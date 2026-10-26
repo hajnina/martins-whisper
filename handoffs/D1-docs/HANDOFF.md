@@ -97,9 +97,15 @@ error: SHA-256 mismatch for 'base': expected 60ed5bc3..., got be07e048e...
 # exit 1
 ```
 
-Model download (host, pinned revision):
+Model download (host, pinned revision; both files verified):
 
 ```sh
+$ curl -fL --retry 2 -o /tmp/ggml-base.bin \
+  "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base.bin"
+$ sha256sum /tmp/ggml-base.bin
+60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe  /tmp/ggml-base.bin
+# 147,951,465 bytes, matches ModelCatalog
+
 $ curl -fL --retry 2 -o /tmp/ggml-tiny.bin \
   "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.bin"
 $ sha256sum /tmp/ggml-tiny.bin

@@ -53,8 +53,11 @@ The canonical source is the MIT-licensed Hugging Face repo
 [`ggerganov/whisper.cpp`](https://huggingface.co/ggerganov/whisper.cpp), pinned to
 revision `5359861c739e955e79d9a303bcbc70fb988958b1`.
 
-**VERIFIED (host, 2026-10-26):** the tiny download below completed, 77,691,713
-bytes, SHA-256 `be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21`.
+**VERIFIED (host, 2026-10-26):** both the `base` command below (147,951,465
+bytes, SHA-256 `60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe`)
+and the `tiny` file (77,691,713 bytes, SHA-256
+`be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21`) were
+downloaded from the pinned revision and matched `ModelCatalog`.
 
 ```bash
 REV=5359861c739e955e79d9a303bcbc70fb988958b1
