@@ -77,6 +77,26 @@ object WavFixtures {
         }
     }
 
+    /**
+     * Quiet floor with loud speech bursts (400 ms on / 400 ms off) — the shape of real dictation,
+     * which the relative (floor + margin) gate exists to handle.
+     */
+    fun bursty(seconds: Double, floorDbfs: Double, burstDbfs: Double): ShortArray {
+        val speech = speechLike(seconds, burstDbfs)
+        val quiet = speechLike(seconds, floorDbfs)
+        val out = speech.copyOf()
+        // switch to quiet during the gaps of every second 400 ms half-beat
+        val onMs = 400.0
+        val period = 800.0
+        val sr = SAMPLE_RATE
+        val idx = 0 until out.size
+        for (i in idx) {
+            val phase = (i.toDouble() / sr * 1000.0) % period
+            if (phase >= onMs) out[i] = quiet[i]
+        }
+        return out
+    }
+
     fun frames(samples: ShortArray, frameSize: Int = 320): List<ShortArray> {
         require(frameSize > 0) { "frameSize must be positive" }
         val frames = ArrayList<ShortArray>(samples.size / frameSize + 1)

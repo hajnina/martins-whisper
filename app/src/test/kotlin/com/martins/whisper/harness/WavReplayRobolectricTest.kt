@@ -173,33 +173,34 @@ class WavReplayRobolectricTest {
             },
         )
 
-        assertEquals(
-            "harness mirrors DictationService.SPEECH_RMS_THRESHOLD",
-            declaredSpeechThreshold().toDouble(),
-            SPEECH_RMS_THRESHOLD,
-            1e-9,
-        )
-        val thresholdDb = WavFixtures.linearToDbfs(SPEECH_RMS_THRESHOLD)
+        // Relative gate: level alone is not speech below the uniformly-loud rule.
+        // Below the -45 dBFS uniform-loud cap, a steady tone has no margin above its own
+        // floor and must be rejected with the measured-level message.
         val rejects = results.filter { !it.spoken }
+        assertEquals("noise at or under -45 dBFS must reject", levels.count { it <= -45.0 }, rejects.size)
+        assertTrue(
+            "rejections must carry the gate message with measurements: $rejects",
+            rejects.all { it.reason?.startsWith(TranscriptGate.EMPTY_MESSAGE) == true },
+        )
         val speaks = results.filter { it.spoken }
-        assertTrue("no level was rejected below the gate", rejects.isNotEmpty())
-        assertTrue("no level passed above the gate", speaks.isNotEmpty())
         assertTrue(
-            "quiet levels must reject with the no-speech gate: $rejects",
-            rejects.all { it.dbfs < thresholdDb && it.reason == TranscriptGate.EMPTY_MESSAGE },
+            "uniformly loud levels must still speak: $speaks",
+            speaks.all { it.dbfs >= -45.0 && it.transcript == "hello world" },
         )
-        assertTrue("accepted levels must carry the engine transcript", speaks.all { it.transcript == "hello world" })
 
-        val firstSpeak = results.first { it.spoken }
+        // The gate exists for THIS: quiet-but-dynamic speech (floor -60 dBFS, bursts -30 dBFS)
+        // must speak. The old absolute per-frame gate (-36.5 dBFS) rejected exactly this.
+        val dynamicSamples = WavFixtures.bursty(seconds = 2.0, floorDbfs = -60.0, burstDbfs = -30.0)
+        val dynamic = replay(dynamicSamples) {
+            FakeSpeechEngine(
+                backend = "replay-fake",
+                respond = { _, language -> Transcript(text = "hello world", language = language ?: "en") },
+            )
+        }
         assertTrue(
-            "a level well above the declared ${format(thresholdDb)} dBFS must speak: $speaks",
-            speaks.any { it.dbfs >= thresholdDb + 1.0 },
+            "quiet bursts above the floor must be detected: peak ${format(WavFixtures.peakDbfs(dynamicSamples))} dBFS",
+            dynamic.inserted == "hello world",
         )
-        assertTrue(
-            "gate flip ${firstSpeak.dbfs} dBFS is not within 2 dB of the declared ${format(thresholdDb)} dBFS",
-            abs(firstSpeak.dbfs - thresholdDb) <= 2.0,
-        )
-        assertEquals("only one transition in the sweep", 1, results.zipWithNext().count { (a, b) -> a.spoken != b.spoken })
     }
 
     private fun replay(samples: ShortArray, engineFactory: () -> SpeechEngine): Outcome {
