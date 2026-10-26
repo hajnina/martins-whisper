@@ -1,0 +1,3 @@
+Delivered the B1 build/CI setup for Martins Whisper: offline Gradle build wiring across gradlew, Dockerfile.build, .github/workflows/build.yml, and scripts/env.sh.
+Verified with `gradle :core:test :app:assembleDebug --offline`: BUILD SUCCESSFUL, 74 tests, 0 failures, app-debug.apk 8,800,646 bytes.
+Blocked on on-device verification: no physical Android device available.
