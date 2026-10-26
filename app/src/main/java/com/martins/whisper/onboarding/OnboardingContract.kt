@@ -9,6 +9,12 @@ import com.martins.whisper.data.SettingsStore
  */
 enum class OnboardingStep {
     WELCOME,
+    MIC,
+    OVERLAY,
+    ACCESSIBILITY,
+    NOTIFICATIONS,
+    LANGUAGE,
+    DONE,
     ;
 
     val index: Int get() = ordinal

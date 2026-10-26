@@ -31,6 +31,7 @@ import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.ViewCompat
@@ -40,11 +41,14 @@ import com.martins.whisper.accessibility.DictationAccessibilityService
 import com.martins.whisper.asr.ModelRepositoryProvider
 import com.martins.whisper.asr.WhisperCppEngine
 import com.martins.whisper.core.ComputeBackend
+import com.martins.whisper.core.Flags
 import com.martins.whisper.core.ModelSpec
 import com.martins.whisper.core.asr.DownloadProgress
 import com.martins.whisper.core.asr.ModelCatalog
 import com.martins.whisper.core.asr.ModelRepository
 import com.martins.whisper.data.SettingsStore
+import com.martins.whisper.onboarding.OnboardingFlow
+import com.martins.whisper.onboarding.OnboardingStore
 import com.martins.whisper.service.DictationService
 import com.martins.whisper.service.DictationState
 import com.martins.whisper.ui.ModelAction
@@ -96,6 +100,20 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Flags.onboardingV2 = true
+        if (Flags.onboardingV2 && !OnboardingStore(this).isCompleted()) {
+            try {
+                setContent {
+                    OnboardingFlow(this, onFinished = {
+                        OnboardingStore(this).markCompleted()
+                        recreate()
+                    })
+                }
+                return
+            } catch (t: Throwable) {
+                // fall through to the legacy screen
+            }
+        }
         enableEdgeToEdge()
         settings = SettingsStore(this)
         setContentView(buildContent())

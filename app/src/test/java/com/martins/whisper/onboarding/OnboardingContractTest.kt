@@ -40,6 +40,7 @@ class OnboardingContractTest {
         assertEquals(OnboardingStep.WELCOME, OnboardingStep.entries.first())
         assertNull(OnboardingRules.stepBefore(OnboardingStep.WELCOME))
         assertNull(OnboardingRules.stepAfter(OnboardingStep.entries.last()))
-        assertEquals("1/1", OnboardingRules.progressLabel(OnboardingStep.WELCOME))
+        assertEquals("1/7", OnboardingRules.progressLabel(OnboardingStep.WELCOME))
+        assertEquals(OnboardingStep.DONE, OnboardingStep.entries.last())
     }
 }
