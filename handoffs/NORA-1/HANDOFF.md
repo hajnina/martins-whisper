@@ -35,6 +35,11 @@ native libs (compressed in APK):
 This APK is installable on an arm64 phone. It is CPU-first (Vulkan off). Models
 are not bundled: download in-app or push one (smoke test instructions below).
 
+Installability evidence: `unzip -t` reports no errors; `apksigner verify` reports
+`Signer #1 certificate DN: C=US, O=Android, CN=Android Debug` (debug-signed,
+expected for a debug APK); `aapt2 dump badging` reports `native-code: 'arm64-v8a'`,
+`targetSdkVersion:'35'`, minSdk 29 from `app/build.gradle.kts`.
+
 ## Branches / commits
 
 - Worktree: `/work/martins-whisper-worktrees/n1-native`
