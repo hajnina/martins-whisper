@@ -53,7 +53,7 @@ class DictationService : Service() {
 
     private var engine: SpeechEngine? = null
     private var engineModelId: String? = null
-    private var audioSource: AudioSource = AudioRecordSource(this)
+    private lateinit var audioSource: AudioSource
     private val frames = ArrayList<ShortArray>()
     private var sessionId = 0
     private var pressed = false
@@ -80,6 +80,7 @@ class DictationService : Service() {
     override fun onCreate() {
         super.onCreate()
         settings = SettingsStore(this)
+        audioSource = audioSourceFactory(this)
         overlay = OverlayController(this)
         createNotificationChannel()
         publishState(DictationState.Idle)
@@ -541,6 +542,9 @@ class DictationService : Service() {
 
         @Volatile
         var inserterFactory: (Context) -> TextInserter = { ClipboardTextInserter(it) }
+
+        @Volatile
+        internal var audioSourceFactory: (Context) -> AudioSource = { AudioRecordSource(it) }
 
         fun start(context: Context) {
             val intent = Intent(context, DictationService::class.java).setAction(ACTION_START)
