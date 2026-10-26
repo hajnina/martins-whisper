@@ -1,0 +1,4 @@
+U2b done: pure BubblePresentation (six distinct state visuals + accessibility), MicBubbleView
+uses mapping/icon/accent/contentDescription, injectable haptic seam (VIRTUAL_KEY press/release,
+CONFIRM success, REJECT error). `:app:testDebugUnitTest --offline` BUILD SUCCESSFUL, 86 tests,
+0 failures/errors/skips (7 + 5 new). Branch agent/u2-states, code commit 4763078.

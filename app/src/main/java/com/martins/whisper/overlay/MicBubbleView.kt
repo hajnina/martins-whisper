@@ -13,7 +13,6 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
-import android.view.animation.AnimationUtils
 import com.martins.whisper.service.DictationState
 import kotlin.math.abs
 import kotlin.math.min
@@ -32,6 +31,10 @@ class MicBubbleView(context: Context) : View(context) {
 
     var listener: Listener? = null
 
+    internal var hapticFeedback: (Int) -> Unit = { performHapticFeedback(it) }
+    internal var scheduleHaptic: (delayMs: Long, action: () -> Unit) -> Unit =
+        { delayMs, action -> postDelayed(action, delayMs) }
+
     var state: DictationState = DictationState.Idle
         set(value) {
             val previous = field
@@ -43,19 +46,17 @@ class MicBubbleView(context: Context) : View(context) {
             }
             if (previous::class != value::class) {
                 when (value) {
-                    is DictationState.Success -> performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                    is DictationState.Error -> performHapticFeedback(HapticFeedbackConstants.REJECT)
+                    is DictationState.Success -> hapticFeedback(HapticFeedbackConstants.CONFIRM)
+                    is DictationState.Error -> {
+                        hapticFeedback(HapticFeedbackConstants.REJECT)
+                        scheduleHaptic(ERROR_DOUBLE_TICK_MS) {
+                            hapticFeedback(HapticFeedbackConstants.REJECT)
+                        }
+                    }
                     else -> Unit
                 }
             }
-            contentDescription = when (value) {
-                is DictationState.Idle -> "Hold to dictate"
-                is DictationState.Loading -> value.label
-                is DictationState.Recording -> "Recording"
-                is DictationState.Processing -> value.label
-                is DictationState.Success -> value.message
-                is DictationState.Error -> value.message
-            }
+            contentDescription = BubblePresentation.of(value).contentDescription
             invalidate()
         }
 
@@ -124,7 +125,7 @@ class MicBubbleView(context: Context) : View(context) {
                 } else {
                     pendingControl = null
                     tracking = true
-                    performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    hapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                     listener?.onPress()
                 }
                 return true
@@ -159,7 +160,7 @@ class MicBubbleView(context: Context) : View(context) {
                     if (dragging) {
                         listener?.onDragEnd()
                     } else {
-                        performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                        hapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                         listener?.onRelease()
                     }
                 }
@@ -198,7 +199,8 @@ class MicBubbleView(context: Context) : View(context) {
         val height = height.toFloat()
         val width = width.toFloat()
         val expanded = state !is DictationState.Idle
-        val accent = accentFor(state)
+        val visual = BubblePresentation.of(state)
+        val accent = visual.accent
 
         if (expanded) {
             surfacePaint.color = Color.argb(242, 22, 28, 32)
@@ -224,11 +226,12 @@ class MicBubbleView(context: Context) : View(context) {
         surfacePaint.color = accent
         canvas.drawOval(circleRect, surfacePaint)
 
-        when (state) {
-            is DictationState.Loading, is DictationState.Processing -> drawSpinner(canvas, circleRect)
-            is DictationState.Success -> drawCheck(canvas, circleCenter)
-            is DictationState.Error -> drawCross(canvas, circleCenter)
-            else -> drawMic(canvas, circleCenter, circleRadius)
+        when (visual.icon) {
+            BubbleIcon.SPINNER -> drawSpinner(canvas, circleRect)
+            BubbleIcon.TRANSCRIBING -> drawTranscribing(canvas, circleCenter)
+            BubbleIcon.CHECK -> drawCheck(canvas, circleCenter)
+            BubbleIcon.CROSS -> drawCross(canvas, circleCenter)
+            BubbleIcon.MIC, BubbleIcon.MIC_LEVELS -> drawMic(canvas, circleCenter, circleRadius)
         }
 
         if (expanded) {
@@ -338,6 +341,15 @@ class MicBubbleView(context: Context) : View(context) {
         canvas.drawArc(arcRect, spinnerAngle, 260f, false, iconPaint)
     }
 
+    private fun drawTranscribing(canvas: Canvas, center: Float) {
+        fillPaint.color = Color.WHITE
+        val radius = dp(2.6f)
+        val gap = dp(7f)
+        for (index in -1..1) {
+            canvas.drawCircle(center + index * gap, center, radius, fillPaint)
+        }
+    }
+
     private fun drawCheck(canvas: Canvas, center: Float) {
         iconPaint.color = Color.WHITE
         iconPaint.strokeWidth = dp(2.6f)
@@ -391,15 +403,6 @@ class MicBubbleView(context: Context) : View(context) {
         )
     }
 
-    private fun accentFor(state: DictationState): Int = when (state) {
-        is DictationState.Idle -> Color.rgb(19, 93, 102)
-        is DictationState.Loading -> Color.rgb(178, 106, 0)
-        is DictationState.Recording -> Color.rgb(198, 40, 40)
-        is DictationState.Processing -> Color.rgb(21, 101, 192)
-        is DictationState.Success -> Color.rgb(46, 125, 50)
-        is DictationState.Error -> Color.rgb(176, 0, 32)
-    }
-
     private fun startSpinner() {
         if (spinnerRunning) return
         spinnerRunning = true
@@ -422,6 +425,7 @@ class MicBubbleView(context: Context) : View(context) {
 
     private fun sp(value: Float): Float = value * resources.displayMetrics.scaledDensity
 
-    @Suppress("unused")
-    private fun unusedAnimation() = AnimationUtils.currentAnimationTimeMillis()
+    companion object {
+        internal const val ERROR_DOUBLE_TICK_MS = 90L
+    }
 }

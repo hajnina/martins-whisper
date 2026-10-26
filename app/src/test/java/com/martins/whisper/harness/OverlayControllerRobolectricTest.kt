@@ -67,6 +67,20 @@ class OverlayControllerRobolectricTest {
     }
 
     @Test
+    fun `bubble window is not focusable and never takes focus from the field`() {
+        val controller = OverlayController(context)
+
+        assertTrue(controller.show(listener))
+        val flags = controller.windowFlags
+        assertTrue(flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE != 0)
+        assertTrue(flags and WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL != 0)
+        controller.update(DictationState.Recording(1_000, 0.4f, true))
+        val recordingFlags = controller.windowFlags
+        assertTrue(recordingFlags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE != 0)
+        controller.hide()
+    }
+
+    @Test
     fun `overlay refuses to show without the draw-overlays permission`() {
         ShadowSettings.setCanDrawOverlays(false)
         val controller = OverlayController(context)

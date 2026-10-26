@@ -22,6 +22,9 @@ class OverlayController(context: Context) {
     val isShowing: Boolean
         get() = view?.isAttachedToWindow == true
 
+    internal val windowFlags: Int
+        get() = params?.flags ?: 0
+
     fun show(listener: MicBubbleView.Listener): Boolean {
         if (isShowing) return true
         if (!Settings.canDrawOverlays(appContext)) return false

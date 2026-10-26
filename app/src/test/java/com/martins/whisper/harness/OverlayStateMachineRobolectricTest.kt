@@ -66,7 +66,7 @@ class OverlayStateMachineRobolectricTest {
 
         val recording = DictationState.Recording(elapsedMs = 1_000L, level = 0.42f, speechDetected = true)
         controller.update(recording)
-        assertBubble(bubble, recording, "Recording")
+        assertBubble(bubble, recording, "Listening; release to transcribe")
 
         val processing = DictationState.Processing("Transcribing\u2026")
         controller.update(processing)
@@ -78,7 +78,7 @@ class OverlayStateMachineRobolectricTest {
 
         val error = DictationState.Error("Engine failed to load")
         controller.update(error)
-        assertBubble(bubble, error, "Engine failed to load")
+        assertBubble(bubble, error, "Error: Engine failed to load")
 
         controller.update(DictationState.Idle)
         assertBubble(bubble, DictationState.Idle, "Hold to dictate")
