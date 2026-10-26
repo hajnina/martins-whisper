@@ -2,6 +2,7 @@ package com.martins.whisper.onboarding
 import android.Manifest
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -15,9 +16,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.*
-import androidx.compose.ui.platform.*
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.*
 import androidx.lifecycle.*
 import com.martins.whisper.accessibility.DictationAccessibilityService
@@ -61,7 +64,7 @@ private fun isAccessibilityEnabled(activity: ComponentActivity): Boolean {
     if (PermissionGate.accessibilityServiceEnabled(enabled, component.packageName, component.className)) {
         return true
     }
-    val manager = activity.getSystemService(ComponentActivity.ACCESSIBILITY_SERVICE) as AccessibilityManager
+    val manager = activity.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
     return manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
         .any { it.resolveInfo.serviceInfo.packageName == activity.packageName }
 }
@@ -88,10 +91,10 @@ fun OnboardingFlow(activity: ComponentActivity, onFinished: () -> Unit) {
     MartinsOnboardingTheme {
         val context = LocalContext.current
         val settings = remember { SettingsStore(context) }
-        var step by rememberSaveable { mutableStateOf(OnboardingStep.WELCOME) }
+        var step by rememberSaveable { mutableStateOf<OnboardingStep>(OnboardingStep.WELCOME) }
         var forward by remember { mutableStateOf(true) }
         var snapshot by remember { mutableStateOf(readSnapshot(activity)) }
-        var language by rememberSaveable { mutableStateOf(settings.language) }
+        var language by rememberSaveable { mutableStateOf<String>(settings.language) }
         val currentItem = permissionItemFor(step)
         val lifecycleOwner = LocalLifecycleOwner.current
         DisposableEffect(lifecycleOwner) {
