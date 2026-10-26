@@ -3,6 +3,7 @@ package com.martins.whisper.asr
 import com.martins.whisper.core.AudioChunk
 import com.martins.whisper.core.ComputeBackend
 import com.martins.whisper.core.Transcript
+import com.martins.whisper.core.asr.EngineState
 import com.martins.whisper.core.asr.WhisperCppEngine as WhisperCppEngineContract
 import java.io.File
 import java.util.concurrent.Executors
@@ -14,8 +15,11 @@ import kotlinx.coroutines.withContext
 class SpeechEngineException(message: String, val code: Int? = null, cause: Throwable? = null) :
     RuntimeException(message, cause)
 
-class SpeechEngineUnavailableException(message: String, cause: Throwable? = null) :
-    RuntimeException(message, cause)
+class SpeechEngineUnavailableException(
+    message: String,
+    val reason: String = EngineState.ENGINE_ERROR,
+    cause: Throwable? = null,
+) : RuntimeException(message, cause)
 
 internal object WhisperCppNative {
     private val loadFailure: Throwable? = runCatching { System.loadLibrary("martins_whisper") }.exceptionOrNull()
@@ -27,7 +31,14 @@ internal object WhisperCppNative {
         get() = loadFailure?.let { "${it.javaClass.simpleName}: ${it.message}" }
 
     fun requireAvailable() {
-        loadFailure?.let { throw SpeechEngineUnavailableException("Native whisper.cpp library is unavailable", it) }
+        loadFailure?.let {
+            throw SpeechEngineUnavailableException(
+                "Native whisper.cpp is not available in this APK. Install a build with native " +
+                    "support (-Pmartins.native=true).",
+                EngineState.NATIVE_UNAVAILABLE,
+                it,
+            )
+        }
     }
 
     external fun nativeVersion(): String

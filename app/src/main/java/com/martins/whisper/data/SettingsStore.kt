@@ -3,6 +3,7 @@ package com.martins.whisper.data
 import android.content.Context
 import android.content.SharedPreferences
 import com.martins.whisper.core.ComputeBackend
+import com.martins.whisper.core.asr.EngineState
 
 class SettingsStore(context: Context) {
 
@@ -20,6 +21,22 @@ class SettingsStore(context: Context) {
     var backend: ComputeBackend
         get() = parseBackend(prefs.getString(KEY_BACKEND, ComputeBackend.AUTO.name))
         set(value) = prefs.edit().putString(KEY_BACKEND, value.name).apply()
+
+    var engineState: EngineState
+        get() = EngineState(
+            activeBackend = prefs.getString(KEY_ENGINE_ACTIVE_BACKEND, null),
+            fallbackReason = prefs.getString(KEY_ENGINE_FALLBACK_REASON, null),
+            gpuFailureCount = prefs.getInt(KEY_ENGINE_GPU_FAILURE_COUNT, 0),
+            lastError = prefs.getString(KEY_ENGINE_LAST_ERROR, null),
+        )
+        set(value) {
+            prefs.edit()
+                .putString(KEY_ENGINE_ACTIVE_BACKEND, value.activeBackend)
+                .putString(KEY_ENGINE_FALLBACK_REASON, value.fallbackReason)
+                .putInt(KEY_ENGINE_GPU_FAILURE_COUNT, value.gpuFailureCount.coerceAtLeast(0))
+                .putString(KEY_ENGINE_LAST_ERROR, value.lastError)
+                .apply()
+        }
 
     var idleUnloadSeconds: Int
         get() = prefs.getInt(KEY_IDLE_UNLOAD_SECONDS, DEFAULT_IDLE_UNLOAD_SECONDS)
@@ -56,6 +73,10 @@ class SettingsStore(context: Context) {
         const val KEY_MODEL_ID = "model_id"
         const val KEY_LANGUAGE = "language"
         const val KEY_BACKEND = "backend"
+        const val KEY_ENGINE_ACTIVE_BACKEND = "engine_active_backend"
+        const val KEY_ENGINE_FALLBACK_REASON = "engine_fallback_reason"
+        const val KEY_ENGINE_GPU_FAILURE_COUNT = "engine_gpu_failure_count"
+        const val KEY_ENGINE_LAST_ERROR = "engine_last_error"
         const val KEY_IDLE_UNLOAD_SECONDS = "idle_unload_seconds"
         const val KEY_OVERLAY_ENABLED = "overlay_enabled"
         const val KEY_BOOT_START = "boot_start"

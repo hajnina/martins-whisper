@@ -52,6 +52,7 @@ class DictationService : Service() {
     private lateinit var overlay: OverlayController
 
     private var engine: SpeechEngine? = null
+    private var engineModelId: String? = null
     private var audioSource: AudioSource = AudioRecordSource(this)
     private val frames = ArrayList<ShortArray>()
     private var sessionId = 0
@@ -148,12 +149,18 @@ class DictationService : Service() {
     }
 
     private suspend fun obtainEngine(): SpeechEngine {
-        engine?.let { return it }
+        val modelId = settings.modelId
+        engine?.let { active ->
+            if (engineModelId == modelId) return active
+            runCatching { active.close() }
+            engine = null
+            engineModelId = null
+        }
         val created = withContext(Dispatchers.Default) {
             EngineFactory.create(this@DictationService, settings)
         }
-        if (created is FakeSpeechEngine) created.load()
         engine = created
+        engineModelId = modelId
         return created
     }
 
@@ -335,6 +342,7 @@ class DictationService : Service() {
             if (!pressed && !sessionActive) {
                 runCatching { engine?.close() }
                 engine = null
+                engineModelId = null
             }
         }
     }
@@ -355,6 +363,7 @@ class DictationService : Service() {
         synchronized(frames) { frames.clear() }
         runCatching { engine?.close() }
         engine = null
+        engineModelId = null
         overlay.hide()
         publishState(DictationState.Idle)
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
@@ -498,6 +507,7 @@ class DictationService : Service() {
         runCatching { audioSource.release() }
         runCatching { engine?.close() }
         engine = null
+        engineModelId = null
         overlay.hide()
         _state.value = DictationState.Idle
         scope.cancel()
