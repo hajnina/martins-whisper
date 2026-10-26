@@ -53,8 +53,9 @@ green. `git status` clean on the branch.
 
 ## Status
 
-open
+done (2026-10-26)
 
 ## Result
 
--
+Code+tests: `db95d14` (4 new, 70 app tests green); handoff `cfdbb8a`. Branch `agent/g3-backend`
+(stacked on `agent/g2-engine`). Detailed evidence in `handoffs/ASHA-3/G3b-HANDOFF.md`.
