@@ -23,8 +23,15 @@ data class EnginePlan(
  */
 object EnginePlanner {
 
-    fun plan(modelId: String, backend: ComputeBackend, repository: ModelRepository): EnginePlan {
-        val spec = ModelCatalog.byId(modelId) ?: ModelCatalog.default
+    fun plan(
+        modelId: String,
+        backend: ComputeBackend,
+        repository: ModelRepository,
+        customModels: List<ModelSpec> = emptyList(),
+    ): EnginePlan {
+        val spec = customModels.firstOrNull { it.id == modelId }
+            ?: ModelCatalog.byId(modelId)
+            ?: ModelCatalog.default
         val file = repository.modelFile(spec)
         if (!repository.isInstalled(spec)) {
             throw SpeechEngineUnavailableException(

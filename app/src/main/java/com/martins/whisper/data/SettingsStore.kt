@@ -3,6 +3,8 @@ package com.martins.whisper.data
 import android.content.Context
 import android.content.SharedPreferences
 import com.martins.whisper.core.ComputeBackend
+import com.martins.whisper.core.ModelSpec
+import com.martins.whisper.core.asr.CustomModelCodec
 import com.martins.whisper.core.asr.EngineState
 
 class SettingsStore(context: Context) {
@@ -37,6 +39,20 @@ class SettingsStore(context: Context) {
                 .putString(KEY_ENGINE_LAST_ERROR, value.lastError)
                 .apply()
         }
+
+    var customModels: List<ModelSpec>
+        get() = CustomModelCodec.decode(prefs.getString(KEY_CUSTOM_MODELS, null))
+        set(value) {
+            prefs.edit().putString(KEY_CUSTOM_MODELS, CustomModelCodec.encode(value)).apply()
+        }
+
+    fun addCustomModel(spec: ModelSpec) {
+        customModels = customModels.filterNot { it.id == spec.id } + spec
+    }
+
+    fun removeCustomModel(id: String) {
+        customModels = customModels.filterNot { it.id == id }
+    }
 
     var idleUnloadSeconds: Int
         get() = prefs.getInt(KEY_IDLE_UNLOAD_SECONDS, DEFAULT_IDLE_UNLOAD_SECONDS)
@@ -77,6 +93,7 @@ class SettingsStore(context: Context) {
         const val KEY_ENGINE_FALLBACK_REASON = "engine_fallback_reason"
         const val KEY_ENGINE_GPU_FAILURE_COUNT = "engine_gpu_failure_count"
         const val KEY_ENGINE_LAST_ERROR = "engine_last_error"
+        const val KEY_CUSTOM_MODELS = "custom_models"
         const val KEY_IDLE_UNLOAD_SECONDS = "idle_unload_seconds"
         const val KEY_OVERLAY_ENABLED = "overlay_enabled"
         const val KEY_BOOT_START = "boot_start"

@@ -2,6 +2,7 @@ package com.martins.whisper.asr
 
 import com.martins.whisper.core.ComputeBackend
 import com.martins.whisper.core.asr.EngineState
+import com.martins.whisper.core.asr.ModelCatalog
 import com.martins.whisper.core.asr.ModelRepository
 import com.martins.whisper.core.asr.ModelStorage
 import java.io.File
@@ -39,6 +40,17 @@ class EnginePlannerTest {
         val plan = EnginePlanner.plan("custom.tiny", ComputeBackend.CPU, repository)
         assertEquals("base", plan.spec.id)
         assertEquals("base.bin", plan.modelFile.name)
+    }
+
+    @Test
+    fun `a persisted custom model resolves by its own id`() {
+        val repository = repository()
+        repository.storage.ensureModelsDir()
+        File(repository.modelsDir, "custom-mine.bin").writeBytes(ByteArray(4))
+        val custom = ModelCatalog.custom(id = "custom-mine", fileName = "mine.bin")
+        val plan = EnginePlanner.plan("custom-mine", ComputeBackend.CPU, repository, listOf(custom))
+        assertEquals(custom, plan.spec)
+        assertEquals("custom-mine.bin", plan.modelFile.name)
     }
 
     @Test

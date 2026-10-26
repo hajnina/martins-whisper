@@ -67,13 +67,20 @@ class MainActivity : ComponentActivity() {
     private lateinit var modelBrowser: ModelBrowser
     private var bootSwitch: Switch? = null
     private var pendingImportId: String? = null
+    private var pendingCustomImport = false
 
     private val repository: ModelRepository by lazy { ModelRepositoryProvider.forContext(this) }
 
     private val importDocument = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         val id = pendingImportId
+        val custom = pendingCustomImport
         pendingImportId = null
-        if (uri != null && id != null) importModelFrom(id, uri)
+        pendingCustomImport = false
+        when {
+            uri == null -> Unit
+            custom -> importCustomModelFrom(uri)
+            id != null -> importModelFrom(id, uri)
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -172,7 +179,7 @@ class MainActivity : ComponentActivity() {
         root.addView(overlayButton, matchWidth())
 
         root.addView(section(getString(R.string.section_model)))
-        modelBrowser = ModelBrowser(ModelCatalog.specs, installedModelIds(), settings.modelId)
+        modelBrowser = ModelBrowser(modelSpecs(), installedModelIds(), settings.modelId)
         modelContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(modelContainer, matchWidth())
         modelProgressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
@@ -188,6 +195,13 @@ class MainActivity : ComponentActivity() {
         root.addView(caption(getString(R.string.model_note)).apply {
             setPadding(0, dp(4), 0, dp(10))
         })
+        root.addView(
+            Button(this).apply {
+                setText(R.string.model_import_custom)
+                setOnClickListener { pickCustomImport() }
+            },
+            matchWidth(),
+        )
         renderModels()
 
         root.addView(section(getString(R.string.section_asr)))
@@ -261,8 +275,13 @@ class MainActivity : ComponentActivity() {
         return scroll
     }
 
+    private fun modelSpecs(): List<ModelSpec> =
+        ModelCatalog.specs + settings.customModels.filter { ModelCatalog.byId(it.id) == null }
+
+    private fun specById(id: String): ModelSpec? = modelSpecs().firstOrNull { it.id == id }
+
     private fun installedModelIds(): Set<String> =
-        ModelCatalog.specs.asSequence()
+        modelSpecs().asSequence()
             .filter { repository.isInstalled(it) }
             .map { it.id }
             .toSet()
@@ -306,9 +325,11 @@ class MainActivity : ComponentActivity() {
                     downloadModel(spec.id)
                 })
             }
-            actions.addView(actionButton(R.string.model_import, !state.isBusy) {
-                pickImport(spec.id)
-            })
+            if (spec.url != null) {
+                actions.addView(actionButton(R.string.model_import, !state.isBusy) {
+                    pickImport(spec.id)
+                })
+            }
             if (row.installed) {
                 actions.addView(actionButton(R.string.model_delete, !state.isBusy) {
                     deleteModel(spec.id)
@@ -334,7 +355,9 @@ class MainActivity : ComponentActivity() {
             modelTransferView.visibility = View.GONE
             return
         }
-        val displayName = ModelCatalog.byId(transfer.modelId)?.displayName ?: transfer.modelId
+        val displayName = modelBrowser.state.row(transfer.modelId)?.spec?.displayName
+            ?: specById(transfer.modelId)?.displayName
+            ?: transfer.modelId
         val fraction = when (transfer) {
             is ModelTransfer.Download -> transfer.fraction
             is ModelTransfer.Import -> transfer.fraction
@@ -383,11 +406,24 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun pickImport(id: String) {
+        pendingCustomImport = false
         pendingImportId = id
         try {
             importDocument.launch(arrayOf("*/*"))
         } catch (t: Throwable) {
             pendingImportId = null
+            modelBrowser.fail(t.message ?: "Cannot open the file picker")
+            renderModels()
+        }
+    }
+
+    private fun pickCustomImport() {
+        pendingImportId = null
+        pendingCustomImport = true
+        try {
+            importDocument.launch(arrayOf("*/*"))
+        } catch (t: Throwable) {
+            pendingCustomImport = false
             modelBrowser.fail(t.message ?: "Cannot open the file picker")
             renderModels()
         }
@@ -424,10 +460,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun deleteModel(id: String) {
-        val spec = ModelCatalog.byId(id) ?: return
+        val spec = specById(id) ?: return
         if (!modelBrowser.begin(id, ModelAction.DELETE)) return
         renderModels()
         lifecycleScope.launch {
+            var failed = false
             try {
                 val deleted = withContext(Dispatchers.IO) { repository.delete(spec) }
                 if (deleted) {
@@ -436,11 +473,97 @@ class MainActivity : ComponentActivity() {
                     modelBrowser.fail("Model file was already absent")
                 }
             } catch (t: Throwable) {
+                failed = true
                 modelBrowser.fail(t.message ?: t.javaClass.simpleName)
+            }
+            if (!failed) forgetCustomModel(id)
+            renderModels()
+            updateDiagnostics()
+        }
+    }
+
+    private fun forgetCustomModel(id: String) {
+        if (specById(id)?.url != null) return
+        settings.removeCustomModel(id)
+        if (settings.modelId == id) settings.modelId = ModelCatalog.DEFAULT_MODEL_ID
+        modelBrowser.setSpecs(modelSpecs())
+        modelBrowser.syncInstalled(installedModelIds())
+        modelBrowser.select(settings.modelId)
+    }
+
+    private fun importCustomModelFrom(uri: Uri) {
+        val displayName = queryDisplayName(uri)
+        val spec = ModelCatalog.custom(
+            id = uniqueCustomModelId(displayName),
+            fileName = displayName,
+            displayName = displayName,
+        )
+        if (!modelBrowser.begin(spec, ModelAction.IMPORT)) return
+        renderModels()
+        lifecycleScope.launch {
+            var temp: File? = null
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    val tempFile = File(cacheDir, "custom-model-import-${System.currentTimeMillis()}.bin")
+                    temp = tempFile
+                    val input = contentResolver.openInputStream(uri)
+                        ?: error("Cannot open the selected file")
+                    input.use { source ->
+                        tempFile.outputStream().use { target -> source.copyTo(target) }
+                    }
+                    repository.importFile(spec = spec, source = tempFile) { progress ->
+                        publishProgress(progress)
+                    }
+                }
+                val imported = spec.copy(
+                    sha256 = result.sha256 ?: error("Could not compute the model checksum"),
+                    sizeBytes = result.bytes.takeIf { it > 0 },
+                )
+                settings.addCustomModel(imported)
+                settings.modelId = imported.id
+                modelBrowser.setSpecs(modelSpecs())
+                modelBrowser.completeInstalled(imported.id)
+                modelBrowser.select(imported.id)
+                modelBrowser.syncInstalled(installedModelIds())
+            } catch (t: Throwable) {
+                modelBrowser.fail(t.message ?: t.javaClass.simpleName)
+                modelBrowser.setSpecs(modelSpecs())
+            } finally {
+                temp?.delete()
             }
             renderModels()
             updateDiagnostics()
         }
+    }
+
+    private fun queryDisplayName(uri: Uri): String {
+        val fromProvider = runCatching {
+            contentResolver.query(
+                uri,
+                arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                null,
+                null,
+                null,
+            )?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+        }.getOrNull()
+        return (fromProvider ?: uri.lastPathSegment?.substringAfterLast('/'))
+            ?.takeIf { it.isNotBlank() }
+            ?: "custom-model.bin"
+    }
+
+    private fun uniqueCustomModelId(displayName: String): String {
+        val base = displayName.substringBeforeLast('.')
+            .lowercase()
+            .map { if (it.isLetterOrDigit() || it == '-' || it == '_') it else '-' }
+            .joinToString("")
+            .trim('-')
+            .take(40)
+            .ifBlank { "model" }
+        val taken = modelSpecs().map { it.id }.toSet()
+        var candidate = "custom-$base"
+        var suffix = 2
+        while (candidate in taken) candidate = "custom-$base-${suffix++}"
+        return candidate
     }
 
     private fun publishProgress(progress: DownloadProgress) {

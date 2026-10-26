@@ -92,6 +92,47 @@ class ModelBrowserTest {
     }
 
     @Test
+    fun `a custom model is added to the browser when its import starts`() {
+        val browser = browser()
+        val custom = ModelCatalog.custom(id = "custom-mine", fileName = "mine.bin", displayName = "Mine")
+        assertTrue(browser.begin(custom, ModelAction.IMPORT))
+        assertEquals(custom, browser.state.row("custom-mine")!!.spec)
+        assertFalse(browser.state.row("custom-mine")!!.installed)
+
+        browser.progress(0.25f)
+        assertEquals(0.25f, (browser.state.transfer as ModelTransfer.Import).fraction)
+
+        browser.completeInstalled("custom-mine")
+        browser.select("custom-mine")
+        assertTrue(browser.state.row("custom-mine")!!.installed)
+        assertTrue(browser.state.row("custom-mine")!!.selected)
+    }
+
+    @Test
+    fun `setSpecs forgets a deleted custom model and falls back the selection`() {
+        val custom = ModelCatalog.custom(id = "custom-mine", fileName = "mine.bin")
+        val browser = ModelBrowser(specs + custom, setOf(custom.id), custom.id)
+
+        browser.setSpecs(specs)
+
+        assertNull(browser.state.row(custom.id))
+        assertFalse(custom.id in browser.installedIds())
+        assertEquals(specs.first().id, browser.state.rows.first { it.selected }.spec.id)
+    }
+
+    @Test
+    fun `a new custom spec is not added while another transfer runs`() {
+        val browser = browser()
+        assertTrue(browser.begin(specs[0].id, ModelAction.DOWNLOAD))
+
+        val custom = ModelCatalog.custom(id = "custom-mine", fileName = "mine.bin")
+        assertFalse(browser.begin(custom, ModelAction.IMPORT))
+
+        assertNull(browser.state.row(custom.id))
+        assertEquals(specs[0].id, browser.state.transfer?.modelId)
+    }
+
+    @Test
     fun `presentation labels cover fallback reasons and sizes`() {
         assertEquals("native engine unavailable", ModelPresentation.fallbackLabel(EngineState.NATIVE_UNAVAILABLE))
         assertEquals("model not installed", ModelPresentation.fallbackLabel(EngineState.MODEL_MISSING))

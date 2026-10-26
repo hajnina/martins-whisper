@@ -51,6 +51,7 @@
     <string name="hold_to_talk">Hold to talk</string>
     <string name="error_mic">Microphone permission required</string>
     <string name="error_overlay">Enable display over other apps</string>
+    <string name="model_import_custom">Import custom model\u2026</string>
     <string name="model_note">Models marked not installed must be downloaded or imported before dictation works. Import expects the GGML file of the selected model.</string>
     <string name="model_download">Download</string>
     <string name="model_import">Import file</string>

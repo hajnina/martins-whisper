@@ -23,9 +23,7 @@ import com.martins.whisper.MainActivity
 import com.martins.whisper.R
 import com.martins.whisper.audio.AudioRecordSource
 import com.martins.whisper.audio.AudioSource
-import com.martins.whisper.core.AudioChunk
-import com.martins.whisper.core.ChunkReason
-import com.martins.whisper.core.SpeechEngine
+import com.martins.whisper.core.asr.ModelManager
 import com.martins.whisper.data.SettingsStore
 import com.martins.whisper.overlay.MicBubbleView
 import com.martins.whisper.overlay.OverlayController
@@ -51,10 +49,10 @@ class DictationService : Service() {
     private lateinit var settings: SettingsStore
     private lateinit var overlay: OverlayController
 
-    private var engine: SpeechEngine? = null
-    private var engineModelId: String? = null
+    private lateinit var engineHost: DictationEngineHost
     private lateinit var audioSource: AudioSource
-    private val frames = ArrayList<ShortArray>()
+    @Volatile
+    private var engineReady = false
     private var sessionId = 0
     private var pressed = false
     private var sessionActive = false
@@ -63,7 +61,7 @@ class DictationService : Service() {
     private var currentLevel = 0f
     private var sessionStartElapsed = 0L
     private var timerJob: Job? = null
-    private var idleUnloadJob: Job? = null
+    private var watchdogJob: Job? = null
     private var stateResetJob: Job? = null
     private var lastNotificationKey: String? = null
 
@@ -82,6 +80,17 @@ class DictationService : Service() {
         settings = SettingsStore(this)
         audioSource = audioSourceFactory(this)
         overlay = OverlayController(this)
+        engineHost = DictationEngineHost(
+            createEngine = { EngineFactory.create(this, settings) },
+            clock = { SystemClock.elapsedRealtime() },
+            idleMs = settings.idleUnloadSeconds.coerceAtLeast(30) * 1000L,
+        )
+        watchdogJob = scope.launch {
+            while (isActive) {
+                delay(ModelManager.WATCHDOG_INTERVAL_MS)
+                if (!pressed && !sessionActive) engineHost.unloadIfIdle()
+            }
+        }
         createNotificationChannel()
         publishState(DictationState.Idle)
     }
@@ -124,45 +133,38 @@ class DictationService : Service() {
         sessionStartElapsed = SystemClock.elapsedRealtime()
         speechDetected = false
         currentLevel = 0f
-        synchronized(frames) { frames.clear() }
-        idleUnloadJob?.cancel()
+        engineHost.beginSession()
+        engineReady = false
         stateResetJob?.cancel()
-        val modelName = ModelCatalog.byId(settings.modelId)?.displayName ?: settings.modelId
+        val modelName = settings.customModels.firstOrNull { it.id == settings.modelId }?.displayName
+            ?: ModelCatalog.byId(settings.modelId)?.displayName
+            ?: settings.modelId
         publishState(DictationState.Loading("Loading $modelName\u2026"))
 
+        if (!hasMicrophonePermission()) {
+            fail(getString(R.string.error_mic))
+            return
+        }
+        ensureForeground(withMicrophone = true)
+        if (!startAudio(id)) return
+
+        val modelId = settings.modelId
         scope.launch {
-            val loaded = try {
-                obtainEngine()
+            try {
+                withContext(Dispatchers.Default) {
+                    engineHost.prepare(modelId)
+                    engineHost.load()
+                }
             } catch (t: Throwable) {
-                fail(t.message ?: "Engine failed to load")
+                if (pressed && id == sessionId) fail(t.message ?: "Engine failed to load")
                 return@launch
             }
             if (!pressed || id != sessionId) return@launch
-            if (!hasMicrophonePermission()) {
-                fail(getString(R.string.error_mic))
-                return@launch
-            }
-            ensureForeground(withMicrophone = true)
-            if (!startAudio(id)) return@launch
-            publishState(DictationState.Recording(0L, 0f, false))
+            engineReady = true
+            val elapsed = SystemClock.elapsedRealtime() - sessionStartElapsed
+            publishState(DictationState.Recording(elapsed, currentLevel, speechDetected))
             startTimer(id)
         }
-    }
-
-    private suspend fun obtainEngine(): SpeechEngine {
-        val modelId = settings.modelId
-        engine?.let { active ->
-            if (engineModelId == modelId) return active
-            runCatching { active.close() }
-            engine = null
-            engineModelId = null
-        }
-        val created = withContext(Dispatchers.Default) {
-            EngineFactory.create(this@DictationService, settings)
-        }
-        engine = created
-        engineModelId = modelId
-        return created
     }
 
     private fun startAudio(id: Int): Boolean {
@@ -171,21 +173,26 @@ class DictationService : Service() {
             audioSource.start(
                 onFrame = { samples, capturedAt ->
                     if (!sessionActive || id != sessionId) return@start
-                    synchronized(frames) {
-                        if (frames.size < MAX_FRAMES) frames.add(samples)
+                    if (!engineHost.addFrame(samples)) {
+                        if (sessionActive && id == sessionId) {
+                            scope.launch { fail("Audio buffer overflow; dictation aborted") }
+                        }
+                        return@start
                     }
                     val rms = AudioRecordSource.rms(samples)
                     currentLevel = max(rms * 4f, currentLevel * 0.7f).coerceIn(0f, 1f)
                     if (rms > SPEECH_RMS_THRESHOLD) speechDetected = true
-                    mainHandler.post {
-                        if (pressed && id == sessionId) {
-                            publishState(
-                                DictationState.Recording(
-                                    SystemClock.elapsedRealtime() - sessionStartElapsed,
-                                    currentLevel,
-                                    speechDetected,
-                                ),
-                            )
+                    if (engineReady) {
+                        mainHandler.post {
+                            if (pressed && id == sessionId) {
+                                publishState(
+                                    DictationState.Recording(
+                                        SystemClock.elapsedRealtime() - sessionStartElapsed,
+                                        currentLevel,
+                                        speechDetected,
+                                    ),
+                                )
+                            }
                         }
                     }
                 },
@@ -226,54 +233,36 @@ class DictationService : Service() {
         val holdMs = SystemClock.elapsedRealtime() - sessionStartElapsed
         stopAudio()
 
-        val sampleCount = synchronized(frames) { frames.sumOf { it.size } }
+        val sampleCount = engineHost.bufferedSamples()
         val durationMs = sampleCount * 1000L / SAMPLE_RATE
         if (holdMs < MIN_HOLD_MS && !speechDetected) {
-            synchronized(frames) { frames.clear() }
+            engineHost.cancelSession()
             publishState(DictationState.Idle)
             Toast.makeText(this, R.string.hold_to_talk, Toast.LENGTH_SHORT).show()
             return
         }
         if (durationMs < MIN_AUDIO_MS) {
-            synchronized(frames) { frames.clear() }
+            engineHost.cancelSession()
             publishState(DictationState.Idle)
             return
         }
-        finalizeSession(sampleCount, durationMs)
+        finalizeSession()
     }
 
-    private fun finalizeSession(sampleCount: Int, durationMs: Long) {
-        val samples = FloatArray(sampleCount)
-        var write = 0
-        synchronized(frames) {
-            for (frame in frames) {
-                for (sample in frame) {
-                    if (write >= samples.size) break
-                    samples[write++] = sample / 32768f
-                }
-            }
-            frames.clear()
+    private fun finalizeSession() {
+        val captured = engineHost.finishSession()
+        if (captured == null || captured.sampleCount == 0L) {
+            publishState(DictationState.Idle)
+            return
         }
+        val samples = captured.toFloatArray()
+        val durationMs = captured.durationMs()
         publishState(DictationState.Processing())
         val language = settings.effectiveLanguage()
         scope.launch {
-            val activeEngine = engine
-            if (activeEngine == null) {
-                fail("Model not loaded")
-                return@launch
-            }
             try {
                 val transcript = withContext(Dispatchers.Default) {
-                    activeEngine.transcribe(
-                        AudioChunk(
-                            index = 0,
-                            samples = samples,
-                            startMs = 0L,
-                            endMs = durationMs,
-                            reason = ChunkReason.FLUSH,
-                        ),
-                        language,
-                    )
+                    engineHost.transcribe(samples, durationMs, language)
                 }
                 val text = transcript.text.trim()
                 if (text.isEmpty()) {
@@ -291,7 +280,6 @@ class DictationService : Service() {
                 publishState(DictationState.Success(message))
                 updateNotification(DictationState.Success(message), force = true)
                 scheduleReset()
-                scheduleIdleUnload()
             } catch (t: Throwable) {
                 fail(t.message ?: "Transcription failed")
             }
@@ -312,7 +300,7 @@ class DictationService : Service() {
         sessionId += 1
         timerJob?.cancel()
         stopAudio()
-        synchronized(frames) { frames.clear() }
+        engineHost.cancelSession()
         publishState(DictationState.Idle)
     }
 
@@ -322,7 +310,7 @@ class DictationService : Service() {
         sessionId += 1
         timerJob?.cancel()
         stopAudio()
-        synchronized(frames) { frames.clear() }
+        engineHost.cancelSession()
         publishState(DictationState.Error(message))
         scheduleReset()
     }
@@ -332,19 +320,6 @@ class DictationService : Service() {
         stateResetJob = scope.launch {
             delay(STATE_RESET_MS)
             if (!pressed && !sessionActive) publishState(DictationState.Idle)
-        }
-    }
-
-    private fun scheduleIdleUnload() {
-        idleUnloadJob?.cancel()
-        val idleMs = settings.idleUnloadSeconds.coerceAtLeast(30) * 1000L
-        idleUnloadJob = scope.launch {
-            delay(idleMs)
-            if (!pressed && !sessionActive) {
-                runCatching { engine?.close() }
-                engine = null
-                engineModelId = null
-            }
         }
     }
 
@@ -358,13 +333,11 @@ class DictationService : Service() {
         sessionActive = false
         sessionId += 1
         timerJob?.cancel()
-        idleUnloadJob?.cancel()
+        watchdogJob?.cancel()
         stateResetJob?.cancel()
         stopAudio()
-        synchronized(frames) { frames.clear() }
-        runCatching { engine?.close() }
-        engine = null
-        engineModelId = null
+        engineHost.cancelSession()
+        engineHost.close()
         overlay.hide()
         publishState(DictationState.Idle)
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
@@ -502,13 +475,11 @@ class DictationService : Service() {
         sessionActive = false
         sessionId += 1
         timerJob?.cancel()
-        idleUnloadJob?.cancel()
+        watchdogJob?.cancel()
         stateResetJob?.cancel()
         stopAudio()
         runCatching { audioSource.release() }
-        runCatching { engine?.close() }
-        engine = null
-        engineModelId = null
+        engineHost.close()
         overlay.hide()
         _state.value = DictationState.Idle
         scope.cancel()
@@ -533,7 +504,6 @@ class DictationService : Service() {
         private const val MIN_HOLD_MS = 400L
         private const val MIN_AUDIO_MS = 150L
         private const val MAX_HOLD_MS = 600_000L
-        private const val MAX_FRAMES = 30_000
         private const val STATE_RESET_MS = 1_800L
         private const val SPEECH_RMS_THRESHOLD = 0.015f
 

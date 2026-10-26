@@ -37,7 +37,7 @@ data class ModelBrowserState(
  * the activity performs the blocking work and reports progress back here.
  */
 class ModelBrowser(
-    private val specs: List<ModelSpec>,
+    private var specs: List<ModelSpec>,
     installedIds: Set<String>,
     selectedId: String,
 ) {
@@ -55,10 +55,26 @@ class ModelBrowser(
         state = snapshot(transfer = state.transfer, message = state.message, error = state.error)
     }
 
+    fun setSpecs(newSpecs: List<ModelSpec>) {
+        specs = newSpecs
+        if (specs.none { it.id == selected }) selected = specs.firstOrNull()?.id ?: selected
+        installed.retainAll(specs.map { it.id }.toSet())
+        state = snapshot(state.transfer, state.message, state.error)
+    }
+
     fun syncInstalled(ids: Set<String>) {
         installed.clear()
         installed.addAll(ids)
         state = snapshot(transfer = state.transfer, message = state.message, error = state.error)
+    }
+
+    fun begin(spec: ModelSpec, action: ModelAction): Boolean {
+        if (state.transfer != null) return false
+        if (specs.none { it.id == spec.id }) {
+            specs = specs + spec
+            state = snapshot(state.transfer, state.message, state.error)
+        }
+        return begin(spec.id, action)
     }
 
     fun begin(id: String, action: ModelAction): Boolean {
