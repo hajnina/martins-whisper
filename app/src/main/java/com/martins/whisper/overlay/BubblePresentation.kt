@@ -31,7 +31,7 @@ object BubblePresentation {
         is DictationState.Idle -> BubbleVisual(
             accent = IDLE_ACCENT,
             icon = BubbleIcon.MIC,
-            contentDescription = "Hold to dictate",
+            contentDescription = "Tap to dictate",
             label = null,
         )
 
@@ -45,7 +45,7 @@ object BubblePresentation {
         is DictationState.Recording -> BubbleVisual(
             accent = LISTENING_ACCENT,
             icon = BubbleIcon.MIC_LEVELS,
-            contentDescription = "Listening; release to transcribe",
+            contentDescription = "Listening; tap to stop",
             label = null,
         )
 

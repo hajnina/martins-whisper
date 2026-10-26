@@ -3,7 +3,7 @@
     <string name="app_name">Martins Whisper</string>
 
     <string name="accessibility_service_label">Martins Whisper text insertion</string>
-    <string name="accessibility_service_description">Inserts dictated text into the focused text field. Used only while you hold the dictation bubble.</string>
+    <string name="accessibility_service_description">Inserts dictated text into the focused text field. Used only while you dictate with the bubble.</string>
     <string name="insertion_copied_toast">Transcript copied; paste it manually</string>
     <string name="insertion_copied_title">Transcript copied</string>
     <string name="insertion_copied_text">No editable field was available. Paste the transcript manually.</string>
@@ -12,8 +12,8 @@
     <string name="notification_channel_name">Dictation</string>
     <string name="notification_channel_description">Keeps the dictation bubble running</string>
     <string name="notification_title">Martins Whisper is ready</string>
-    <string name="notification_text">Hold the bubble to dictate</string>
-    <string name="notification_recording">Recording\u2026 release to transcribe</string>
+    <string name="notification_text">Tap the bubble to dictate</string>
+    <string name="notification_recording">Recording\u2026 tap to stop</string>
     <string name="notification_processing">Transcribing\u2026</string>
     <string name="notification_overlay_missing">Overlay permission is off. Tap Settings.</string>
     <string name="action_settings">Settings</string>
@@ -50,7 +50,7 @@
     <string name="backend_gpu">Vulkan (GPU)</string>
     <string name="backend_cpu">CPU</string>
     <string name="boot_start_summary">Restore the bubble after reboot (Android may restrict microphone startup until the app is opened).</string>
-    <string name="hold_to_talk">Hold to talk</string>
+    <string name="hold_to_talk">Tap to talk</string>
     <string name="error_mic">Microphone permission required</string>
     <string name="error_overlay">Enable display over other apps</string>
     <string name="model_import_custom">Import custom model\u2026</string>

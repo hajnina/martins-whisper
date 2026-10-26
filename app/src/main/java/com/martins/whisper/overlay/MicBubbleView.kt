@@ -100,6 +100,7 @@ class MicBubbleView(context: Context) : View(context) {
     private var downAt = 0L
     private var tracking = false
     private var dragging = false
+    private var stopOnUp = false
     private var pendingControl: Control? = null
 
     private enum class Control { SETTINGS, STOP }
@@ -119,11 +120,17 @@ class MicBubbleView(context: Context) : View(context) {
                 if (control != null) {
                     pendingControl = control
                     tracking = false
+                    stopOnUp = false
                 } else {
                     pendingControl = null
                     tracking = true
-                    hapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                    listener?.onPress()
+                    // Tap-to-toggle: the first tap starts and latches the session; the next tap
+                    // stops it. A tap must never be turned into a stop by its own ACTION_UP.
+                    stopOnUp = state is DictationState.Loading || state is DictationState.Recording
+                    if (!stopOnUp) {
+                        hapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                        listener?.onPress()
+                    }
                 }
                 return true
             }
@@ -153,13 +160,14 @@ class MicBubbleView(context: Context) : View(context) {
                 if (tracking) {
                     if (dragging) {
                         listener?.onDragEnd()
-                    } else {
+                    } else if (stopOnUp) {
                         hapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                         listener?.onRelease()
                     }
                 }
                 tracking = false
                 dragging = false
+                stopOnUp = false
                 return true
             }
 
@@ -168,14 +176,18 @@ class MicBubbleView(context: Context) : View(context) {
                 if (tracking && !dragging) listener?.onCancel()
                 tracking = false
                 dragging = false
+                stopOnUp = false
                 return true
             }
         }
         return super.onTouchEvent(event)
     }
 
+    private fun isExpandedLayout(): Boolean = width >= expandedWidthPx * 0.9f
+
     private fun controlAt(x: Float, y: Float): Control? {
         if (state is DictationState.Idle) return null
+        if (!isExpandedLayout()) return null
         val height = height.toFloat().takeIf { it > 0f } ?: expandedHeightPx.toFloat()
         val width = width.toFloat().takeIf { it > 0f } ?: expandedWidthPx.toFloat()
         if (y < height * 0.15f || y > height * 0.85f) return null
@@ -192,7 +204,7 @@ class MicBubbleView(context: Context) : View(context) {
         super.onDraw(canvas)
         val height = height.toFloat()
         val width = width.toFloat()
-        val expanded = state !is DictationState.Idle
+        val expanded = state !is DictationState.Idle && isExpandedLayout()
         val visual = BubblePresentation.of(state)
         val accent = visual.accent
 

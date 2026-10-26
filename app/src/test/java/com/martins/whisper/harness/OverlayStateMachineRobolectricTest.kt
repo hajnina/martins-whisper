@@ -58,7 +58,7 @@ class OverlayStateMachineRobolectricTest {
         controller.update(DictationState.Idle)
         val bubble = bubbleViews(windowManager).single()
         assertEquals(bubble.isAttachedToWindow, controller.isShowing)
-        assertBubble(bubble, DictationState.Idle, "Hold to dictate")
+        assertBubble(bubble, DictationState.Idle, "Tap to dictate")
 
         val loading = DictationState.Loading("Loading Base\u2026")
         controller.update(loading)
@@ -66,7 +66,7 @@ class OverlayStateMachineRobolectricTest {
 
         val recording = DictationState.Recording(elapsedMs = 1_000L, level = 0.42f, speechDetected = true)
         controller.update(recording)
-        assertBubble(bubble, recording, "Listening; release to transcribe")
+        assertBubble(bubble, recording, "Listening; tap to stop")
 
         val processing = DictationState.Processing("Transcribing\u2026")
         controller.update(processing)
@@ -81,7 +81,7 @@ class OverlayStateMachineRobolectricTest {
         assertBubble(bubble, error, "Error: Engine failed to load")
 
         controller.update(DictationState.Idle)
-        assertBubble(bubble, DictationState.Idle, "Hold to dictate")
+        assertBubble(bubble, DictationState.Idle, "Tap to dictate")
 
         assertEquals(1, bubbleViews(windowManager).size)
         assertSame(bubble, bubbleViews(windowManager).single())
@@ -119,6 +119,25 @@ class OverlayStateMachineRobolectricTest {
 
         controller.hide()
         assertTrue(bubbleViews(windowManager).isEmpty())
+    }
+
+    @Test
+    fun `state changes never resize or move the bubble under the finger`() {
+        val controller = OverlayController(context)
+        assertTrue(controller.show(listener))
+        controller.update(DictationState.Idle)
+        val before = controller.positionForTest()
+        val sizeBefore = controller.sizeForTest()
+
+        controller.update(DictationState.Loading("Loading\u2026"))
+        controller.update(DictationState.Recording(1_000L, 0.4f, true))
+        controller.update(DictationState.Processing())
+        controller.update(DictationState.Success("Inserted"))
+        controller.update(DictationState.Error("boom"))
+
+        assertEquals(before, controller.positionForTest())
+        assertEquals(sizeBefore, controller.sizeForTest())
+        controller.hide()
     }
 
     private fun assertBubble(bubble: MicBubbleView, state: DictationState, description: String) {

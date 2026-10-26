@@ -14,7 +14,7 @@ class BubblePresentationTest {
         val visual = BubblePresentation.of(DictationState.Idle)
         assertEquals(BubblePresentation.IDLE_ACCENT, visual.accent)
         assertEquals(BubbleIcon.MIC, visual.icon)
-        assertEquals("Hold to dictate", visual.contentDescription)
+        assertEquals("Tap to dictate", visual.contentDescription)
         assertNull(visual.label)
     }
 
@@ -37,7 +37,7 @@ class BubblePresentationTest {
         val visual = BubblePresentation.of(DictationState.Recording(1_200, 0.5f, true))
         assertEquals(BubblePresentation.LISTENING_ACCENT, visual.accent)
         assertEquals(BubbleIcon.MIC_LEVELS, visual.icon)
-        assertEquals("Listening; release to transcribe", visual.contentDescription)
+        assertEquals("Listening; tap to stop", visual.contentDescription)
     }
 
     @Test

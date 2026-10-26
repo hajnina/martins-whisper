@@ -91,31 +91,10 @@ class OverlayController(context: Context) {
 
     fun update(state: DictationState) {
         val bubbleView = view ?: return
+        // The bubble never resizes or moves on a state change: growing it to a 240 dp pill made it
+        // jump sideways on the first tap (and the second tap then missed it, DEVICE-REPORT #2).
+        // State is shown inside the fixed 56 dp circle (colour, icon, content description).
         bubbleView.state = state
-        val expanded = state.overlayExpanded
-        val layoutParams = params ?: return
-        val targetWidth = if (expanded) bubbleView.expandedWidthPx else dp(56f)
-        val targetHeight = if (expanded) bubbleView.expandedHeightPx else dp(56f)
-        if (layoutParams.width == targetWidth && layoutParams.height == targetHeight) return
-
-        if (expanded) {
-            val (screenWidth, screenHeight) = screenSize()
-            val margin = dp(12f)
-            val clamped = OverlayGeometry.clamp(
-                layoutParams.x,
-                layoutParams.y,
-                targetWidth,
-                targetHeight,
-                screenWidth,
-                screenHeight,
-                margin,
-            )
-            layoutParams.x = clamped.first
-            layoutParams.y = clamped.second
-        }
-        layoutParams.width = targetWidth
-        layoutParams.height = targetHeight
-        runCatching { windowManager.updateViewLayout(bubbleView, layoutParams) }
     }
 
     fun beginDrag() {
@@ -178,6 +157,9 @@ class OverlayController(context: Context) {
 
     internal fun positionForTest(): Pair<Int, Int>? =
         params?.let { it.x to it.y }
+
+    internal fun sizeForTest(): Pair<Int, Int>? =
+        params?.let { it.width to it.height }
 
     internal fun bubbleForTest(): MicBubbleView? = view
 

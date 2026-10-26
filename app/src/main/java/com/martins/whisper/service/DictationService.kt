@@ -78,6 +78,12 @@ class DictationService : Service() {
     @Volatile
     private var telemetry: DictationTelemetry? = null
 
+    private var sessionWav: File? = null
+    private var sessionAudioDumped = false
+    private var sessionPeakDb = 0f
+    private var sessionRmsDb = 0f
+    private var lastLoggedState: String? = null
+
     private val overlayListener = object : MicBubbleView.Listener {
         override fun onPress() = this@DictationService.onPress()
         override fun onRelease() = this@DictationService.onRelease()
@@ -151,6 +157,8 @@ class DictationService : Service() {
         currentLevel = 0f
         engineHost.beginSession()
         engineReady = false
+        resetSessionAudio()
+        stateLog("tap-start session=$id")
         stateResetJob?.cancel()
         val modelName = settings.customModels.firstOrNull { it.id == settings.modelId }?.displayName
             ?: ModelCatalog.byId(settings.modelId)?.displayName
@@ -170,17 +178,20 @@ class DictationService : Service() {
         }
         ensureForeground(withMicrophone = true)
         if (!startAudio(id)) return
+        stateLog("capture-start session=$id")
         tm?.tMicOpen = SystemClock.elapsedRealtime()
         tm?.sampleRate = SAMPLE_RATE
 
         val modelId = settings.modelId
         scope.launch {
             try {
+                stateLog("model-load-start model=$modelId")
                 withContext(Dispatchers.Default) {
                     engineHost.prepare(modelId)
                     engineHost.load()
                 }
                 telemetry?.engineLoadMs = SystemClock.elapsedRealtime() - loadStartElapsed
+                stateLog("model-load-end model=$modelId ms=${telemetry?.engineLoadMs}")
             } catch (t: Throwable) {
                 if (pressed && id == sessionId) fail(t.message ?: "Engine failed to load")
                 return@launch
@@ -257,25 +268,9 @@ class DictationService : Service() {
         if (!sessionActive) return
         sessionActive = false
         val holdMs = SystemClock.elapsedRealtime() - sessionStartElapsed
+        stateLog("tap-stop holdMs=$holdMs session=$sessionId")
         stopAudio()
 
-        val sampleCount = engineHost.bufferedSamples()
-        val durationMs = sampleCount * 1000L / SAMPLE_RATE
-        if (holdMs < MIN_HOLD_MS && !speechDetected) {
-            engineHost.cancelSession()
-            publishState(DictationState.Idle)
-            Toast.makeText(this, R.string.hold_to_talk, Toast.LENGTH_SHORT).show()
-            return
-        }
-        if (durationMs < MIN_AUDIO_MS) {
-            engineHost.cancelSession()
-            publishState(DictationState.Idle)
-            return
-        }
-        finalizeSession()
-    }
-
-    private fun finalizeSession() {
         val captured = engineHost.finishSession()
         if (captured == null || captured.sampleCount == 0L) {
             publishState(DictationState.Idle)
@@ -283,6 +278,30 @@ class DictationService : Service() {
         }
         val samples = captured.toFloatArray()
         val durationMs = captured.durationMs()
+        dumpSessionAudio(samples)
+        if (holdMs < MIN_HOLD_MS && !speechDetected) {
+            stateLog("session-too-short holdMs=$holdMs audioMs=$durationMs")
+            telemetry?.gateVerdict = "too-short"
+            writeSidecar("too-short", "hold too short", "", null)
+            telemetry?.publishTelemetry(result = "cancelled", error = "hold too short")
+            telemetry = null
+            publishState(DictationState.Idle)
+            Toast.makeText(this, R.string.hold_to_talk, Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (durationMs < MIN_AUDIO_MS) {
+            stateLog("session-too-short audioMs=$durationMs")
+            telemetry?.gateVerdict = "too-short"
+            writeSidecar("too-short", "no audio captured", "", null)
+            telemetry?.publishTelemetry(result = "cancelled", error = "no audio captured")
+            telemetry = null
+            publishState(DictationState.Idle)
+            return
+        }
+        finalizeSession(samples, durationMs)
+    }
+
+    private fun finalizeSession(samples: FloatArray, durationMs: Long) {
         val energy = AudioEnergy.of(samples)
         publishState(DictationState.Processing())
         val tapStopElapsed = SystemClock.elapsedRealtime()
@@ -294,34 +313,17 @@ class DictationService : Service() {
         telemetry?.rmsDbfs = SpeechEnvelope.toDbfs(energy.rms)
         telemetry?.noiseFloorDbfs = envelope.floorDb
         telemetry?.gateThresholdDb = SpeechEnvelope.GATE_MARGIN_DB
-val audioDump: File? by lazy {
-            if (wavDumpEnabled()) {
-                val dump = DebugWavDump.dump(filesDir, timestampedName(), samples)
-                Log.d(TAG, "debug WAV dump: $dump")
-                dump
-            } else null
-        }
-        fun dumpSidecar(verdict: String, reason: String?, transcript: String, insertedText: String?) {
-            val dump = audioDump ?: return
-            val sidecar = org.json.JSONObject()
-                .put("verdict", verdict)
-                .put("peak_dBFS", envelope.peakDb)
-                .put("rms_dBFS", telemetry?.rmsDbfs ?: 0f)
-                .put("threshold", SpeechEnvelope.GATE_MARGIN_DB)
-                .put("language", settings.effectiveLanguage() ?: "auto")
-                .put("model", settings.modelId)
-                .put("transcript", transcript)
-                .put("inserted_text", insertedText ?: "")
-                .put("target_package", AccessibilityInserter.lastTargetPackage ?: org.json.JSONObject.NULL)
-                .put("engine_ms", telemetry?.engineInferMs ?: 0L)
-                .put("ts", System.currentTimeMillis())
-            if (!reason.isNullOrBlank()) sidecar.put("error", reason)
-            DebugWavDump.writeSidecar(dump, sidecar)
-        }
+        sessionPeakDb = envelope.peakDb
+        sessionRmsDb = SpeechEnvelope.toDbfs(energy.rms)
+        stateLog(
+            "gate-input samples=${samples.size} audioMs=$durationMs peak=${envelope.peakDb} " +
+                "floor=${envelope.floorDb}",
+        )
 
         if (energy.isDigitalSilence) {
             telemetry?.gateVerdict = "silent-mic"
-            dumpSidecar("silent-mic", TranscriptGate.SILENT_MIC_MESSAGE, "", null)
+            stateLog("gate=silent-mic")
+            writeSidecar("silent-mic", TranscriptGate.SILENT_MIC_MESSAGE, "", null)
             telemetry?.publishTelemetry(result = "error", error = TranscriptGate.SILENT_MIC_MESSAGE)
             publishState(DictationState.Error(TranscriptGate.SILENT_MIC_MESSAGE))
             scheduleReset()
@@ -331,7 +333,8 @@ val audioDump: File? by lazy {
         if (!speech) {
             telemetry?.gateVerdict = "no-speech"
             val message = envelope.gateMessage()
-            dumpSidecar("no-speech", message, "", null)
+            stateLog("gate=no-speech message=$message")
+            writeSidecar("no-speech", message, "", null)
             telemetry?.publishTelemetry(result = "error", error = message)
             publishState(DictationState.Error(message))
             scheduleReset()
@@ -340,16 +343,20 @@ val audioDump: File? by lazy {
         telemetry?.gateVerdict = "speak"
         telemetry?.language = settings.effectiveLanguage() ?: "auto"
         val language = settings.effectiveLanguage()
+        stateLog("gate=speak language=${language ?: "auto"}")
         val inferStart = SystemClock.elapsedRealtime()
         scope.launch {
             try {
+                stateLog("transcribe-start samples=${samples.size} audioMs=$durationMs")
                 val transcript = withContext(Dispatchers.Default) {
                     engineHost.transcribe(samples, durationMs, language)
                 }
                 telemetry?.engineInferMs = SystemClock.elapsedRealtime() - inferStart
+                stateLog("transcribe-end ms=${telemetry?.engineInferMs} chars=${transcript.text.length}")
                 val text = when (val decision = TranscriptGate.evaluate(transcript.text, speech, energy.peak)) {
                     is TranscriptGate.Decision.Reject -> {
-                        dumpSidecar("reject-transcript", decision.reason, "", "")
+                        stateLog("transcript-rejected reason=${decision.reason}")
+                        writeSidecar("reject-transcript", decision.reason, "", "")
                         telemetry?.publishTelemetry(result = "rejected", error = decision.reason)
                         publishState(DictationState.Error(decision.message))
                         scheduleReset()
@@ -367,7 +374,8 @@ val audioDump: File? by lazy {
                     is InsertResult.Failed -> "Copy failed: ${result.reason}" to false
                     is InsertResult.Rejected -> "Nothing inserted: ${result.reason}" to false
                 }
-                dumpSidecar("transcribed", null, text, insertedText = if (inserted) text else null)
+                writeSidecar("transcribed", null, text, insertedText = if (inserted) text else null)
+                stateLog("insert result=$result inserted=$inserted chars=${text.length}")
                 telemetry?.insertMethod = when (result) {
                     is InsertResult.Copied -> "clipboard"
                     else -> "accessibility"
@@ -402,12 +410,22 @@ val audioDump: File? by lazy {
 
     private fun cancelSession() {
         if (!pressed && !sessionActive) return
+        stateLog("cancel session=$sessionId")
         pressed = false
         sessionActive = false
         sessionId += 1
         timerJob?.cancel()
         stopAudio()
-        engineHost.cancelSession()
+        val captured = engineHost.finishSession()
+        if (captured != null && captured.sampleCount > 0L) {
+            dumpSessionAudio(captured.toFloatArray())
+            telemetry?.gateVerdict = "cancelled"
+            writeSidecar("cancelled", "cancelled by user", "", null)
+        } else {
+            engineHost.cancelSession()
+        }
+        telemetry?.publishTelemetry(result = "cancelled", error = "cancelled by user")
+        telemetry = null
         publishState(DictationState.Idle)
     }
 
@@ -416,13 +434,66 @@ val audioDump: File? by lazy {
 
     private fun timestampedName(): String = DebugWavDump.stamp(System.currentTimeMillis())
 
+    private fun stateLog(event: String) {
+        Log.i(STATE_TAG, event)
+    }
+
+    private fun resetSessionAudio() {
+        sessionWav = null
+        sessionAudioDumped = false
+        sessionPeakDb = 0f
+        sessionRmsDb = 0f
+    }
+
+    /** Debug builds save the raw capture of every session, including aborted ones. */
+    private fun dumpSessionAudio(samples: FloatArray): File? {
+        if (sessionAudioDumped) return sessionWav
+        sessionAudioDumped = true
+        if (!wavDumpEnabled() || samples.isEmpty()) return null
+        return runCatching {
+            val energy = AudioEnergy.of(samples)
+            sessionPeakDb = SpeechEnvelope.of(samples).peakDb
+            sessionRmsDb = SpeechEnvelope.toDbfs(energy.rms)
+            DebugWavDump.dump(filesDir, timestampedName(), samples).also {
+                sessionWav = it
+                Log.d(TAG, "debug WAV dump: $it")
+            }
+        }.getOrNull()
+    }
+
+    private fun writeSidecar(verdict: String, reason: String?, transcript: String, insertedText: String?) {
+        val dump = sessionWav ?: return
+        val sidecar = org.json.JSONObject()
+            .put("verdict", verdict)
+            .put("peak_dBFS", sessionPeakDb)
+            .put("rms_dBFS", sessionRmsDb)
+            .put("threshold", SpeechEnvelope.GATE_MARGIN_DB)
+            .put("language", settings.effectiveLanguage() ?: "auto")
+            .put("model", settings.modelId)
+            .put("transcript", transcript)
+            .put("inserted_text", insertedText ?: "")
+            .put("target_package", AccessibilityInserter.lastTargetPackage ?: org.json.JSONObject.NULL)
+            .put("engine_ms", telemetry?.engineInferMs ?: 0L)
+            .put("ts", System.currentTimeMillis())
+        if (!reason.isNullOrBlank()) sidecar.put("error", reason)
+        DebugWavDump.writeSidecar(dump, sidecar)
+    }
+
     private fun fail(message: String) {
+        stateLog("fail: $message")
         pressed = false
         sessionActive = false
         sessionId += 1
         timerJob?.cancel()
         stopAudio()
-        engineHost.cancelSession()
+        val captured = engineHost.finishSession()
+        if (captured != null && captured.sampleCount > 0L) {
+            dumpSessionAudio(captured.toFloatArray())
+        } else {
+            engineHost.cancelSession()
+        }
+        telemetry?.gateVerdict = telemetry?.gateVerdict?.takeIf { it.isNotBlank() } ?: "error"
+        writeSidecar("error", message, "", null)
         telemetry?.error = message
         telemetry?.publishTelemetry(result = "error", error = message)
         telemetry = null
@@ -439,6 +510,7 @@ val audioDump: File? by lazy {
     }
 
     private fun stopAudio() {
+        stateLog("capture-stop session=$sessionId")
         runCatching { audioSource.stop() }
     }
 
@@ -580,9 +652,23 @@ val audioDump: File? by lazy {
     }
 
     private fun publishState(newState: DictationState) {
+        val key = newState::class.simpleName ?: "Unknown"
+        if (key != lastLoggedState) {
+            lastLoggedState = key
+            stateLog("state=$key ${stateDetail(newState)}")
+        }
         _state.value = newState
         overlay.update(newState)
         updateNotification(newState)
+    }
+
+    private fun stateDetail(state: DictationState): String = when (state) {
+        is DictationState.Loading -> state.label
+        is DictationState.Recording -> "elapsedMs=${state.elapsedMs} speech=${state.speechDetected}"
+        is DictationState.Processing -> state.label
+        is DictationState.Success -> state.message
+        is DictationState.Error -> state.message
+        DictationState.Idle -> ""
     }
 
     override fun onDestroy() {
@@ -610,6 +696,7 @@ val audioDump: File? by lazy {
         const val EXTRA_NO_MIC = "no_mic_type"
 
         const val TAG = "MartinsWhisper"
+        const val STATE_TAG = "MartinsWhisperState"
         const val CHANNEL_ID = "dictation"
         const val NOTIFICATION_ID = 4201
         private const val REQUEST_CONTENT = 10

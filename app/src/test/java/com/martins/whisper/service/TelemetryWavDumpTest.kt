@@ -1,20 +1,63 @@
 package com.martins.whisper.service
 
+import android.Manifest
+import android.app.Application
+import android.content.Context
+import com.martins.whisper.audio.AudioSource
+import com.martins.whisper.core.asr.FakeSpeechEngine
 import java.io.File
+import java.util.concurrent.TimeUnit
 import org.json.JSONObject
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.ConscryptMode
+import org.robolectric.shadows.ShadowSystemClock
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class TelemetryWavDumpTest {
+
+    private lateinit var app: Application
+    private lateinit var audio: EmittingAudioSource
+    private lateinit var originalEngineFactory: (Context, com.martins.whisper.data.SettingsStore) -> com.martins.whisper.core.SpeechEngine
+    private lateinit var originalAudioSourceFactory: (Context) -> AudioSource
+    private lateinit var originalTargetCapture: () -> Unit
+    private var originalWavDump = false
+
+    @Before
+    fun setUp() {
+        app = RuntimeEnvironment.getApplication()
+        shadowOf(app).grantPermissions(Manifest.permission.RECORD_AUDIO)
+        File(app.filesDir, "debug-audio").deleteRecursively()
+        File(app.filesDir, "telemetry").deleteRecursively()
+        audio = EmittingAudioSource()
+        originalEngineFactory = EngineFactory.factory
+        originalAudioSourceFactory = DictationService.audioSourceFactory
+        originalTargetCapture = DictationService.targetCapture
+        originalWavDump = DictationService.wavDumpEnabled
+        EngineFactory.factory = { _, _ -> FakeSpeechEngine() }
+        DictationService.audioSourceFactory = { audio }
+        DictationService.targetCapture = {}
+        DictationService.wavDumpEnabled = true
+    }
+
+    @After
+    fun tearDown() {
+        EngineFactory.factory = originalEngineFactory
+        DictationService.audioSourceFactory = originalAudioSourceFactory
+        DictationService.targetCapture = originalTargetCapture
+        DictationService.wavDumpEnabled = originalWavDump
+    }
 
     @Test
     fun `record appends one JSONL line and mirrors last_json with every protocol field`() {
@@ -59,82 +102,121 @@ class TelemetryWavDumpTest {
         assertEquals(parsed.getString("result"), mirrored.getString("result"))
         assertEquals(parsed.getString("gate_verdict"), mirrored.getString("gate_verdict"))
         assertEquals(-12.5, mirrored.getDouble("peak_dBFS"), 0.01)
-        assertTrue("last.json mirror must be a boolean target_changed", mirrored.isNull("target_changed") || mirrored.getBoolean("target_changed") == false)
+        assertTrue(
+            "last.json mirror must be a boolean target_changed",
+            mirrored.isNull("target_changed") || !mirrored.getBoolean("target_changed"),
+        )
         recorder.record(record)
         assertEquals(2, File(files, "telemetry/records.jsonl").readLines().size)
     }
 
     @Test
-    fun `wav dump writes a valid RIFF PCM16 mono file and a transcript sidecar`() {
+    fun `wav dump writes a valid RIFF PCM16 mono file and a json sidecar`() {
         val files = runtimeFiles()
-        val samples = FloatArray(1_600) { i -> 0.05f * kotlin.math.sin(2.0 * Math.PI * 440 * i / 16_000.0).toFloat() }
-        val wav = DebugWavDump.dump(files, 123L, samples, "hello there")
+        val samples = FloatArray(1_600) { i ->
+            0.05f * kotlin.math.sin(2.0 * Math.PI * 440 * i / 16_000.0).toFloat()
+        }
+        val wav = DebugWavDump.dump(files, "123", samples)
         val bytes = wav.readBytes()
+        assertEquals("123.wav", wav.name)
         assertTrue("WAV must start RIFF", String(bytes.copyOfRange(0, 4), Charsets.US_ASCII) == "RIFF")
-        // data chunk = 2 bytes per sample
         assertEquals(samples.size * 2 + 44, bytes.size)
         val dataBytes = bytes.copyOfRange(44, bytes.size)
-        assertTrue("samples must decodeable to nonzero PCM", dataBytes.any { it != 0.toByte() })
-        assertEquals("hello there", File(wav.parentFile, "123.txt").readText())
+        assertTrue("samples must decode to nonzero PCM", dataBytes.any { it != 0.toByte() })
+
+        DebugWavDump.writeSidecar(wav, JSONObject().put("verdict", "speak"))
+        val sidecar = File(wav.parentFile, "123.json")
+        assertTrue(sidecar.isFile)
+        assertEquals("speak", JSONObject(sidecar.readText()).getString("verdict"))
     }
 
-        @Test
-    fun `a no-speech session still leaves the wav and sidecar json and a last-json record`() {
-        val app = org.robolectric.RuntimeEnvironment.getApplication()
-        org.robolectric.Shadows.shadowOf(app).grantPermissions(android.Manifest.permission.RECORD_AUDIO)
-        val original = DictationService.wavDumpEnabled
-        DictationService.wavDumpEnabled = true
-        val inserted = org.junit.Assert.assertNotNull("sanity", "setup") == null
+    @Test
+    fun `a no-speech session still saves the wav, its sidecar and a last-json record`() {
+        val files = runtimeFiles()
+        val result = runSession(frames = 25, holdMs = 500)
+        assertEquals(DictationState.Error::class, result::class)
+
+        val wavs = debugWavs(files)
+        assertEquals("one WAV per session", 1, wavs.size)
+        val wav = wavs.single()
+        assertTrue("WAV must be RIFF", String(wav.readBytes().copyOfRange(0, 4), Charsets.US_ASCII) == "RIFF")
+        val sidecar = File(wav.parentFile, "${wav.nameWithoutExtension}.json")
+        assertTrue("sidecar json must exist next to the WAV", sidecar.isFile)
+        val json = JSONObject(sidecar.readText())
+        assertEquals("no-speech", json.getString("verdict"))
+        assertTrue(json.has("peak_dBFS") && json.has("rms_dBFS") && json.has("threshold"))
+
+        val last = File(files, "telemetry/last.json")
+        assertTrue("last.json must also be written for rejected sessions", last.isFile)
+        val telemetryJson = JSONObject(last.readText())
+        assertEquals("no-speech", telemetryJson.getString("gate_verdict"))
+        assertEquals("error", telemetryJson.getString("result"))
+    }
+
+    @Test
+    fun `a too-short session still saves the captured wav and a sidecar`() {
+        val files = runtimeFiles()
+        runSession(frames = 5, holdMs = 100)
+
+        val wavs = debugWavs(files)
+        assertEquals("one WAV per session", 1, wavs.size)
+        val sidecar = File(wavs.single().parentFile, "${wavs.single().nameWithoutExtension}.json")
+        assertTrue(sidecar.isFile)
+        assertEquals("too-short", JSONObject(sidecar.readText()).getString("verdict"))
+
+        val last = File(files, "telemetry/last.json")
+        assertTrue(last.isFile)
+        assertEquals("cancelled", JSONObject(last.readText()).getString("result"))
+    }
+
+    private fun runSession(frames: Int, holdMs: Long): DictationState {
+        val controller = Robolectric.buildService(DictationService::class.java).create()
+        val service = controller.get()
         try {
-            val engineFactoryOriginal = com.martins.whisper.service.EngineFactory.factory
-            com.martins.whisper.service.EngineFactory.factory = { _, _ ->
-                com.martins.whisper.core.asr.FakeSpeechEngine(
-                    backend = "replay-fake",
-                    respond = { _, _ -> com.martins.whisper.core.Transcript(" Thank you. ", "en") },
-                )
-            }
-            val files = runtimeFiles()
-            val dir = File(files, "debug-audio")
-            var threw: Throwable? = null
-            val controller = Robolectric.buildService(DictationService::class.java).create()
-            val service = controller.get()
-            try {
-                DictationService::class.java.getDeclaredMethod("onPress").apply { isAccessible = true }.invoke(service)
-                org.robolectric.shadows.ShadowSystemClock.advanceBy(500, java.util.concurrent.TimeUnit.MILLISECONDS)
-                DictationService::class.java.getDeclaredMethod("onRelease").apply { isAccessible = true }.invoke(service)
-                val deadline = System.currentTimeMillis() + 5000
-                while (System.currentTimeMillis() < deadline &&
-                    !dir.listFiles().orEmpty().any { it.name.endsWith(".wav") }
-                ) {
-                    org.robolectric.shadows.ShadowLooper.idleMainLooper()
-                    Thread.sleep(20)
-                }
-            } catch (t: Throwable) {
-                threw = t
-            } finally {
-                controller.destroy()
-                DictationService.wavDumpEnabled = original
-                com.martins.whisper.service.EngineFactory.factory = engineFactoryOriginal
-            }
-            val wavs = dir.listFiles().orEmpty().filter { it.name.endsWith(".wav") }
-            assertTrue(wavs.isNotEmpty(), "no-speech must still dump the WAV (dump guard or gate broke)")
-            val wav = wavs.first()
-            assertTrue("WAV must be a RIFF", String(wav.readBytes().let { it.copyOfRange(0, 4) }, Charsets.US_ASCII) == "RIFF")
-            val sidecar = File(wav.parentFile, "${wav.nameWithoutExtension}.json")
-            assertTrue(sidecar.isFile, "sidecar json must exist next to the WAV")
-            val json = JSONObject(sidecar.readText())
-            assertTrue("no-speech verdict must be recorded", json.has("verdict"))
-            assertTrue("%d-dBFS levels and threshold".let { true }, true)
-            assertTrue(json.has("peak_dBFS") && json.has("rms_dBFS") && json.has("threshold"))
-            val last = File(files, "telemetry/last.json")
-            assertTrue(last.isFile, "last.json must also be written for rejected sessions")
-            val telemetryJson = JSONObject(last.readText())
-            assertEquals("no-speech", telemetryJson.getString("gate_verdict"))
-            assertTrue(telemetryJson.getString("result") == "error")
+            onPress(service)
+            audio.emit(frames)
+            ShadowSystemClock.advanceBy(holdMs, TimeUnit.MILLISECONDS)
+            onRelease(service)
+            org.robolectric.shadows.ShadowLooper.idleMainLooper()
+            return DictationService.state.value
+        } finally {
+            controller.destroy()
         }
     }
 
-private companion object {
+    private fun onPress(service: DictationService) {
+        DictationService::class.java.getDeclaredMethod("onPress").apply { isAccessible = true }.invoke(service)
+    }
+
+    private fun onRelease(service: DictationService) {
+        DictationService::class.java.getDeclaredMethod("onRelease").apply { isAccessible = true }.invoke(service)
+    }
+
+    private fun debugWavs(files: File): List<File> =
+        File(files, "debug-audio").listFiles().orEmpty().filter { it.name.endsWith(".wav") }
+
+    private class EmittingAudioSource : AudioSource {
+        private var onFrame: ((ShortArray, Long) -> Unit)? = null
+
+        @Synchronized
+        override fun start(onFrame: (ShortArray, Long) -> Unit, onError: (Throwable) -> Unit) {
+            this.onFrame = onFrame
+        }
+
+        @Synchronized
+        override fun stop() = Unit
+
+        override fun release() = Unit
+
+        fun emit(frames: Int) {
+            val callback = synchronized(this) { onFrame } ?: error("capture was not started")
+            repeat(frames) { index ->
+                callback(ShortArray(320) { 33 }, index * 20L)
+            }
+        }
+    }
+
+    private companion object {
         val TRUTHFUL_FIELDS = listOf(
             "t_tap_start", "t_mic_open", "t_tap_stop", "audio_ms", "sample_rate",
             "peak_dBFS", "rms_dBFS", "noise_floor_dBFS", "gate_threshold", "gate_verdict",
@@ -144,4 +226,4 @@ private companion object {
     }
 }
 
-private fun runtimeFiles(): File = org.robolectric.RuntimeEnvironment.getApplication().filesDir
+private fun runtimeFiles(): File = RuntimeEnvironment.getApplication().filesDir
