@@ -9,7 +9,25 @@ data class NodeSnapshot(
     val hasReadableText: Boolean,
     val selectionStart: Int,
     val selectionEnd: Int,
+    val windowId: Int = -1,
+    val viewId: String? = null,
+    val isShowingHintText: Boolean = false,
 )
+
+/** The field that was focused when the user started dictating must still be the target at insert. */
+object TargetGuard {
+    fun stillSameTarget(captured: NodeSnapshot?, live: NodeSnapshot?): Boolean {
+        if (captured == null || live == null) return false
+        if (captured.packageName != live.packageName) return false
+        if (captured.windowId != -1 && live.windowId != -1 && captured.windowId != live.windowId) {
+            return false
+        }
+        val capturedView = captured.viewId
+        val liveView = live.viewId
+        if (capturedView != null && liveView != null && capturedView != liveView) return false
+        return true
+    }
+}
 
 sealed interface InsertionRoute {
     data object SetText : InsertionRoute
@@ -31,6 +49,7 @@ object InsertionPolicy {
         if (!node.isEnabled) return InsertionRoute.ClipboardOnly("focused field is disabled")
         if (!node.isVisible) return InsertionRoute.ClipboardOnly("focused field is not visible")
         if (node.isPassword) return InsertionRoute.ClipboardOnly("password field")
+        if (node.isShowingHintText) return InsertionRoute.SetText
         if (!node.hasReadableText) return InsertionRoute.Paste
         return InsertionRoute.SetText
     }

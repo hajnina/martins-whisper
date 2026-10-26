@@ -5,8 +5,10 @@ import android.app.Application
 import android.content.Context
 import android.os.Looper
 import com.martins.whisper.audio.AudioSource
+import com.martins.whisper.core.ChunkReason
 import com.martins.whisper.core.SpeechEngine
 import com.martins.whisper.core.Transcript
+import com.martins.whisper.core.TranscriptGate
 import com.martins.whisper.core.asr.FakeSpeechEngine
 import com.martins.whisper.data.SettingsStore
 import com.martins.whisper.service.DictationService
@@ -30,6 +32,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.ConscryptMode
+import org.robolectric.shadows.ShadowSystemClock
 
 /**
  * Service-layer Robolectric coverage for the G2 path: capture starts while the engine is still
@@ -49,6 +52,7 @@ class DictationServiceLifecycleRobolectricTest {
     private lateinit var originalFactory: (Context, SettingsStore) -> SpeechEngine
     private lateinit var originalInserterFactory: (Context) -> TextInserter
     private lateinit var originalAudioSourceFactory: (Context) -> AudioSource
+    private lateinit var originalTargetCapture: () -> Unit
 
     @Before
     fun setUp() {
@@ -65,6 +69,8 @@ class DictationServiceLifecycleRobolectricTest {
         originalFactory = EngineFactory.factory
         originalInserterFactory = DictationService.inserterFactory
         originalAudioSourceFactory = DictationService.audioSourceFactory
+        originalTargetCapture = DictationService.targetCapture
+        DictationService.targetCapture = {}
 
         EngineFactory.factory = { _, _ ->
             FakeSpeechEngine(respond = { _, language -> Transcript("hello from fake", language) })
@@ -85,6 +91,7 @@ class DictationServiceLifecycleRobolectricTest {
         EngineFactory.factory = originalFactory
         DictationService.inserterFactory = originalInserterFactory
         DictationService.audioSourceFactory = originalAudioSourceFactory
+        DictationService.targetCapture = originalTargetCapture
     }
 
     @Test
@@ -129,6 +136,8 @@ class DictationServiceLifecycleRobolectricTest {
             val chunk = engine.received.single().chunk
             assertEquals(10 * ManualAudioSource.FRAME_SAMPLES, chunk.samples.size)
             assertEquals(200L, chunk.endMs)
+            assertEquals("single-shot path must not chunk", ChunkReason.FLUSH, chunk.reason)
+            assertEquals("single-shot path must not overlap", 0, chunk.overlapMs)
             chunk.samples.forEachIndexed { index, sample ->
                 val frame = index / ManualAudioSource.FRAME_SAMPLES
                 val expected = (100 * (frame + 1)) / 32768f
@@ -272,6 +281,130 @@ class DictationServiceLifecycleRobolectricTest {
         }
     }
 
+    @Test
+    fun `the microphone is only open between the start and stop taps`() {
+        val controller = Robolectric.buildService(DictationService::class.java).create()
+        val service = controller.get()
+        try {
+            assertFalse("creating the service must not open the mic", audio.started)
+
+            invoke(service, "onPress")
+            await("recording starts") {
+                DictationService.state.value is DictationState.Recording
+            }
+            assertTrue(audio.started)
+            assertFalse(audio.stopped)
+
+            audio.emit(frames = 10, firstSample = 1_000, step = 0)
+            invoke(service, "onRelease")
+            await("transcript is inserted") { inserted.size == 1 }
+
+            assertEquals(1, audio.stopCalls)
+            assertTrue("mic closes as soon as the tap ends", audio.stopped)
+        } finally {
+            controller.destroy()
+        }
+    }
+
+    @Test
+    fun `a hold over 30 s stops itself and still makes exactly one transcribe call`() {
+        val engine = FakeSpeechEngine(
+            respond = { _, language -> Transcript("hello from fake", language) },
+        )
+        EngineFactory.factory = { _, _ -> engine }
+        val controller = Robolectric.buildService(DictationService::class.java).create()
+        val service = controller.get()
+        try {
+            invoke(service, "onPress")
+            await("recording starts") {
+                DictationService.state.value is DictationState.Recording
+            }
+            audio.emit(frames = 1_500, firstSample = 1_000, step = 0)
+            shadowOf(Looper.getMainLooper()).idleFor(31, TimeUnit.SECONDS)
+            await("long hold is inserted") { inserted.size == 1 }
+
+            assertEquals(1, engine.received.size)
+            assertTrue(DictationService.state.value is DictationState.Success)
+        } finally {
+            controller.destroy()
+        }
+    }
+
+    @Test
+    fun `start tap captures the focused target before any audio is captured`() {
+        var captures = 0
+        DictationService.targetCapture = { captures++ }
+        val controller = Robolectric.buildService(DictationService::class.java).create()
+        val service = controller.get()
+        try {
+            invoke(service, "onPress")
+            await("recording starts") {
+                DictationService.state.value is DictationState.Recording
+            }
+            assertEquals(1, captures)
+            invoke(service, "cancelSession")
+        } finally {
+            controller.destroy()
+        }
+    }
+
+    @Test
+    fun `hallucinated transcript on real audio is rejected without insertion`() {
+        val engine = FakeSpeechEngine(
+            respond = { _, _ -> Transcript("Thank you.") },
+        )
+        EngineFactory.factory = { _, _ -> engine }
+        val controller = Robolectric.buildService(DictationService::class.java).create()
+        val service = controller.get()
+        try {
+            invoke(service, "onPress")
+            await("recording starts") {
+                DictationService.state.value is DictationState.Recording
+            }
+            audio.emit(frames = 10, firstSample = 1_000, step = 0)
+            invoke(service, "onRelease")
+            await("hallucination is rejected") {
+                DictationService.state.value is DictationState.Error
+            }
+
+            val state = DictationService.state.value as DictationState.Error
+            assertEquals(TranscriptGate.EMPTY_MESSAGE, state.message)
+            assertTrue("nothing may be inserted", inserted.isEmpty())
+            assertEquals(1, engine.received.size)
+        } finally {
+            controller.destroy()
+        }
+    }
+
+    @Test
+    fun `digital silence is a microphone error and never reaches the engine or the field`() {
+        val engine = FakeSpeechEngine(
+            respond = { _, _ -> Transcript("Thank you.") },
+        )
+        EngineFactory.factory = { _, _ -> engine }
+        val controller = Robolectric.buildService(DictationService::class.java).create()
+        val service = controller.get()
+        try {
+            invoke(service, "onPress")
+            await("recording starts") {
+                DictationService.state.value is DictationState.Recording
+            }
+            audio.emit(frames = 10, firstSample = 0, step = 0)
+            ShadowSystemClock.advanceBy(500, TimeUnit.MILLISECONDS)
+            invoke(service, "onRelease")
+            await("silent microphone is reported") {
+                DictationService.state.value is DictationState.Error
+            }
+
+            val state = DictationService.state.value as DictationState.Error
+            assertEquals(TranscriptGate.SILENT_MIC_MESSAGE, state.message)
+            assertTrue("nothing may be inserted", inserted.isEmpty())
+            assertTrue("all-zero audio must not reach the engine", engine.received.isEmpty())
+        } finally {
+            controller.destroy()
+        }
+    }
+
     private fun invoke(service: DictationService, method: String) {
         DictationService::class.java
             .getDeclaredMethod(method)
@@ -301,14 +434,26 @@ class DictationServiceLifecycleRobolectricTest {
         var started = false
             private set
 
+        @Volatile
+        var stopped = false
+            private set
+
+        @Volatile
+        var stopCalls = 0
+            private set
+
         @Synchronized
         override fun start(onFrame: (ShortArray, Long) -> Unit, onError: (Throwable) -> Unit) {
             this.onFrame = onFrame
             started = true
+            stopped = false
         }
 
         @Synchronized
-        override fun stop() = Unit
+        override fun stop() {
+            stopCalls += 1
+            stopped = true
+        }
 
         override fun release() = Unit
 
