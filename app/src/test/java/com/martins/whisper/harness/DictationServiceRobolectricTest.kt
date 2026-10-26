@@ -5,15 +5,16 @@ import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.os.Looper
-import com.martins.whisper.service.InsertResult
-import com.martins.whisper.service.ClipboardTextInserter
-import com.martins.whisper.service.TextInserter
 import com.martins.whisper.audio.AudioSource
+import com.martins.whisper.core.SpeechEngine
 import com.martins.whisper.core.Transcript
 import com.martins.whisper.core.asr.FakeSpeechEngine
+import com.martins.whisper.data.SettingsStore
 import com.martins.whisper.service.DictationService
 import com.martins.whisper.service.DictationState
 import com.martins.whisper.service.EngineFactory
+import com.martins.whisper.service.InsertResult
+import com.martins.whisper.service.TextInserter
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -43,6 +44,9 @@ class DictationServiceRobolectricTest {
     private lateinit var engine: FakeSpeechEngine
     private lateinit var audio: FakeAudioSource
     private var inserted: String? = null
+    private lateinit var originalFactory: (Context, SettingsStore) -> SpeechEngine
+    private lateinit var originalInserterFactory: (Context) -> TextInserter
+    private lateinit var originalAudioSourceFactory: (Context) -> AudioSource
 
     @Before
     fun setUp() {
@@ -56,6 +60,9 @@ class DictationServiceRobolectricTest {
         )
         audio = FakeAudioSource()
         inserted = null
+        originalFactory = EngineFactory.factory
+        originalInserterFactory = DictationService.inserterFactory
+        originalAudioSourceFactory = DictationService.audioSourceFactory
         EngineFactory.factory = { _, _ -> engine }
         DictationService.inserterFactory = {
             object : TextInserter {
@@ -70,9 +77,9 @@ class DictationServiceRobolectricTest {
 
     @After
     fun tearDown() {
-        EngineFactory.factory = { _, _ -> com.martins.whisper.service.FakeSpeechEngine() }
-        DictationService.inserterFactory = { ClipboardTextInserter(it) }
-        DictationService.audioSourceFactory = { com.martins.whisper.audio.AudioRecordSource(it) }
+        EngineFactory.factory = originalFactory
+        DictationService.inserterFactory = originalInserterFactory
+        DictationService.audioSourceFactory = originalAudioSourceFactory
     }
 
     @Test

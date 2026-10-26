@@ -4,6 +4,7 @@ import com.martins.whisper.core.AudioChunk
 import com.martins.whisper.core.ChunkReason
 import com.martins.whisper.core.ModelState
 import com.martins.whisper.core.SpeechEngine
+import com.martins.whisper.core.TextInsertionPlanner
 import com.martins.whisper.core.Transcript
 import com.martins.whisper.core.TranscriptMerger
 import com.martins.whisper.core.asr.FakeSpeechEngine
@@ -96,9 +97,32 @@ class FakeAudioPipelineE2ETest {
         assertEquals("alpha beta gamma delta epsilon", merged)
         assertEquals(ModelState.READY, manager.state)
 
-        clock.set(IDLE_UNLOAD_MS - 1)
+        val caret = TextInsertionPlanner.insert(
+            current = "Team,",
+            selectionStart = 5,
+            selectionEnd = 5,
+            insert = " $merged",
+        )
+        assertEquals("Team, alpha beta gamma delta epsilon", caret.text)
+        assertEquals(caret.text.length, caret.selectionStart)
+        assertEquals(caret.selectionStart, caret.selectionEnd)
+
+        val replaced = TextInsertionPlanner.insert(
+            current = "Hello old world",
+            selectionStart = 6,
+            selectionEnd = 9,
+            insert = "new",
+        )
+        assertEquals("Hello new world", replaced.text)
+        assertEquals(9, replaced.selectionStart)
+        assertEquals(9, replaced.selectionEnd)
+
+        clock.set(200_000)
+        manager.markUsed()
+        clock.set(499_999)
         assertFalse(manager.maybeUnload())
-        clock.set(IDLE_UNLOAD_MS)
+        assertEquals(ModelState.READY, manager.state)
+        clock.set(500_000)
         assertTrue(manager.maybeUnload())
         assertTrue(engine.closed)
         assertEquals(1, engine.closeCalls)

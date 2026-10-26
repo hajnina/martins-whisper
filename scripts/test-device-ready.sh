@@ -23,7 +23,7 @@ export ANDROID_HOME="${ANDROID_HOME:-/work/android-toolchain/sdk}"
 export ANDROID_SDK_ROOT="$ANDROID_HOME"
 AAPT2="${AAPT2:-$ANDROID_HOME/build-tools/35.0.1/aapt2}"
 
-GRADLE=(./gradlew --offline --console=plain "-Pandroid.aapt2FromMavenOverride=$AAPT2")
+GRADLE=(./gradlew --offline --rerun-tasks --console=plain "-Pandroid.aapt2FromMavenOverride=$AAPT2")
 
 echo "== Layer 1 + Layer 2 compile (Gradle user home: $GRADLE_USER_HOME) =="
 "${GRADLE[@]}" \
@@ -54,6 +54,7 @@ Layer 2 execution is DEVICE-ONLY (H1); it is NOT run in this sandbox:
   AccessibilityInsertionReadBackTest  insertion + caret visible to accessibility
   PasswordFieldRefusalTest            password/PIN refused, text untouched
   PermissionDenialTest                missing RECORD_AUDIO fails closed
+  ServiceLifecycleTest               foreground service starts without mic, stops on ACTION_STOP
 Run on hardware with:
   adb install -r app/build/outputs/apk/debug/app-debug.apk
   adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
