@@ -47,3 +47,6 @@ Chronological project log. PM owns this file; agents add entries via their hando
 
 ## 2026-10-26 (MARA shift 2)
 - MFVP flow audit done: bubble->record->VAD(RMS gate + whole-buffer)->real WhisperCppEngine->emitTranscript all wired on master; CRITICAL GAP: inserter falls back to clipboard only (DictationService.kt:514). Tickets MFVP-1/2 written; MFVP-2... renamed tickets: MFVP-1-inserter-wired (CODER running), MFVP-2-feel-bubble-focus. MFVP-3 model path verified (default base, resume+SHA tested). H1 ask refreshed in owner/ASKS.md.
+
+## 2026-10-26 (MARA shift 5, BUILD-READY #2)
+- 21:40Z - DEVICE-REPORT #2 fixed on master: the 12 ms AudioRecord session was the adb tap's DOWN/UP (bubble was push-to-talk), not the probe; the "move" was the 56->240 dp expansion clamping x 952->~460. Commit `06b7db6`: tap-to-toggle (first tap latches, next tap stops), overlay never resizes/moves on state change, `MartinsWhisperState` transition log, WAV+JSON sidecar for every session incl. too-short/cancel/error, telemetry last.json for aborts, committed stable debug keystore. Full offline gate: core 165 + app 139 tests, 0 fail/0 err, 2 env-skips; APK 9,054,349 B signed by `app/debug.keystore`. BUILD-READY #2 = `06b7db6` (docs tip `160168d`), owner push + CI native APK + device run. NORA-3 root-cause handoff added (independent confirmation).
