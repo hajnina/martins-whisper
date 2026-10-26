@@ -1,8 +1,17 @@
 # Kanban - Martins Whisper (Android)
 
-Updated: 2026-10-26T18:56Z (UTC)
+Updated: 2026-10-26T21:0xZ (UTC)
 Columns: Backlog | Ready | In Progress | Review | Blocked | Done
 WIP limit: 2 worker sessions (free-tier quota; MARA stays <=2 workers + integrator).
+
+## MFVP (owner-only scope now)
+| Ticket | What | Status |
+|--------|------|--------|
+| MFVP-1 | Wire AccessibilityInserter into DictationService (focused-field insert; clipboard fallback). CRITICAL GAP found in flow audit. | CODER running, branch `agent/mfvp1-inserter`, ticket `.scratch/device-ready-apk/tickets/MFVP-1-inserter-wired.md` |
+| MFVP-2 | FEEL polish: haptics start/stop/insert + focus check. | open ticket `MFVP-2-feel-bubble-focus.md` |
+| MFVP-3 | One default model (base) one-tap download w/ resume+SHA. | DONE-verified: SettingsStore.kt:102, ModelBrowser.kt:149, HttpModelDownloaderTest (happy/resume/sha-mismatch) |
+| MFVP-4 | H1 device session (wireless adb). | BLOCKED on hardware: owner/ASKS.md updated |
+| MFVP-5 | Short README install/use. | open (after 1-3) |
 
 ## Wayfinder map (source of truth for the road to sign-off)
 
