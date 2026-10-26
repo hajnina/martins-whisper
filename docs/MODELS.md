@@ -84,8 +84,9 @@ uses `adb shell run-as`.
 What the script does:
 
 1. Derives the id from `ggml-<id>.bin` (or accepts `--id ID`).
-2. Compares the local SHA-256 with the catalog value and refuses a mismatch
-   (`--no-verify` skips this for a custom model).
+2. Requires a catalog id and compares the local SHA-256 with the catalog value,
+   refusing a mismatch (`--no-verify` is an explicit escape hatch; do not use it
+   for a normal catalog download).
 3. Refuses to overwrite an existing model unless `--force` is given.
 4. `adb push` to `/data/local/tmp/`, then `run-as com.martins.whisper cp` into
    `files/models/<id>.bin`, `chmod 600`, and removes the temporary copy.

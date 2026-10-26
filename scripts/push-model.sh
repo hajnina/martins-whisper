@@ -36,8 +36,8 @@ Environment:
 
 Supported catalog ids and hashes:
   tiny tiny.en base base.en small small.en medium medium.en large-v3-turbo
-A custom id is allowed for a model that is not in the catalog; verification is
-then limited to printing the local SHA-256.
+The id must be one of the catalog ids above; other files are not selectable in
+the 0.1.0 model picker.
 
 The app is debug-signed in v1. A non-debuggable (release) build makes `run-as`
 unavailable; this script then exits with an explanation instead of touching data.
@@ -154,17 +154,18 @@ main() {
 
   local expected actual
   expected="$(catalog_sha "$MODEL_ID" || true)"
+  [[ -n "$expected" ]] || die "unknown model id '$MODEL_ID'; supported: tiny tiny.en base base.en small small.en medium medium.en large-v3-turbo"
   actual="$(local_sha "$MODEL_FILE" || true)"
   echo "Model:  $MODEL_FILE"
   echo "Id:     $MODEL_ID"
   echo "Bytes:  $(wc -c < "$MODEL_FILE" | tr -d ' ')"
   echo "SHA256: ${actual:-<sha256sum not available>}"
-  if [[ "$VERIFY" -eq 1 && -n "$expected" ]]; then
+  if [[ "$VERIFY" -eq 1 ]]; then
     [[ -n "$actual" ]] || die "cannot verify: no sha256sum/shasum on this host"
     [[ "$actual" == "$expected" ]] || die "SHA-256 mismatch for '$MODEL_ID': expected $expected, got $actual"
     echo "Hash:   OK (matches the catalog)"
-  elif [[ "$VERIFY" -eq 1 ]]; then
-    echo "Hash:   not in the catalog; recorded above (not compared)"
+  else
+    echo "Hash:   not checked (--no-verify)"
   fi
 
   local adb
