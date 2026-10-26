@@ -26,8 +26,9 @@ Notes:
 - The APK is `minSdk 29`, `targetSdk 35`, package `com.martins.whisper`,
   version `0.1.0` (versionCode 1).
 - The default 0.1.0 APK has **no native libraries** (`-Pmartins.native=false`);
-  the arm64 whisper.cpp library is a G1 build. The support matrix describes the
-  v1 target, not a claim about the current stub engine.
+  the engine wiring is real, but the arm64 whisper.cpp library is opt-in with
+  `-Pmartins.native=true`. The support matrix describes the v1 target; no
+  on-device run has validated it yet.
 - Vulkan is **not required**. Never promise a GPU speedup; report the device's
   measured result.
 
@@ -54,10 +55,11 @@ Pass = all items below. Any functional failure blocks sign-off.
       matrix below.
 - [ ] Accessibility-off path falls back to clipboard + notification without a
       crash.
-- [ ] Password/PIN fields are refused in all cases (no insertion, no clipboard
-      offered as a "success").
+- [ ] Password/PIN fields are refused (no insertion). The clipboard fallback may
+      still copy the transcript; the UI must say "copied", not "inserted".
 - [ ] After reboot, the app restores the bubble **without** starting the
-      microphone from boot; opening the app once re-arms dictation.
+      microphone from boot; pressing the bubble re-arms the foreground service
+      (verify the Android 14+ restriction).
 - [ ] 300 s idle unload is visible in state/logs and the next dictation reloads.
 - [ ] No crash across the matrix.
 - [ ] A 10-run stability pass with mixed apps leaves RSS growth ≤ 10% after

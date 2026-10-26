@@ -16,6 +16,8 @@ Status: **active development / replan v2 (Android)**. See `KANBAN.md`, `SPEC.md`
 |---|---|---|
 | [docs/BUILD.md](docs/BUILD.md) | operator | Build the APK and run the JVM tests on this host, in Docker, or in CI. |
 | [docs/INSTALL.md](docs/INSTALL.md) | user + operator | Sideload the APK, first run, upgrade and uninstall. |
+| [docs/FIRST-DICTATION.md](docs/FIRST-DICTATION.md) | user + operator | Shortest path from a native APK to text in another app, including model download/import. |
+| [docs/FIRST-DICTATION.md](docs/FIRST-DICTATION.md) | user + operator | Shortest path from APK to text: native build, 3 permissions, model, overlay, first dictation. |
 | [docs/PERMISSIONS.md](docs/PERMISSIONS.md) | user | Microphone, overlay, accessibility, notifications, battery; what each is for and how to revoke it. |
 | [docs/MODELS.md](docs/MODELS.md) | user + operator | Model sizes/hashes, download/import, adb model push, storage and deletion. |
 | [docs/PRIVACY.md](docs/PRIVACY.md) | everyone | Local-only audio and transcripts, the one network use, and what is stored. |
@@ -25,9 +27,12 @@ Status: **active development / replan v2 (Android)**. See `KANBAN.md`, `SPEC.md`
 
 ## Current build status (0.1.0)
 
-The Android shell, permissions UI, overlay, settings, model catalog and the ASR
-layer are in place and pass 109 JVM tests. **The real whisper.cpp engine and the
-in-app model download/import UI are not wired into `EngineFactory` yet (G1).**
-Until G1 lands, the APK starts with a fake engine and dictation does not produce
-real speech-to-text. Everything in these docs that requires a physical phone is
-marked **UNVERIFIED** until the H1 device run.
+The Android shell, permissions UI, overlay, settings, model catalog, in-app model
+management (installed state, download, SAF import, delete, progress) and the real
+`WhisperCppEngine` wiring are in place and pass 135 JVM tests. Diagnostics shows
+native availability, the resolved backend, fallback reason, GPU-failure count and
+the last engine error. The default APK still has **no native libraries**
+(`-Pmartins.native=false`), so real transcription needs an arm64 build with
+`-Pmartins.native=true`; no native/device run has been done yet. Everything in
+these docs that requires a physical phone is marked **UNVERIFIED** until the H1
+device run.

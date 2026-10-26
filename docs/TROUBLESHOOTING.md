@@ -4,10 +4,12 @@ Find the symptom, try the next step. If you are reporting a bug, attach the
 secret-free report from [DOCTOR.md](DOCTOR.md) and the app version. Device-only
 steps are **UNVERIFIED (H1-blocked)** until they are run on real hardware.
 
-> **Known 0.1.0 gap:** the APK ships a fake speech engine and has no in-app model
-> download screen (G1). If dictation returns placeholder text rather than your
-> words, that is this gap, not a permission problem. Check
-> [INSTALL.md](INSTALL.md) for the current status.
+> **0.1.0 status:** the engine is wired to the real `WhisperCppEngine` and the
+> in-app **Model** screen can download, import and delete catalog models. The
+> **default APK has no native libraries**, so real transcription needs an arm64
+> build with `-Pmartins.native=true`. Failures are typed and shown in
+> **Diagnostics** (native availability, resolved backend, fallback, GPU failures,
+> last error). Check [INSTALL.md](INSTALL.md) and [FIRST-DICTATION.md](FIRST-DICTATION.md).
 
 ## Install
 
@@ -74,9 +76,9 @@ implemented; if it is still clipped on your device, record the case in
 ### The bubble disappears after a reboot
 
 With **Start overlay on boot** enabled, the bubble is restored **without the
-microphone** (Android 14+ restricts boot-time mic starts). Open the app once;
-dictation is re-armed. If nothing is restored, check the boot switch and battery
-settings.
+microphone** (Android 14+ restricts boot-time mic starts). Press the bubble to
+request the microphone again; opening the app also re-arms it. If nothing is
+restored, check the boot switch and battery settings.
 
 ### The bubble blocks a button / cannot be moved
 
@@ -114,20 +116,27 @@ place the cursor before dictating and use a simple `EditText` if possible.
 
 ### "Model missing" / dictation says the model is not installed
 
-0.1.0 has no download screen. Push a model on the operator path:
+The app reports the typed reason `model-missing` and the message *"Model '…' is
+not installed. Download or import it in Settings."*
 
-```bash
-./scripts/push-model.sh ggml-base.bin
-```
+1. In **Model**, tap the row you want (for example **Base (multilingual)**).
+2. Tap **Download**, or **Import file** if you already have the matching
+   `ggml-<id>.bin`. Wait for **Installed · selected**.
+3. On a debug APK with no network, use the operator fallback:
 
-Then select **Base (multilingual)** in **Settings → Model**. Verify the file
-exists with `./scripts/doctor.sh` (it lists `files/models/<id>.bin`).
+   ```bash
+   ./scripts/push-model.sh ggml-base.bin
+   ```
+
+   Then reopen the app so the row refreshes.
+4. Verify the file with `./scripts/doctor.sh` (it lists
+   `files/models/<id>.bin`).
 
 ### Push fails with `package not debuggable`
 
 `run-as` only works on a debuggable APK. Install the debug APK from
-[BUILD.md](BUILD.md) (or use the in-app import once G1 lands). A release build
-does not allow adb access to app-private storage.
+[BUILD.md](BUILD.md) or use the in-app **Download**/**Import file** instead. A
+release build does not allow adb access to app-private storage.
 
 ### Push fails with `SHA-256 mismatch`
 
@@ -153,20 +162,28 @@ report shows free storage and RAM, not live RSS; use
 
 ### "Engine unavailable" / no transcript at all
 
-- 0.1.0 intentionally has a fake engine until G1 wires whisper.cpp. If the text
-  is a placeholder, this is the known gap.
-- When the real engine is built, the APK must contain the arm64 library
-  (`-Pmartins.native=true`). A CPU-only/default APK without native libs must show
-  a typed "engine unavailable" error, not crash.
-- Native build failures are documented in [BUILD.md](BUILD.md) and
-  [native-build.md](native-build.md); do not chase them on a phone.
+The engine fails **typed** and records the reason. The same fields are in the
+in-app **Diagnostics** section and, on a debuggable APK, in
+`./scripts/doctor.sh` (`backend`, `fallback`, `gpu_failures`, `last_error`).
+
+| Typed reason | What it means | What to do |
+|---|---|---|
+| `native-unavailable` | This APK has no `libmartins_whisper.so` (the default build). | Install an arm64 build made with `-Pmartins.native=true`; downloading a model will not fix it. Diagnostics says **Native whisper.cpp: missing** and may show a load error. |
+| `model-missing` | The selected catalog id has no file under `files/models/<id>.bin`. | Download/import that row, or `push-model.sh`; select the installed row. Diagnostics shows the typed *not installed* message. |
+| `gpu-unavailable` | You requested **GPU** but the engine loaded on CPU. | Expected on a phone/driver without working Vulkan. Dictation still works on CPU; no action needed. Diagnostics shows **Fallback: GPU unavailable; using CPU**. |
+| `auto-cpu` | **Auto** chose CPU (no usable GPU, or a prior GPU failure). | Informational; dictation works on CPU. Diagnostics shows **Fallback: auto selected CPU**. |
+| `engine-error` | Model file is corrupt/unreadable, or whisper.cpp failed to create the context. | Re-download/re-import the model; if it persists, capture Diagnostics + logcat. |
+
+Native build failures are documented in [BUILD.md](BUILD.md) and
+[native-build.md](native-build.md); do not chase them on a phone.
 
 ### GPU selected but it falls back to CPU
 
 This is expected on devices without a working Vulkan driver, and on a driver
-crash. v1 falls back to CPU once and reports the reason. GPU is optional and
-never a sign-off blocker. Record the backend in the doctor report and the H2
-table.
+crash. v1 falls back to CPU once and reports `gpu-unavailable`; Diagnostics shows
+the CPU backend, the fallback reason and an incremented **GPU fallbacks
+recorded** count. GPU is optional and never a sign-off blocker. Record the
+backend in the doctor report and the H2 table.
 
 ## Getting evidence for a bug report
 

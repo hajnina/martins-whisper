@@ -26,8 +26,10 @@ Environment:
   ADB              Path to adb (default: adb on PATH, then $ANDROID_HOME/platform-tools/adb)
   ANDROID_SERIAL   Default device serial
 
-The app does not yet expose an in-app doctor screen; this script reads the same
-facts from adb. Fields it cannot read are printed as "unavailable", never guessed.
+The in-app Diagnostics section shows the engine state; this script adds the
+device/permission/model facts and reads the persisted engine state on a
+debuggable APK. Fields it cannot read are printed as "unavailable", never
+guessed.
 EOF
 }
 
@@ -200,8 +202,67 @@ main() {
   else
     echo "models=$models"
   fi
-  echo "backend=unavailable (app v0.1.0 has no doctor screen; see docs/DOCTOR.md)"
-  echo "last_error=unavailable (not surfaced by app v0.1.0)"
+  local prefs_read=no prefs=""
+  if [[ "$installed" == "yes" ]]; then
+    prefs="$(q run-as "$PACKAGE" cat shared_prefs/martins_whisper_settings.xml 2>/dev/null)"
+    [[ -n "$prefs" ]] && prefs_read=yes
+  fi
+
+  pref_string() {
+    local key="$1" value
+    value="$(sed -n "s:.*<string name=\"$key\">\(.*\)</string>.*:\1:p" <<<"$prefs" | first_line)"
+    value="${value//&amp;/&}"
+    value="${value//&lt;/<}"
+    value="${value//&gt;/>}"
+    value="${value//&apos;/$'\''}"
+    value="${value//&quot;/\"}"
+    printf '%s\n' "$value"
+  }
+  pref_int() {
+    sed -n "s:.*<int name=\"$1\" value=\"\([-0-9]*\)\".*:\1:p" <<<"$prefs" | first_line
+  }
+  pref_bool() {
+    sed -n "s:.*<boolean name=\"$1\" value=\"\(true\|false\)\".*:\1:p" <<<"$prefs" | first_line
+  }
+
+  local selected_model backend_setting active_backend fallback_reason gpu_failures last_error idle_unload overlay_setting boot_start
+  if [[ "$installed" != "yes" ]]; then
+    selected_model="n/a (app not installed)"; backend_setting="n/a"; active_backend="n/a"
+    fallback_reason="n/a"; gpu_failures="n/a"; last_error="n/a"; idle_unload="n/a"
+    overlay_setting="n/a"; boot_start="n/a"
+  elif [[ "$prefs_read" != "yes" ]]; then
+    selected_model="unavailable (non-debuggable build or app data not readable)"
+    backend_setting="unavailable"; active_backend="unavailable"; fallback_reason="unavailable"
+    gpu_failures="unavailable"; last_error="unavailable"; idle_unload="unavailable"
+    overlay_setting="unavailable"; boot_start="unavailable"
+  else
+    selected_model="$(pref_string model_id)"; selected_model="${selected_model:-base (default not written yet)}"
+    backend_setting="$(pref_string backend)"; backend_setting="${backend_setting:-AUTO (default not written yet)}"
+    active_backend="$(pref_string engine_active_backend)"; active_backend="${active_backend:-not recorded (no engine load yet)}"
+    fallback_reason="$(pref_string engine_fallback_reason)"; fallback_reason="${fallback_reason:-none}"
+    gpu_failures="$(pref_int engine_gpu_failure_count)"; gpu_failures="${gpu_failures:-0 (default not written yet)}"
+    last_error="$(pref_string engine_last_error)"; last_error="${last_error:-none recorded}"
+    idle_unload="$(pref_int idle_unload_seconds)"; idle_unload="${idle_unload:-300 (default not written yet)}"
+    overlay_setting="$(pref_bool overlay_enabled)"; overlay_setting="${overlay_setting:-false (default not written yet)}"
+    boot_start="$(pref_bool boot_start)"; boot_start="${boot_start:-true (default not written yet)}"
+  fi
+
+  echo "selected_model_id=$selected_model"
+  echo "backend_setting=$backend_setting"
+  echo "backend=$active_backend"
+  echo "fallback=$fallback_reason"
+  echo "gpu_failures=$gpu_failures"
+  echo "last_error=$last_error"
+  echo "idle_unload_seconds=$idle_unload"
+  echo "overlay_enabled=$overlay_setting"
+  echo "boot_start=$boot_start"
+  if [[ "$active_backend" == whisper.cpp* ]]; then
+    echo "native_engine=loaded (backend above)"
+  elif [[ "$last_error" == *"Native whisper.cpp is not available"* ]]; then
+    echo "native_engine=missing (last_error says the APK has no native library)"
+  else
+    echo "native_engine=not loaded yet; check in-app Diagnostics before the first press"
+  fi
   echo "end_of_report"
 }
 
