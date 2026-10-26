@@ -21,7 +21,7 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.martins.whisper.MainActivity
 import com.martins.whisper.R
-import com.martins.whisper.accessibility.AccessibilityTextInserter
+import com.martins.whisper.service.AccessibilityTextInserter
 import com.martins.whisper.audio.AudioRecordSource
 import com.martins.whisper.audio.AudioSource
 import com.martins.whisper.core.asr.ModelManager
