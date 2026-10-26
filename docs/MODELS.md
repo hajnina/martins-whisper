@@ -4,10 +4,13 @@ Martins Whisper runs **whisper.cpp GGML** models on the phone. A model file is
 just data; the app never uploads it. v1 supports **GGML only** (magic `6c 6d 67
 67`). GGUF and ONNX files are not supported (ADR-004).
 
-> **Status in 0.1.0:** the catalog, hash checks, downloader and on-disk layout
-> exist and are covered by JVM tests. The **in-app download/import/delete screen
-> is not wired yet (G1)**. Until it lands, use the adb push path below.
-> Device commands are **UNVERIFIED (device, H1-blocked)**.
+> **Status after G1 (on `master`):** the **Model** section lists the catalog and
+> has **Download**, **Import file** and **Delete** actions, with progress and
+> SHA-256 verification. The engine is wired to the installed model
+> (`EngineFactory` → `WhisperCppEngine`). The **default debug APK still has no
+> native library**, so it can download/manage models but cannot transcribe; use a
+> `-Pmartins.native=true` build for real dictation. Device runs remain
+> **UNVERIFIED (H1-blocked)**.
 
 ## Which model to use
 
@@ -34,6 +37,11 @@ opt-in experiments.
 Full 64-character SHA-256 values are in `research/01-model-facts.md` and in
 `core/src/main/kotlin/com/martins/whisper/core/asr/ModelCatalog.kt`.
 
+A model file alone is not enough: the engine also needs the native library. The
+default host APK is built with `-Pmartins.native=false`, so its Diagnostics shows
+**Native whisper.cpp: missing** and dictation fails with a typed error until you
+install a native build. See [FIRST-DICTATION.md](FIRST-DICTATION.md) step 0.
+
 ## Where models live
 
 The app stores one file per model, named by **catalog id** (not the upstream
@@ -47,11 +55,14 @@ Examples: `base.bin`, `tiny.en.bin`, `large-v3-turbo.bin`. The app's
 `ModelStorage` maps a catalog spec to `<id>.bin` and uses `<id>.bin.part` while
 writing, then atomically replaces the final file after verification.
 
-## Download from the canonical source (operator)
+## Download from the canonical source
 
 The canonical source is the MIT-licensed Hugging Face repo
-[`ggerganov/whisper.cpp`](https://huggingface.co/ggerganov/whisper.cpp), pinned to
-revision `5359861c739e955e79d9a303bcbc70fb988958b1`.
+[`ggerganov/whisper.cpp`](https://huggingface.co/ggerganov/whisper.cpp). The
+in-app **Download** button uses the catalog's `resolve/main` URL (the same repo)
+and **verifies the catalog SHA-256** before installing; if upstream `main` changes,
+the hash check fails closed. The operator command below pins the revision
+explicitly for a reproducible download:
 
 **VERIFIED (host, 2026-10-26):** both the `base` command below (147,951,465
 bytes, SHA-256 `60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe`)
@@ -75,10 +86,11 @@ License: Whisper weights © 2022 OpenAI, MIT. Converted to GGML by whisper.cpp,
 MIT. The app must keep this attribution visible; see
 `research/01-model-facts.md` for the exact notice.
 
-## Operator: adb push
+## Operator fallback: adb push
 
-This is the supported path in 0.1.0. It needs the **debug-signed APK** because it
-uses `adb shell run-as`.
+Use this when the phone has no network, or you already have the file. It needs
+the **debug-signed APK** because it uses `adb shell run-as`; the normal user path
+is the in-app **Download** button.
 
 ```bash
 ./scripts/push-model.sh ggml-base.bin
@@ -108,26 +120,46 @@ adb shell run-as com.martins.whisper chmod 600 files/models/base.bin
 adb shell rm -f /data/local/tmp/ggml-base.bin
 ```
 
-Then in the app choose **Settings → Model → Base (multilingual)**. The choice is
-persisted in SharedPreferences (`model_id`).
+Then open the app, find **Model → Base (multilingual)** and tap that row to
+select it (it should show **Installed · selected**). The choice is persisted in
+SharedPreferences (`model_id`).
 
 If `run-as` fails with `package not debuggable`, you are running a release build
 without the debug key; use a debug APK for the model-push workflow.
 
-## In-app download and import (planned, G1)
+## In-app model screen (G1)
 
-The intended v1 flow, already backed by `ModelCatalog`, `ModelRepository`,
-`ModelDownloader` and `ModelStorage`:
+The single **Model** section lists every catalog row with its size and status:
 
-- **Download**: an explicit tap per model, with progress, resume (`.part`),
-  streaming SHA-256 verification, then atomic replace. Network is used only for
-  this action. No silent downloads.
-- **Import**: pick an existing GGML file with the Android file picker; verify its
-  SHA-256 if supplied, otherwise accept it after the magic/load check.
-- **Delete**: remove the model file; the next dictation reports a clear "model
-  missing" state instead of crashing.
+- `Not installed` — no file on the phone.
+- `Not installed · selected` — this id is the current choice but its file is
+  missing; dictation fails with a typed *"not installed"* message.
+- `Installed` / `Installed · selected` — the file exists; the engine can plan it.
 
-These screens do **not exist in 0.1.0**; do not look for a download button.
+Tap a row to make it the selected `model_id`. Actions:
+
+- **Download** (only for a not-installed catalog model): explicit tap, progress
+  bar, resume via `<id>.bin.part`, streaming SHA-256 verification, atomic replace.
+  Network is used only for this action; no silent downloads. On success the
+  message is **Model ready**.
+- **Import file**: opens the Android file picker. The app copies the picked file
+  to a cache file, verifies the **catalog SHA-256 for the selected row**, then
+  installs it. A wrong/truncated file fails with a mismatch and is not installed.
+  Only catalog ids are selectable; arbitrary custom GGML ids are a follow-up.
+- **Delete** (only for an installed model): removes `<id>.bin` and its `.part`.
+  The status returns to `Not installed`; the next dictation reports the typed
+  *"not installed"* message instead of crashing.
+
+The engine and the model screen share one repository
+(`ModelRepositoryProvider`, rooted at `filesDir/models`), so a successful
+download or import is immediately visible to the engine. Switching models while
+the engine is loaded causes the service to close the old engine and load the new
+one on the next hold.
+
+**VERIFIED (host):** the G1 build compiles and its JVM tests cover
+download/import/delete transitions, planning and engine-state persistence.
+**UNVERIFIED (device):** the actual download/import over the phone's network and
+file picker.
 
 ## Storage and memory guidance
 
@@ -143,15 +175,17 @@ deletes the models.
 
 ## Idle unload
 
-**Settings → Unload model when idle** offers 1, 5 (default), 10 and 15 minutes.
-The service frees the engine after the chosen idle time; the next hold reloads
-it. The real native free path is part of G1/whisper.cpp; the state machine and
-timer are implemented and tested. Verify on device with
-[DEVICE-MATRIX.md](DEVICE-MATRIX.md) and the doctor report.
+**Recognition → Unload model when idle** offers 1, 5 (default), 10 and 15
+minutes. The service closes the engine after the chosen idle time
+(`WhisperCppEngine.close()` frees the native context); the next hold reloads it,
+so that dictation is slower once. Diagnostics shows the backend from the last
+load. Verify the timing and memory on device with
+[DEVICE-MATRIX.md](DEVICE-MATRIX.md).
 
 ## Delete a model
 
-- In-app delete is planned (G1).
+- In-app: tap **Delete** under an installed row. The status becomes
+  `Not installed`.
 - Operator (debug APK):
 
   ```bash

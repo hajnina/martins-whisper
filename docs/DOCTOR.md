@@ -4,10 +4,11 @@ A good bug report needs the device, Android version, app version, backend, model
 and permission state. The doctor report collects exactly that. It contains **no
 transcripts, no audio, no accounts and no tokens**.
 
-> **Status in 0.1.0:** the app has a **Diagnostics** section but it only shows a
-> status caption; the full in-app doctor screen is **not implemented yet (G1)**.
-> Use the operator script below. A device run is **UNVERIFIED (H1-blocked)**
-> because this sandbox has no phone.
+> **Status in 0.1.0:** the in-app **Diagnostics** section shows native
+> availability, resolved backend, fallback reason, GPU-failure count and the last
+> engine error. `scripts/doctor.sh` adds device/permission/model facts and, on a
+> debuggable APK, the persisted engine state. A device run is **UNVERIFIED
+> (H1-blocked)** because this sandbox has no phone.
 
 ## Run the script
 
@@ -27,9 +28,10 @@ Pick the device when several are connected:
 If `adb` or a device is missing, the script exits with code **2** (adb) or **3**
 (device) and a clear message; it does not print a partial report.
 
-**VERIFIED (host):** `bash -n`, `--help`, and the missing-device path
-(`error: no adb device in 'device' state...`, exit 3).
-**UNVERIFIED (device):** every reported value on a real phone.
+**VERIFIED (host):** `bash -n`, `--help`, the missing-device path
+(`error: no adb device in 'device' state...`, exit 3), and the report/engine
+parsing against a fake `adb` fixture. **UNVERIFIED (device):** every reported
+value on a real phone, including the `run-as` SharedPreferences read.
 
 ## What the report contains
 
@@ -52,11 +54,18 @@ If `adb` or a device is missing, the script exits with code **2** (adb) or **3**
 | `accessibility_service` | `enabled` / `disabled` | insertion failures |
 | `battery_optimization` | `not ignored` / `ignored (exempt)` | service killed |
 | `models_dir`, `model` | `base.bin bytes=147951465 sha256=...` | missing/corrupt model |
-| `backend` | `unavailable (app v0.1.0...)` | GPU/CPU fallback |
-| `last_error` | `unavailable (not surfaced...)` | app error code |
+| `selected_model_id` | `base` | which catalog row the engine will plan |
+| `backend_setting` | `AUTO` / `GPU` / `CPU` | user preference vs actual backend |
+| `backend` | `whisper.cpp/cpu` / `whisper.cpp/vulkan` / `not recorded` | which engine actually loaded |
+| `fallback` | `none` / `gpu-unavailable` / `auto-cpu` / `model-missing` / ... | why CPU was used |
+| `gpu_failures` | `0` / `1` | repeated GPU trouble |
+| `last_error` | `Model 'Base (multilingual)' is not installed...` | typed failure text |
+| `native_engine` | `loaded` / `missing` / `not loaded yet` | quick native-APK check |
+| `idle_unload_seconds`, `overlay_enabled`, `boot_start` | `300`, `true`, `true` | service/settings state |
 
-`backend` and `last_error` are placeholders until the app exposes them; the
-script prints `unavailable`, never a guess.
+The engine fields come from the persisted `SettingsStore` SharedPreferences via
+`run-as` on a debuggable APK. If the app data is not readable, the script prints
+`unavailable` or `not recorded`, never a guess.
 
 Illustrative shape (not a captured device run):
 
@@ -84,8 +93,16 @@ accessibility_service=enabled
 battery_optimization=not ignored
 models_dir=files/models
 model=base.bin bytes=147951465 sha256=60ed5bc3dd14eea8...
-backend=unavailable (app v0.1.0 has no doctor screen; see docs/DOCTOR.md)
-last_error=unavailable (not surfaced by app v0.1.0)
+selected_model_id=base
+backend_setting=AUTO
+backend=whisper.cpp/cpu
+fallback=gpu-unavailable
+gpu_failures=1
+last_error=none recorded
+idle_unload_seconds=300
+overlay_enabled=true
+boot_start=true
+native_engine=loaded (backend above)
 end_of_report
 ```
 
@@ -114,17 +131,21 @@ Logcat: <attach the filtered logcat excerpt; see docs/TROUBLESHOOTING.md>
 Screenshot: <optional; avoid private text>
 ```
 
-## Planned in-app doctor (G1)
+## In-app Diagnostics (shipped with the G1 wiring)
 
-When G1 wires the real engine, the in-app **Diagnostics** section should show and
-copy the same fields plus:
+The app's **Diagnostics** section currently shows:
 
-- active backend (`whisper.cpp/vulkan` or `whisper.cpp/cpu`) and the fallback
-  reason,
-- selected model id and SHA-256 prefix,
-- idle-unload state (`loaded`, `unloaded`, `last used N s ago`),
-- last error code,
-- free storage.
+- `Native whisper.cpp: available` / `missing`, plus the native load error when
+  missing,
+- `Resolved backend: not loaded yet` or the loaded backend
+  (`whisper.cpp/vulkan`, `whisper.cpp/gpu`, `whisper.cpp/cpu`),
+- `Fallback:` the typed reason (`none`, `native-unavailable`, `model-missing`,
+  `gpu-unavailable`, `auto-cpu`, `engine-error`) in human wording,
+- `GPU fallbacks recorded: N`,
+- `Last engine error: …` after a failure,
+- a hint to press the bubble when no engine has loaded yet.
 
-It must still exclude audio and transcripts. The operator script is the reference
-for the field names so both stay consistent.
+It deliberately excludes audio, transcripts, the device serial and accounts. It
+is the first place to look for the typed reasons in
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md#engine-unavailable--no-transcript-at-all);
+`doctor.sh` reports the same persisted fields so both stay consistent.

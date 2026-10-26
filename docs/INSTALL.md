@@ -6,13 +6,16 @@ You need the APK file and, for the operator path, a computer with `adb`.
 Two readers:
 
 - **User** (no terminal): install the APK file that someone sent you, then follow
-  [PERMISSIONS.md](PERMISSIONS.md).
+  [PERMISSIONS.md](PERMISSIONS.md). The APK must include the native library for
+  real dictation; without it the app can download models but not transcribe.
 - **Operator** (terminal): build or receive the APK, install it with `adb`.
 
-> **Status in 0.1.0:** the app installs and the settings/permission screens work,
-> but the real speech engine and the in-app model download screen are not wired
-> yet (G1). Dictation will not produce real text until then. Device steps below
-> are **UNVERIFIED (device, H1-blocked)** because this sandbox has no phone.
+> **Status in 0.1.0:** the app installs, the settings/permission screens work, the
+> model catalog has in-app download/import/delete, and `EngineFactory` loads the
+> selected model through the real `WhisperCppEngine`. The default APK has **no
+> native libraries** (`-Pmartins.native=false`), so real transcription needs an
+> arm64 build with `-Pmartins.native=true`. Device steps below are **UNVERIFIED
+> (device, H1-blocked)** because this sandbox has no phone.
 
 ## What you need
 
@@ -28,13 +31,26 @@ Two readers:
    ```bash
    cd /work/martins-whisper-worktrees/d1-docs
    source scripts/env.sh
-   ./gradlew :app:assembleDebug --offline
+   ./gradlew :core:test :app:testDebugUnitTest :app:assembleDebug --offline
    ls -l app/build/outputs/apk/debug/app-debug.apk
    ```
 
-   **VERIFIED (host, 2026-10-26):** `BUILD SUCCESSFUL`, APK `8,873,577` bytes.
-   The SHA-256 changes on every rebuild (debug-signing timestamp); compare only
-   against the hash printed for the same build, not across builds.
+   **VERIFIED (host, 2026-10-26):** `BUILD SUCCESSFUL`, **135 JVM tests, 0
+   failures**, APK `9,163,557` bytes. The SHA-256 changes on every rebuild
+   (debug-signing timestamp); compare only against the hash printed for the same
+   build, not across builds.
+
+   That command builds the **default APK with no native engine**. For real
+   dictation build the arm64 native variant (needs NDK `27.0.12077973`):
+
+   ```bash
+   ./gradlew :app:assembleDebug --offline -Pmartins.native=true
+   unzip -l app/build/outputs/apk/debug/app-debug.apk | grep libmartins_whisper
+   # expected: lib/arm64-v8a/libmartins_whisper.so
+   ```
+
+   **UNVERIFIED (host):** this sandbox has no NDK, so the native variant was not
+   built here. The default APK contains no `lib/` entries (**VERIFIED**).
 
 2. Enable **Developer options → USB debugging** on the phone and accept the RSA
    prompt. Check the connection:
@@ -54,21 +70,29 @@ Two readers:
    **VERIFIED (script):** `--help` and `bash -n`; missing adb/device exits with a
    clear message. **UNVERIFIED (device):** the actual `adb install`.
 
-4. Open **Martins Whisper** and grant the four permissions in
+4. Open **Martins Whisper** and grant the **three required** permissions
+   (microphone, display over other apps, accessibility insertion); notifications
+   are optional but needed for the ongoing status. See
    [PERMISSIONS.md](PERMISSIONS.md).
 
-5. Make a model available. In 0.1.0 there is no in-app download button, so push
-   one over adb:
+5. Make a model available. The normal path is in the app: tap a catalog row,
+   then **Download** or **Import file**; wait for **Installed · selected**. On a
+   debug APK with no network you can still push one over adb:
 
    ```bash
    ./scripts/push-model.sh /path/to/ggml-base.bin
    ```
 
-   See [MODELS.md](MODELS.md) for downloads, hashes and storage.
+   See [MODELS.md](MODELS.md) for the in-app flow, downloads, hashes and storage.
 
-6. In the app, **Settings → Model** must show the model you pushed (for example
-   *Base (multilingual)*). Start the overlay and hold the bubble. Until G1 is
-   merged, the engine is still a fake stub.
+6. In the app, the **Model** section shows the catalog with **Installed** /
+   **Not installed** and the selected row. Tap **Start overlay**, open another
+   app, and hold the floating bubble; the first press loads the selected model.
+   **Diagnostics** explains a typed failure. On the default (native-less) APK the
+   engine reports *Native whisper.cpp is not available*; install a
+   `-Pmartins.native=true` arm64 build to dictate for real.
+
+   The shortest end-to-end path is [FIRST-DICTATION.md](FIRST-DICTATION.md).
 
 ## User path (APK file, no computer)
 
@@ -84,10 +108,11 @@ stock-Android path.
    you trust.
 3. Tap **Install**, then **Open**.
 4. Grant the permissions in [PERMISSIONS.md](PERMISSIONS.md).
-5. A model must still be present. v1's in-app download screen is planned; until
-   it ships, a model has to be pushed once with
-   [MODELS.md → adb push](MODELS.md#operator-adb-push). Ask the person who gave
-   you the APK to push it.
+5. A model must still be present. Tap the **Base (multilingual)** row, then
+   **Download** (network) or **Import file** (a `ggml-base.bin` you already
+   have). The row must say **Installed · selected**. If the phone has no network
+   and you have no file, ask the person who gave you the APK to push it with
+   [MODELS.md → adb push](MODELS.md#operator-fallback-adb-push).
 
 > Android may warn "unsafe app blocked" or "app from unknown source". That is the
 > normal sideload warning, not a virus scan result. Only install an APK you got
@@ -95,15 +120,18 @@ stock-Android path.
 
 ## First run checklist (device, H1)
 
-- [ ] App opens to the **Martins Whisper** onboarding/settings screen.
+- [ ] App opens to the **Martins Whisper** single scrolling screen (Permissions,
+      Overlay, Model, Recognition, Diagnostics).
 - [ ] Microphone shows **Granted** after the system prompt.
 - [ ] Display over other apps shows **Granted**.
 - [ ] Accessibility insertion shows **Granted** after enabling the service.
-- [ ] Notifications shows **Granted** (Android 13+).
-- [ ] A model file is listed under `files/models` (doctor script or
-      [MODELS.md](MODELS.md)).
+- [ ] Notifications shows **Granted** (Android 13+); optional, needed for the
+      ongoing status.
+- [ ] A model file is listed under `files/models` and the row says
+      **Installed · selected** (doctor script or [MODELS.md](MODELS.md)).
 - [ ] **Start overlay** shows the floating bubble above another app.
-- [ ] Holding the bubble records; releasing returns a transcript (after G1).
+- [ ] Holding the bubble records; releasing returns a transcript (native arm64
+      build only).
 
 **UNVERIFIED (device, H1-blocked):** this checklist has not been run on a phone
 in this environment.

@@ -31,7 +31,7 @@ notification while it is running.
 | Data | Where | Why | Removed by |
 |---|---|---|---|
 | Settings | app-private SharedPreferences `martins_whisper_settings` | model id, language, GPU/CPU preference, idle-unload time, overlay on/off, boot switch, bubble position | uninstall / app data clear |
-| Model files | app-private `files/models/<id>.bin` | the GGML weights you downloaded or pushed | delete (planned G1) or uninstall |
+| Model files | app-private `files/models/<id>.bin` | the GGML weights you downloaded, imported or pushed | in-app delete or uninstall |
 | Transcripts | **not stored** by 0.1.0 | inserted into the target field or clipboard only | n/a |
 | Audio | **not stored** | discarded after transcription | n/a |
 | History | **not implemented** (backlog, opt-in) | none | n/a |
@@ -50,16 +50,18 @@ so clear it yourself if the text is sensitive.
 ## The one network use: model download
 
 - The app declares `INTERNET` because a model download needs it.
-- The intended v1 flow (planned, G1) downloads only after you tap a model, shows
-  progress, verifies SHA-256, and stores the file in app-private storage. No
-  silent download, no background prefetch.
+- The in-app flow downloads only after you tap **Download** on a model row,
+  shows progress, verifies the catalog SHA-256, and stores the file in
+  app-private storage. No silent download, no background prefetch.
+- **Import file** uses the Android file picker and does not touch the network.
 - Hosts used: `huggingface.co` for the redirect and the Hugging Face CDN hosts it
   redirects to (for example `us.aws.cdn.hf.co`, `cdn-lfs-us-1.hf.co`). The exact
   list is in `research/01-model-facts.md`.
 - The request contains normal HTTP metadata (IP address, user agent). No token,
   account or device identifier is sent.
-- **Current 0.1.0:** there is no download screen, so a stock 0.1.0 install makes
-  no network request at all. Models are pushed over adb by the operator.
+- **A stock install makes no network request** until you tap **Download**.
+  Models can also be imported from a local file or pushed over adb by the
+  operator.
 
 ## Accessibility service: what it can see
 
@@ -73,7 +75,9 @@ In this app the service is used to:
 - remember the focused editable field and its selection,
 - write the transcript with `ACTION_SET_TEXT` (preferred), then paste, then
   clipboard + notification as fallbacks,
-- **refuse** password/PIN fields (ADR-003).
+- **refuse to insert** into password/PIN fields (ADR-003); like any other
+  unsuccessful insertion, the transcript is copied to the clipboard so you can
+  decide what to do with it.
 
 The service does **not** upload, log or persist what it reads, and it is active
 only while the app's accessibility service is enabled in system settings. You can

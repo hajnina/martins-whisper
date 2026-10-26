@@ -43,36 +43,34 @@ Optional community NDK (needed only for aarch64 native builds):
 
 This installs the community aarch64 NDK r30 (`30.0.16248370`) under `sdk/ndk/`. See "Native NDK" below.
 
-### Verified result on this host (2026-10-26)
+### Verified result on this host (2026-10-26, after G1 + D1 merge)
 
-Last full run in the D1 worktree (private Gradle cache, offline, no daemon):
+Last full integrated run in the DORA-2 worktree (private Gradle cache, offline,
+no daemon). This is the latest gate; MARA re-runs it during integration.
 
 ```
-$ source scripts/env.sh
+$ export JAVA_HOME=/work/android-toolchain/jdk
+$ export ANDROID_HOME=/work/android-toolchain/sdk ANDROID_SDK_ROOT=/work/android-toolchain/sdk
 $ export GRADLE_USER_HOME=/home/node/gh-dora   # private copy, not the shared cache
 $ ./gradlew :core:test :app:testDebugUnitTest :app:assembleDebug --offline --no-daemon --console=plain
-BUILD SUCCESSFUL in 21s
-47 actionable tasks: 36 executed, 11 from cache
+BUILD SUCCESSFUL in 15s
+47 actionable tasks: 23 executed, 24 up-to-date
 
 $ ls -l app/build/outputs/apk/debug/app-debug.apk
--rw-r--r-- 8873577 app-debug.apk
+-rw-r--r-- 9163557 app-debug.apk
 $ sha256sum app/build/outputs/apk/debug/app-debug.apk
-004e39e4c6c01b22dc5dc53aeb5c4253e257a5ab407159b3e2395f689630867c  app-debug.apk
+9eec641a56e777e036b1c88a7688f8f5e856b64baf4bad25c23b968c3954986a  app-debug.apk
 ```
 
-Re-run during the D1 handoff check (same command, APK already assembled):
+Test totals from `*/build/test-results/**/*.xml`:
+`tests=135 failures=0 errors=0 skipped=0` (`:core:test` 85 + `:app:testDebugUnitTest` 50).
 
-```
-BUILD SUCCESSFUL in 11s
-47 actionable tasks: 1 executed, 46 up-to-date
--rw-r--r-- 8873577 app-debug.apk
-867dec1f868a9ed72093d33db13453b2f4d02de1e1167f423105b6e02c141354  app-debug.apk
-```
+Earlier D1 baseline (before the G1 merge) was 109 tests and an 8,873,577-byte APK
+(`004e39e4…` / `867dec1f…`); those numbers are historical and are **not** the
+current gate.
 
-The APK hash changes on every rebuild (debug-signing timestamp), so both hashes
-above are valid for their own run; compare only within a single run.
-
-Test totals from `*/build/test-results/**/*.xml`: `tests=109 failures=0 errors=0 skipped=0`.
+The APK hash changes on every rebuild (debug-signing timestamp), so compare only
+within a single run.
 
 - JDK: Temurin 17.0.21+9 (aarch64)
 - Gradle: 8.9 (wrapper pinned)
@@ -81,8 +79,8 @@ Test totals from `*/build/test-results/**/*.xml`: `tests=109 failures=0 errors=0
 - APK signature: debug v2 scheme verified with `apksigner`; `aapt2 dump badging` reports package `com.martins.whisper`, versionName `0.1.0`, versionCode 1, minSdk 29, targetSdk 35.
 
 The APK hash changes on every rebuild; compare only within one handoff. The default
-APK has no native libraries (`-Pmartins.native=false`); the real whisper.cpp engine
-is a G1 build.
+APK has no native libraries (`-Pmartins.native=false`); the engine wiring is real,
+but the arm64 whisper.cpp library is opt-in with `-Pmartins.native=true`.
 
 When several agents share `/work`, do **not** point `GRADLE_USER_HOME` at
 `/work/android-toolchain/gradle-home` (shared locks). Copy it once and build offline:
@@ -95,7 +93,7 @@ export GRADLE_USER_HOME=/home/node/gh-<agent>
 ```
 
 The older bring-up note below is kept for history: `:core:test` once reported
-`NO-SOURCE` on the skeleton; it now runs 109 tests.
+`NO-SOURCE` on the skeleton; the integrated gate now runs 135 tests.
 
 ### Manual fallback
 
