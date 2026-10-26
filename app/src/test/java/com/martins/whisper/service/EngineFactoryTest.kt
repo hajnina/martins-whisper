@@ -158,6 +158,113 @@ class EngineFactoryTest {
     }
 
     @Test
+    fun `gpu loader failure retries once on cpu and records gpu-unavailable`() {
+        val calls = mutableListOf<ComputeBackend>()
+        var state = EngineState()
+        val cpuEngine = FakeSpeechEngine(backend = "whisper.cpp/cpu")
+        val loaded = EngineFactory.createWith(
+            modelId = "base",
+            backend = ComputeBackend.GPU,
+            repository = repositoryWith("base"),
+            nativeAvailable = { true },
+            engineLoader = { plan ->
+                calls += plan.backend
+                when (plan.backend) {
+                    ComputeBackend.CPU -> cpuEngine
+                    else -> throw SpeechEngineException("vulkan init failed", code = -1)
+                }
+            },
+            previousState = state,
+            onState = { state = it },
+        )
+        assertEquals(listOf(ComputeBackend.GPU, ComputeBackend.CPU), calls)
+        assertSame(cpuEngine, loaded)
+        assertEquals("whisper.cpp/cpu", state.activeBackend)
+        assertEquals(EngineState.GPU_UNAVAILABLE, state.fallbackReason)
+        assertEquals(1, state.gpuFailureCount)
+        assertNull(state.lastError)
+    }
+
+    @Test
+    fun `auto loader failure retries once on cpu and records auto-cpu`() {
+        val calls = mutableListOf<ComputeBackend>()
+        var state = EngineState()
+        val cpuEngine = FakeSpeechEngine(backend = "whisper.cpp/cpu")
+        val loaded = EngineFactory.createWith(
+            modelId = "base",
+            backend = ComputeBackend.AUTO,
+            repository = repositoryWith("base"),
+            nativeAvailable = { true },
+            engineLoader = { plan ->
+                calls += plan.backend
+                when (plan.backend) {
+                    ComputeBackend.CPU -> cpuEngine
+                    else -> throw SpeechEngineException("vulkan init failed", code = -1)
+                }
+            },
+            previousState = state,
+            onState = { state = it },
+        )
+        assertEquals(listOf(ComputeBackend.AUTO, ComputeBackend.CPU), calls)
+        assertSame(cpuEngine, loaded)
+        assertEquals(EngineState.AUTO_CPU, state.fallbackReason)
+        assertEquals(1, state.gpuFailureCount)
+        assertNull(state.lastError)
+    }
+
+    @Test
+    fun `explicit cpu loader failure is not retried`() {
+        val calls = mutableListOf<ComputeBackend>()
+        var state = EngineState()
+        try {
+            EngineFactory.createWith(
+                modelId = "base",
+                backend = ComputeBackend.CPU,
+                repository = repositoryWith("base"),
+                nativeAvailable = { true },
+                engineLoader = { plan ->
+                    calls += plan.backend
+                    throw SpeechEngineException("cpu init failed", code = -4)
+                },
+                previousState = state,
+                onState = { state = it },
+            )
+            fail("expected SpeechEngineException")
+        } catch (e: SpeechEngineException) {
+            assertEquals(-4, e.code)
+        }
+        assertEquals(listOf(ComputeBackend.CPU), calls)
+        assertEquals(EngineState.ENGINE_ERROR, state.fallbackReason)
+        assertEquals("cpu init failed", state.lastError)
+    }
+
+    @Test
+    fun `gpu and cpu loader failures stop after exactly two calls`() {
+        val calls = mutableListOf<ComputeBackend>()
+        var state = EngineState()
+        try {
+            EngineFactory.createWith(
+                modelId = "base",
+                backend = ComputeBackend.GPU,
+                repository = repositoryWith("base"),
+                nativeAvailable = { true },
+                engineLoader = { plan ->
+                    calls += plan.backend
+                    throw SpeechEngineException("init failed on ${plan.backend}", code = -9)
+                },
+                previousState = state,
+                onState = { state = it },
+            )
+            fail("expected SpeechEngineException")
+        } catch (e: SpeechEngineException) {
+            assertEquals(-9, e.code)
+        }
+        assertEquals(listOf(ComputeBackend.GPU, ComputeBackend.CPU), calls)
+        assertEquals(EngineState.ENGINE_ERROR, state.fallbackReason)
+        assertNull(state.activeBackend)
+    }
+
+    @Test
     fun `engine loader exceptions are recorded and rethrown typed`() {
         var state = EngineState()
         try {

@@ -44,8 +44,8 @@
     <string name="section_diagnostics">Diagnostics</string>
     <string name="diagnostics_text">Only JVM/Robolectric validation has run. Device microphone, overlay and GPU behavior require a physical Android device.</string>
     <string name="language_auto">Auto detect</string>
-    <string name="backend_auto">Auto (GPU when available)</string>
-    <string name="backend_gpu">GPU</string>
+    <string name="backend_auto">Auto (Vulkan, CPU fallback)</string>
+    <string name="backend_gpu">Vulkan (GPU)</string>
     <string name="backend_cpu">CPU</string>
     <string name="boot_start_summary">Restore the bubble after reboot (Android may restrict microphone startup until the app is opened).</string>
     <string name="hold_to_talk">Hold to talk</string>
