@@ -1,0 +1,6 @@
+G3b backend choice + CPU retry once (branch agent/g3-backend).
+Spinner keeps AUTO/GPU/CPU persistence with labels Auto (Vulkan, CPU fallback) / Vulkan (GPU) / CPU.
+EngineFactory retries exactly once on CPU for non-CPU requests: GPU -> gpu-unavailable, AUTO -> auto-cpu, count+1, lastError null; explicit CPU never retries; double failure is two calls and ENGINE_ERROR.
+Acceptance: :app:testDebugUnitTest --offline BUILD SUCCESSFUL, 70 tests / 0 failures / 0 errors / 0 skipped; EngineFactoryTest 12/12 green (4 new).
+Code commit db95d14; handoff in handoffs/ASHA-3/G3b-HANDOFF.md.
+No device/GPU validation (host JVM only).
