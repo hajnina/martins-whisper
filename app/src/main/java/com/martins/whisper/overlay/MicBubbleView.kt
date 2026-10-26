@@ -15,6 +15,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import com.martins.whisper.core.voice.OrbDynamics
 import com.martins.whisper.core.voice.OrbMotion
+import com.martins.whisper.core.voice.VoiceFeatures
 import com.martins.whisper.service.DictationState
 import com.martins.whisper.ui.orb.AnimationPolicy
 import kotlin.math.abs
@@ -94,6 +95,10 @@ class MicBubbleView(context: Context) : View(context) {
     private var lastOrbFrameAt = 0L
     private var previousSpeechDetected = false
     private var stopOrbAfter: Runnable? = null
+    private var latestFeatures: VoiceFeatures? = null
+    private var latestFeaturesAt = 0L
+    internal var lastOrbMotion: OrbMotion? = null
+        private set
     private val orbTick = object : Runnable {
         override fun run() {
             if (!orbRunning) return
@@ -203,6 +208,16 @@ class MicBubbleView(context: Context) : View(context) {
 
     private fun isExpandedLayout(): Boolean = width >= expandedWidthPx * 0.9f
 
+    /** Measured features from the capture path; safe to call from any thread. */
+    fun onVoiceFeatures(features: VoiceFeatures) {
+        post {
+            latestFeatures = features
+            latestFeaturesAt = SystemClock.elapsedRealtime()
+            if (state is DictationState.Recording) startOrb()
+            invalidate()
+        }
+    }
+
     /**
      * The orb only animates on a real state: while recording (level is measured RMS) and for a
      * short decay after success/error. Idle and loading stay static except for their spinner.
@@ -246,6 +261,17 @@ class MicBubbleView(context: Context) : View(context) {
         lastOrbFrameAt = now
         val current = state
         if (current is DictationState.Recording) {
+            val measured = latestFeatures?.takeIf { now - latestFeaturesAt < FEATURE_FRESH_MS }
+            if (measured != null) {
+                return orbDynamics.update(
+                    level = measured.level,
+                    pitchNorm = measured.pitchHz?.let { measured.pitchNorm },
+                    voicedProb = measured.voicedProb,
+                    brightness = measured.brightness,
+                    onset = measured.onset,
+                    dtSeconds = dt,
+                )
+            }
             val onset = current.speechDetected && !previousSpeechDetected
             previousSpeechDetected = current.speechDetected
             val voiced = if (current.speechDetected) 1f else 0f
@@ -299,7 +325,9 @@ class MicBubbleView(context: Context) : View(context) {
             circleCenter + circleRadius,
             circleCenter + circleRadius,
         )
-        orbRenderer.draw(canvas, circleRect, motionForDraw(), accent)
+        val orbMotion = motionForDraw()
+        lastOrbMotion = orbMotion
+        orbRenderer.draw(canvas, circleRect, orbMotion, accent)
 
         when (visual.icon) {
             BubbleIcon.SPINNER -> drawSpinner(canvas, circleRect)
@@ -506,5 +534,6 @@ class MicBubbleView(context: Context) : View(context) {
 
     companion object {
         internal const val ERROR_DOUBLE_TICK_MS = 90L
+        private const val FEATURE_FRESH_MS = 500L
     }
 }
