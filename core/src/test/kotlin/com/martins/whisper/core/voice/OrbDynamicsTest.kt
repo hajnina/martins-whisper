@@ -73,6 +73,20 @@ class OrbDynamicsTest {
     }
 
     @Test
+    fun `brightness drives edge crispness`() {
+        val dark = OrbDynamics()
+        val bright = OrbDynamics()
+        var darkMotion = dark.update(0.4f, null, 1f, 0f, false, 1f / 60f)
+        var brightMotion = bright.update(0.4f, null, 1f, 1f, false, 1f / 60f)
+        repeat(120) {
+            darkMotion = dark.update(0.4f, null, 1f, 0f, false, 1f / 60f)
+            brightMotion = bright.update(0.4f, null, 1f, 1f, false, 1f / 60f)
+        }
+        assertTrue("dark=", darkMotion.edgeCrispness < 0.2f)
+        assertTrue("bright=", brightMotion.edgeCrispness > 0.8f)
+    }
+
+    @Test
     fun `idle breathing stays small and never runs away`() {
         val dynamics = OrbDynamics()
         val breathe = (0 until 600).map { dynamics.idle(1f / 60f).breathe }

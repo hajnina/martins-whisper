@@ -16,6 +16,7 @@ import android.view.ViewConfiguration
 import com.martins.whisper.core.voice.OrbDynamics
 import com.martins.whisper.core.voice.OrbMotion
 import com.martins.whisper.service.DictationState
+import com.martins.whisper.ui.orb.AnimationPolicy
 import kotlin.math.abs
 import kotlin.math.min
 
@@ -207,6 +208,10 @@ class MicBubbleView(context: Context) : View(context) {
      * short decay after success/error. Idle and loading stay static except for their spinner.
      */
     private fun updateOrbAnimation(value: DictationState) {
+        if (!AnimationPolicy.enabled()) {
+            stopOrb()
+            return
+        }
         stopOrbAfter?.let { removeCallbacks(it) }
         stopOrbAfter = null
         when (value) {
@@ -223,6 +228,7 @@ class MicBubbleView(context: Context) : View(context) {
     }
 
     private fun startOrb() {
+        if (!AnimationPolicy.enabled()) return
         orbRunning = true
         lastOrbFrameAt = SystemClock.elapsedRealtime()
         removeCallbacks(orbTick)
@@ -474,6 +480,10 @@ class MicBubbleView(context: Context) : View(context) {
 
     private fun startSpinner() {
         if (spinnerRunning) return
+        if (!AnimationPolicy.enabled()) {
+            invalidate()
+            return
+        }
         spinnerRunning = true
         post(spinnerTick)
     }
