@@ -1,0 +1,1 @@
+MFVP-1 done: AccessibilityTextInserter wired as DictationService default inserter (clipboard fallback when disconnected), 4 new Robolectric tests, full :app:testDebugUnitTest --offline = 84 tests / 0 failures / 19 classes. Commit d5c8521153b3ec81b7359fbf10971c3682d44160 on agent/mfvp1-inserter.
