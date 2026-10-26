@@ -2,6 +2,7 @@ package com.martins.whisper.core.asr
 
 import com.martins.whisper.core.ModelSpec
 import org.junit.Assert.assertEquals
+import kotlin.test.assertFailsWith
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -47,11 +48,7 @@ class ModelCatalogTest {
         assertEquals("large-v3-turbo", ModelCatalog.byId("large-v3-turbo")?.id)
         assertNull(ModelCatalog.byId("nope"))
         assertFalse(ModelCatalog.isKnown("nope"))
-        try {
-            ModelCatalog.requireById("nope")
-            throw AssertionError("expected exception")
-        } catch (_: NoSuchElementException) {
-        }
+        assertFailsWith<NoSuchElementException> { ModelCatalog.requireById("nope") }
     }
 
     @Test
@@ -66,16 +63,12 @@ class ModelCatalogTest {
     @Test
     fun `custom model validates inputs`() {
         listOf("", "..", "../evil", "a/b").forEach { bad ->
-            try {
+            assertFailsWith<IllegalArgumentException>("bad id '$bad' must be rejected") {
                 ModelCatalog.custom(id = bad, fileName = "x.bin")
-                throw AssertionError("expected rejection for '$bad'")
-            } catch (_: IllegalArgumentException) {
             }
         }
-        try {
+        assertFailsWith<IllegalArgumentException>("bad sha must be rejected") {
             ModelCatalog.custom(id = "ok", fileName = "x.bin", sha256 = "not-a-hash")
-            throw AssertionError("expected bad sha rejection")
-        } catch (_: IllegalArgumentException) {
         }
     }
 

@@ -3,6 +3,7 @@ package com.martins.whisper.core.asr
 import com.martins.whisper.core.ModelSpec
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import kotlin.test.assertFailsWith
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -121,11 +122,7 @@ class ModelDownloaderTest {
         val storage = ModelStorage(tmp)
         val downloader = downloader(storage, ScriptedSource(payload))
         val custom = ModelCatalog.custom(id = "custom", fileName = "custom.bin")
-        try {
-            downloader.download(custom)
-            throw AssertionError("expected DownloadException")
-        } catch (_: DownloadException) {
-        }
+        assertFailsWith<DownloadException>("no url should reject") { downloader.download(custom) }
     }
 
     private fun spec(sha256: String = payloadHash): ModelSpec = ModelSpec(

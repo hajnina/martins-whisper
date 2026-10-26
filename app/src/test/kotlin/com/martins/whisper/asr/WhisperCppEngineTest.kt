@@ -1,5 +1,6 @@
 package com.martins.whisper.asr
 
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -16,10 +17,8 @@ class WhisperCppEngineTest {
 
     @Test
     fun `create fails safely when the native library is missing`() {
-        try {
+        assertThrows(SpeechEngineUnavailableException::class.java) {
             WhisperCppEngine.create("/tmp/does-not-exist.bin")
-            throw AssertionError("expected SpeechEngineUnavailableException")
-        } catch (_: SpeechEngineUnavailableException) {
         }
     }
 }

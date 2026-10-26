@@ -3,6 +3,7 @@ package com.martins.whisper.core.asr
 import com.martins.whisper.core.ModelSpec
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import kotlin.test.assertFailsWith
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -78,10 +79,8 @@ class ModelRepositoryTest {
     @Test
     fun `install without url is rejected`() = withTempDir { tmp ->
         val repo = ModelRepository(ModelStorage(tmp))
-        try {
+        assertFailsWith<IllegalArgumentException>("no url should reject install") {
             repo.install(ModelCatalog.custom(id = "custom", fileName = "custom.bin"))
-            throw AssertionError("expected IllegalArgumentException")
-        } catch (_: IllegalArgumentException) {
         }
     }
 
