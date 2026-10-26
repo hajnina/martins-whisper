@@ -1,5 +1,9 @@
 package com.martins.whisper.core
 
+import com.martins.whisper.core.text.Graphemes
+import com.martins.whisper.core.text.TextScript
+import java.text.Normalizer
+
 /**
  * Shared API contract for core logic. Implementations live in sibling files and are
  * owned by individual work packages; do not change these signatures without PM review.
@@ -127,12 +131,22 @@ object TextInsertionPlanner {
      */
     /**
      * Fits spoken text into the text around [selectionStart]: trims whisper's own padding, adds a
-     * leading space only when the previous character is not whitespace, and fixes the first letter's
-     * case (capital at the start of a field/sentence, lowercase mid-sentence).
+     * leading space only when the language uses word spaces and the previous character is not
+     * whitespace, and applies case only for cased scripts. CJK/Thai get neither a space nor
+     * capitalisation; RTL and Indic scripts keep spaces but are never re-cased.
+     *
+     * [language] is the whisper code of the detected/selected language; null means "infer the
+     * script from the text itself".
      */
-    fun formatForCaret(insert: String, current: String?, selectionStart: Int): String {
-        val text = insert.trim()
+    fun formatForCaret(
+        insert: String,
+        current: String?,
+        selectionStart: Int,
+        language: String? = null,
+    ): String {
+        val text = insert.trimUnicode()
         if (text.isEmpty()) return ""
+        val script = TextScript.forLanguage(language) ?: TextScript.forText(text)
         val base = current.orEmpty()
         val lastLine = if (base.isBlank()) {
             ""
@@ -140,18 +154,72 @@ object TextInsertionPlanner {
             base.substring(0, selectionStart.coerceIn(0, base.length))
                 .substringAfterLast('\n')
         }
-        if (lastLine.isBlank()) return text.capitalizeFirst()
-        val prefix = if (lastLine.last().isWhitespace()) "" else " "
-        val startsSentence = lastLine.trimEnd().lastOrNull() in setOf('.', '!', '?', '\n')
-        val cased = if (startsSentence) text.capitalizeFirst() else text.lowercaseFirst()
+        val cased = if (!script.cased) {
+            text
+        } else if (lastLine.isBlank()) {
+            text.capitalizeFirstLetter()
+        } else {
+            val startsSentence = lastLine.trimEnd().lastOrNull() in setOf('.', '!', '?', '\n')
+            if (startsSentence) text.capitalizeFirstLetter() else text.lowercaseFirstLetter()
+        }
+        if (lastLine.isBlank()) return cased
+        val prefix = if (script.wordSpaces && !lastLine.last().isWhitespace()) " " else ""
         return prefix + cased
     }
 
-    private fun String.capitalizeFirst(): String =
-        replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+    /** Removes whisper's padding, including non-breaking and ideographic spaces. */
+    private fun String.trimUnicode(): String {
+        var start = 0
+        var end = length
+        while (start < end && isUnicodeSpace(this[start])) start++
+        while (end > start && isUnicodeSpace(this[end - 1])) end--
+        return substring(start, end)
+    }
 
-    private fun String.lowercaseFirst(): String =
-        replaceFirstChar { if (it.isUpperCase()) it.lowercase() else it.toString() }
+    private fun isUnicodeSpace(char: Char): Boolean =
+        char.isWhitespace() || Character.isSpaceChar(char)
+
+    private fun String.capitalizeFirstLetter(): String =
+        mapFirstLetter { letter ->
+            if (letter.first().isLowerCase()) {
+                letter.first().titlecase() + letter.drop(1)
+            } else {
+                letter
+            }
+        }
+
+    private fun String.lowercaseFirstLetter(): String =
+        mapFirstLetter { letter ->
+            if (letter.first().isUpperCase()) {
+                letter.first().lowercase() + letter.drop(1)
+            } else {
+                letter
+            }
+        }
+
+    private fun String.mapFirstLetter(transform: (String) -> String): String {
+        var index = 0
+        while (index < length) {
+            val codePoint = codePointAt(index)
+            if (Character.isLetter(codePoint)) {
+                val original = String(Character.toChars(codePoint))
+                val replaced = transform(original)
+                if (replaced == original) return this
+                return substring(0, index) + replaced +
+                    substring(index + Character.charCount(codePoint))
+            }
+            index += Character.charCount(codePoint)
+        }
+        return this
+    }
+
+    /** NFC-normalised form, used when comparing inserted text with what the field read back. */
+    fun normalizeNfc(text: String): String =
+        Normalizer.normalize(text, Normalizer.Form.NFC)
+
+    /** True when both texts are equal after NFC normalisation (NFC/NFD must not look different). */
+    fun normalizedEquals(expected: String?, actual: String?): Boolean =
+        expected != null && actual != null && normalizeNfc(expected) == normalizeNfc(actual)
 
     fun insert(
         current: String?,
@@ -163,17 +231,13 @@ object TextInsertionPlanner {
         val rawStart = selectionStart.coerceIn(0, base.length)
         val rawEnd = selectionEnd.coerceIn(rawStart, base.length)
 
-        val start = if (base.splitsSurrogatePair(rawStart)) rawStart - 1 else rawStart
-        val end = if (base.splitsSurrogatePair(rawEnd)) (rawEnd + 1).coerceAtMost(base.length) else rawEnd
-        val boundedEnd = end.coerceAtLeast(start)
+        // Never split a UTF-16 pair or a grapheme cluster: a caret/selection edge inside one is
+        // expanded to the whole cluster, matching the previous surrogate-pair behaviour.
+        val start = Graphemes.clusterStart(base, rawStart)
+        val end = Graphemes.clusterEnd(base, rawEnd).coerceAtLeast(start)
 
-        val text = base.substring(0, start) + insert + base.substring(boundedEnd)
+        val text = base.substring(0, start) + insert + base.substring(end)
         val caret = start + insert.length
         return Result(text, caret, caret)
     }
-
-    private fun String.splitsSurrogatePair(index: Int): Boolean =
-        index in 1 until length &&
-            this[index - 1].isHighSurrogate() &&
-            this[index].isLowSurrogate()
 }

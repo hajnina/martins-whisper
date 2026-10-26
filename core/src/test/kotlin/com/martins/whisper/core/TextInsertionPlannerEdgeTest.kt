@@ -1,5 +1,6 @@
 package com.martins.whisper.core
 
+import com.martins.whisper.core.text.Graphemes
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -51,17 +52,12 @@ class TextInsertionPlannerEdgeTest {
     ): Pair<String, Int> {
         val rawStart = selectionStart.coerceIn(0, base.length)
         val rawEnd = selectionEnd.coerceIn(rawStart, base.length)
-        val start = if (base.splitsPairAt(rawStart)) rawStart - 1 else rawStart
-        val end = if (base.splitsPairAt(rawEnd)) rawEnd + 1 else rawEnd
+        val start = Graphemes.clusterStart(base, rawStart)
+        val end = Graphemes.clusterEnd(base, rawEnd)
         val boundedEnd = maxOf(start, end)
         return (base.substring(0, start) + insert + base.substring(boundedEnd)) to
             (start + insert.length)
     }
-
-    private fun String.splitsPairAt(index: Int): Boolean =
-        index in 1 until length &&
-            this[index - 1].isHighSurrogate() &&
-            this[index].isLowSurrogate()
 
     private fun assertWellFormed(result: TextInsertionPlanner.Result) {
         assertTrue("result = ${result.text}", result.text.isWellFormedUtf16())
@@ -131,15 +127,18 @@ class TextInsertionPlannerEdgeTest {
     }
 
     @Test
-    fun `zwj cluster boundaries are code unit boundaries not surrogate pairs`() {
+    fun `zwj cluster boundaries are grapheme boundaries, never inside the family`() {
         val result = insert(family, man.length, man.length, "|")
-        assertEquals(man + "|" + zwj + woman + zwj + girl + zwj + boy, result.text)
+        assertEquals("|", result.text)
+        assertEquals(1, result.selectionStart)
+        assertEquals("|$family", insert(family, 0, 0, "|").text)
+        assertEquals("$family|", insert(family, family.length, family.length, "|").text)
     }
 
     @Test
-    fun `combining mark boundaries remain code unit boundaries`() {
+    fun `combining mark boundaries expand to the whole grapheme`() {
         val base = "e\u0301"
-        assertEquals("e|\u0301", insert(base, 1, 1, "|").text)
+        assertEquals("|", insert(base, 1, 1, "|").text)
         assertEquals("e\u0301|", insert(base, 2, 2, "|").text)
         assertEquals("|e\u0301", insert(base, 0, 0, "|").text)
     }
@@ -164,12 +163,12 @@ class TextInsertionPlannerEdgeTest {
     }
 
     @Test
-    fun `rtl selection of a combining mark replaces just that mark`() {
+    fun `rtl selection inside a grapheme replaces the whole grapheme`() {
         val base = "שָׁלוֹם"
         val markStart = base.indexOf('\u05B8')
         val result = insert(base, markStart, markStart + 1, "")
-        assertEquals(base.removeRange(markStart, markStart + 1), result.text)
-        assertEquals(markStart, result.selectionStart)
+        assertEquals("לוֹם", result.text)
+        assertEquals(0, result.selectionStart)
         assertWellFormed(result)
     }
 
