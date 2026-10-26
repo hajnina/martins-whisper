@@ -1,15 +1,19 @@
 # Agent Status (PM view)
 
-Snapshot: 2026-10-26T15:25Z
+Snapshot: 2026-10-26T16:47Z
 
-| ID | Alive | Branch commits | Last observed | Next PM action |
-|---|---|---|---|---|
-| R1 | done | 3 | delivered handoff + report; merged into master | closed |
-| B1 | yes | 1 | shared toolchain READY; `:core:test` BUILD SUCCESSFUL (probe test); finishing app build + docs | wait for handoff, then validate |
-| C1 | yes (v3 pid 11231) | 1 | v3 no-recon launch; writing EnergyVad/AudioChunker | check files + tests in 10m |
-| E1 | yes | 1 | writing `core/.../asr/` model layer | wait for code/tests |
-| U1 | yes (v2 pid 8102) | 1 | v2 relaunched; shared SDK/env verified | check for files in 10m |
-| I1 | yes (v2 pid 8022) | 1 | v2 relaunched; Gradle/JDK verified | check for files in 10m |
+| ID | State | Evidence | Next PM action |
+|---|---|---|---|
+| R1 | done, merged | `handoffs/R1-research/` | closed |
+| C1 | done, merged | 25 tests | closed |
+| I1 | done, merged | 31 tests | closed |
+| U1 | done, merged | APK 8.4 MB | closed |
+| B1 | in progress (sibling PM) | toolchain ready, `:core:test` green; wrapper/Docker/CI uncommitted | wait for committed handoff, then apply ticket 03 gate |
+| E1 | in progress (sibling PM) | ASR layer + tests uncommitted; native/Vulkan unverified | wait for committed handoff, then apply ticket 04 gate |
+| T1 | queued | map ticket 05 | after B1/E1 merge gates |
+| D1 | queued | map ticket 06 | after model facts (01) |
+| G1 | queued | map ticket 10 | after 03-07 |
+| H1/H2 | blocked | map tickets 08/09 | needs physical device + thresholds |
 
-Toolchain: `/work/android-toolchain/TOOLCHAIN-READY.md`; wrapper `/home/node/.local/bin/gradle`; do not write `~/.nix-profile`.
-Logs: `agents/logs/<id>.log` (v1), `<id>-v2.log` (relaunched). Handoffs: `handoffs/<ID>/HANDOFF.md` in each worktree.
+Toolchain: `/work/android-toolchain/TOOLCHAIN-READY.md`. The shared Gradle home is used by a sibling PM; use `GRADLE_USER_HOME=/home/node/gh-pm --offline`.
+Map: `.scratch/device-ready-apk/map.md`. First-push handoff: `handoffs/PM-2026-10-26-1/HANDOFF.md`.

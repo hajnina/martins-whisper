@@ -38,3 +38,17 @@ Also write a short `SUMMARY.txt` next to it with the executive summary only. You
 ## Time / scope
 - Stay within your assigned deliverable. Do not start other packages.
 - If you finish early, harden tests/docs for your package, then stop.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as local markdown under `.scratch/` (no GitHub credentials in the PM container). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` + `DECISIONS.md` / `docs/adr/`. See `docs/agents/domain.md`.

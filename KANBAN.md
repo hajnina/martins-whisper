@@ -1,8 +1,13 @@
 # Kanban - Martins Whisper (Android)
 
-Updated: 2026-10-26T15:36Z
+Updated: 2026-10-26T16:45Z
 Columns: Backlog | Ready | In Progress | Review | Blocked | Done
 WIP limit: 6 background agents.
+
+## Wayfinder map (source of truth for the road to sign-off)
+
+Destination: a signed-off APK that dictates into any app on a real Android phone.
+Map: `.scratch/device-ready-apk/map.md` (10 decision tickets; local markdown). KANBAN rows below are the execution view of that map.
 
 ## In Progress (background agents)
 
