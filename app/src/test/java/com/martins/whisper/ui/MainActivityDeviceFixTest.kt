@@ -10,9 +10,12 @@ import android.widget.TextView
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.test.core.app.ApplicationProvider
 import com.martins.whisper.MainActivity
 import com.martins.whisper.data.SettingsStore
+import com.martins.whisper.onboarding.OnboardingStore
 import org.junit.Assert.assertEquals
+import org.junit.Before
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -26,6 +29,11 @@ import org.robolectric.annotation.ConscryptMode
 @Config(sdk = [34])
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class MainActivityDeviceFixTest {
+
+    @Before
+    fun useLegacyScreen() {
+        OnboardingStore(ApplicationProvider.getApplicationContext()).markCompleted()
+    }
 
     @Test
     fun `system bar insets are applied as scroll padding`() {
