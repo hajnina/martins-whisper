@@ -1,6 +1,6 @@
 # Kanban - Martins Whisper (Android)
 
-Updated: 2026-10-26T15:05Z
+Updated: 2026-10-26T15:17Z
 Columns: Backlog | Ready | In Progress | Review | Blocked | Done
 WIP limit: 6 background agents.
 
@@ -9,11 +9,11 @@ WIP limit: 6 background agents.
 | ID | Deliverable | Owner / branch | Depends on | Handoff |
 |---|---|---|---|---|
 | R1 | Prior-art research: Android offline dictation/overlay/accessibility/whisper.cpp-Vulkan/sherpa-onnx. Clone repos, extract reusable code, recommend engine + insertion strategy. | agent/r1-research | - | handoffs/R1-research/HANDOFF.md |
-| B1 | Android build harness: JDK 17, Gradle, SDK 35, aarch64 host workarounds, native NDK feasibility, emulator feasibility, reproducible Docker/CI. Produce build report + scripts. | agent/b1-build | skeleton | handoffs/B1-build/HANDOFF.md |
-| C1 | Pure Kotlin core audio: EnergyVad, AudioChunker, TranscriptMerger, TextInsertionPlanner + JUnit tests. | agent/c1-core-audio | skeleton/contract | handoffs/C1-core-audio/HANDOFF.md |
+| B1 | Android build harness: JDK 17, Gradle, SDK 35, aarch64 host workarounds, native NDK feasibility, emulator feasibility, reproducible Docker/CI. Produce build report + scripts. **Toolchain READY; `:core:test` passes; finishing app build + handoff.** | agent/b1-build | skeleton | handoffs/B1-build/HANDOFF.md |
+| C1 | Pure Kotlin core audio: EnergyVad, AudioChunker, TranscriptMerger, TextInsertionPlanner + JUnit tests. **v2 relaunched with ready toolchain (pid 7875).** | agent/c1-core-audio | skeleton/contract | handoffs/C1-core-audio/HANDOFF.md |
 | E1 | ASR/model layer: SpeechEngine contract, whisper.cpp JNI + CMake + Vulkan, ModelCatalog/Repository, ModelManager idle-unload + tests. Coordinate with R1 decision. | agent/e1-asr | R1 (partial), B1 (partial) | handoffs/E1-asr/HANDOFF.md |
-| U1 | Android overlay + foreground service + state UI + settings/onboarding shell. Uses fake engine initially. | agent/u1-overlay | skeleton | handoffs/U1-overlay/HANDOFF.md |
-| I1 | Accessibility insertion service: focus tracking, ACTION_SET_TEXT + paste fallback, clipboard recovery, unit/Robolectric tests. | agent/i1-input | skeleton/contract | handoffs/I1-input/HANDOFF.md |
+| U1 | Android overlay + foreground service + state UI + settings/onboarding shell. Uses fake engine initially. **v2 relaunched with shared SDK (pid 8102).** | agent/u1-overlay | skeleton | handoffs/U1-overlay/HANDOFF.md |
+| I1 | Accessibility insertion service: focus tracking, ACTION_SET_TEXT + paste fallback, clipboard recovery, unit/Robolectric tests. **v2 relaunched with ready toolchain (pid 8022).** | agent/i1-input | skeleton/contract | handoffs/I1-input/HANDOFF.md |
 
 ## Ready / queued (next wave)
 
