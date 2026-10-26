@@ -16,18 +16,26 @@ Consequences: Smaller dependency graph, fewer lifecycle surprises; less fancy UI
 ## ADR-003: Insertion via AccessibilityService, overlay stays non-focusable (2026-10-26)
 
 Status: Accepted.
-Decision: Overlay window uses `FLAG_NOT_FOCUSABLE | FLAG_NOT_TOUCH_MODAL`, so the target field keeps focus. `DictationAccessibilityService` inserts via `ACTION_SET_TEXT`, falling back to clipboard + `ACTION_PASTE`, then clipboard+toast.
-Consequences: User must enable accessibility; some apps need fallbacks. Accessibility policy risk for Play Store (sideload OK).
+Decision: Overlay window uses `FLAG_NOT_FOCUSABLE | FLAG_NOT_TOUCH_MODAL`, so the target field keeps focus. `DictationAccessibilityService` inserts via `ACTION_SET_TEXT` with read-back verification, then a custom paste action / `ACTION_PASTE`, then clipboard+notification/toast. Never write password/PIN fields; keep the clipboard copy (do not auto-clear).
+Consequences: User must enable accessibility; some apps need fallbacks. `ACTION_SET_TEXT` returning true is not proof of insertion. Accessibility policy risk for Play Store (sideload OK).
 
 ## ADR-004: ASR engine - whisper.cpp + Vulkan vs sherpa-onnx (2026-10-26)
 
-Status: **Open; research/build spike R1 + E1.**
-Options:
-- A) Vendor whisper.cpp, build JNI/NDK with `GGML_VULKAN=1`; direct GPU, GGML models, full control. Risk: native build on this aarch64 sandbox; Vulkan speedup varies.
-- B) sherpa-onnx AAR with Whisper ONNX, `provider=nnapi|cpu`; prebuilt native libs, easier build. Risk: NNAPI GPU delegation is device-dependent/deprecated; GPU story weaker.
-- C) Both behind `SpeechEngine`; default A on Vulkan devices, B fallback.
-Decision: pending evidence. Interim contract: `SpeechEngine` interface in `core`.
-Consequences: Model format/catalog differs; decide before final packaging.
+Status: **Accepted (2026-10-26, PM). Option A.**
+Context: R1 prior-art review (`research/ANDROID_PRIOR_ART.md`) found whisper.cpp is the only option with GGML + Vulkan + per-call control; sherpa-onnx's GPU path is NNAPI, which Android deprecated in 15. Vulkan speedups are device-dependent (Pixel 8 ~9%; Adreno 640 init failure; Adreno 840+Turnip ~4.3x), so GPU must not block v1.
+Decision:
+- Vendor MIT whisper.cpp, build one arm64-v8a library with Vulkan + CPU, default `auto`, fall back to CPU once, persist/report the active backend and fallback reason.
+- v1 accepts **GGML models only**; ONNX import is a documented follow-up, not v1. Keep the `SpeechEngine` seam.
+- sherpa-onnx AAR is the emergency fallback only if the native build cannot be made green; do not implement it in v1.
+- CPU-first APK is acceptable if Vulkan is not green by integration; GPU validation happens on a device (H2).
+Consequences: One model format/catalog; custom model import is GGML-only in v1. Native NDK/Vulkan build remains a risk on the aarch64 host; CI/Docker x86_64 build is the fallback. Device-specific GPU performance and crashes must be measured, with a persisted GPU-crash counter defaulting to CPU.
+
+## ADR-007: Reboot behavior - tap-to-re-arm, no boot-time microphone start (2026-10-26)
+
+Status: Accepted.
+Context: Android 14+ restricts microphone foreground services started from `BOOT_COMPLETED`; Android 15 while-in-use rules also require a visible overlay/SAW exemption. Starting a hidden mic recorder at boot is unsafe and likely rejected.
+Decision: On boot, show a "Tap to re-arm dictation" notification that starts the microphone FGS from a visible Activity. Do not auto-start mic capture from `BOOT_COMPLETED` in v1.
+Consequences: One user tap after reboot; no policy/OS restriction fight. An overlay-first SAW flow can be tested later on Android 15 devices.
 
 ## ADR-005: VAD chunking with overlap + token-boundary dedupe (2026-10-26)
 

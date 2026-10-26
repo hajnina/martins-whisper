@@ -9,7 +9,7 @@ Target: Android phone/tablet, arm64-v8a, Android 10+ (minSdk 29), sideloaded APK
 R1. **Always-on overlay.** A small floating mic bubble stays above other apps while a foreground service runs. Tap-and-hold the bubble to record; release to transcribe. A small settings affordance is also available. The overlay must not steal input focus from the app the user is typing in.
 R2. **Insert into the focused text field.** On release, after transcription, insert text at the current cursor/selection in the previously focused editable field. Preferred mechanism: Android `AccessibilityService` (`ACTION_SET_TEXT`, fallback clipboard + `ACTION_PASTE`). If no editable field is focused, put the text on the clipboard and show a clear notification/toast.
 R3. **Local-only inference.** No cloud ASR/TTS/LLM. Network is used only for explicit model downloads. Audio is never persisted (unless a debug recording flag is explicitly enabled). Transcripts are not logged by default.
-R4. **Default model = Whisper base, configurable.** Settings offers at least tiny/base/small/medium/large-v3-turbo (multilingual and/or English), plus import of a custom GGML/ONNX model file. Model choice persists.
+R4. **Default model = Whisper base, configurable.** Settings offers at least tiny/base/small/medium/large-v3-turbo (multilingual and/or English), plus import of a custom GGML model file. ONNX/custom-engine import is a documented v1 non-goal (ADR-004). Model choice persists.
 R5. **GPU by default, CPU fallback.** Prefer a Vulkan/NNAPI GPU path. Detect availability, fall back to CPU, and surface the active backend in settings/doctor UI.
 R6. **Idle unload after 300 s.** Free the model from RAM/VRAM after 5 minutes without use. Reload lazily on the next hold. A new hold may start recording while the model is loading; transcription waits for load.
 R7. **Chunking.** Long holds are split at silences using a VAD, with a max chunk length (~25 s) and overlapping forced splits. Chunks are transcribed incrementally while the user is still holding; final text is merged without duplicated boundary words. Tap < 400 ms cancels (Wispr Flow-like).
@@ -39,7 +39,7 @@ R10. **Mega simple first.** No accounts, no sync, no cloud, no LLM cleanup in v1
 │  │    ├─ ring buffer + pre-roll                              │
 │  │    ├─ EnergyVad -> AudioChunker (core, pure Kotlin)       │
 │  │    ├─ TranscriptMerger (core, pure Kotlin)               │
-│  │    └─ SpeechEngine (whisper.cpp Vulkan/CPU or ONNX)       │
+│  │    └─ SpeechEngine (whisper.cpp Vulkan/CPU, GGML)         │
 │  ├─ ModelManager (lazy load, idle unload 300 s, model swap)  │
 │  └─ SessionStateMachine                                     │
 ├─────────────────────────────────────────────────────────────┤
