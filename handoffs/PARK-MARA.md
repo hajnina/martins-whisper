@@ -37,3 +37,8 @@ When you run L1/L2 tracer bullets, they must catch exactly this class of gap: on
 - merged `agent/mfvp1-inserter` (CODER bg worker; handoff `MFVP1-HANDOFF` @50a4b13, code d5c8521: AccessibilityTextInserter adapter + factory default switched, 4 new Robolectric tests, clipboard fallback preserved) -> merge `e5ca2f8`. FULL GATE: 35 suites, **222 tests, 0 failures/errors**; APK 8,973,941 B; worktree clean.
 - ASHA `agent/u2-states`: tip 82b1a9e does same insertion wiring + FEEL states/haptics (6 commits ahead) but NO handoff for the tip yet -> NOT merged; reconcile on her handoff (expected conflicts in DictationService.kt factory default + AdapterName: hers lives in `service/`, mine in `accessibility/`; keep ONE, prefer hers if her tests ride along).
 - Remaining: MFVP-2 FEEL (or via u2-states), MFVP-4 device (owner/ASKS.md), MFVP-5 README, owner push + CI check.
+
+## u2-states reconciled (owner shift 4)
+- merged `agent/u2-states` (ASHA-4/5 handoffs incl. README MFVP-5 replacement, FEEL ticks double-pulse error, FLAG_NOT_FOCUSABLE proof) -> clean auto-merge; then deleted duplicate: my `accessibility/AccessibilityTextInserter.kt` + test removed (ASHA's `service/` version kept - simplest, sync `insertNow`, clipboard fallback on refusal too). Refs: reconcile commit `1d5056f`.
+- FULL GATE after reconcile: 37 suites, **235 tests, 0 failures/errors**; APK 8,982,577 B. master clean, push-ready.
+- NEXT: merge ASHA a1-insert-quality items as they land (with handoffs only). MFVP-2 feels covered by u2-states FEEL. ~10 min to 2M budget park - no new work after this commit except merge+gate if a1 lands instantly.
