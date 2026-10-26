@@ -23,7 +23,8 @@ class MicBubbleView(context: Context) : View(context) {
         fun onPress()
         fun onRelease()
         fun onCancel()
-        fun onDrag(dx: Float, dy: Float)
+        fun onDragStart() = Unit
+        fun onDrag(dxFromDown: Float, dyFromDown: Float)
         fun onDragEnd()
         fun onSettingsTap()
         fun onStopTap()
@@ -96,8 +97,6 @@ class MicBubbleView(context: Context) : View(context) {
 
     private var downRawX = 0f
     private var downRawY = 0f
-    private var lastRawX = 0f
-    private var lastRawY = 0f
     private var downAt = 0L
     private var tracking = false
     private var dragging = false
@@ -114,8 +113,6 @@ class MicBubbleView(context: Context) : View(context) {
             MotionEvent.ACTION_DOWN -> {
                 downRawX = event.rawX
                 downRawY = event.rawY
-                lastRawX = event.rawX
-                lastRawY = event.rawY
                 downAt = SystemClock.elapsedRealtime()
                 dragging = false
                 val control = controlAt(event.x, event.y)
@@ -139,14 +136,11 @@ class MicBubbleView(context: Context) : View(context) {
                 if (!dragging && (abs(totalX) > touchSlop || abs(totalY) > touchSlop)) {
                     dragging = true
                     listener?.onCancel()
+                    listener?.onDragStart()
                 }
                 if (dragging) {
-                    val dx = event.rawX - lastRawX
-                    val dy = event.rawY - lastRawY
-                    listener?.onDrag(dx, dy)
+                    listener?.onDrag(totalX, totalY)
                 }
-                lastRawX = event.rawX
-                lastRawY = event.rawY
                 return true
             }
 

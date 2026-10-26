@@ -18,6 +18,7 @@ import com.martins.whisper.service.TextInserter
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -107,6 +108,37 @@ class DictationServiceRobolectricTest {
 
         controller.destroy()
         assertEquals(DictationState.Idle, DictationService.state.value)
+    }
+
+    @Test
+    fun `selected Czech is passed to the engine instead of auto detection`() {
+        SettingsStore(app).language = SettingsStore.LANGUAGE_CZECH
+        val controller = Robolectric.buildService(DictationService::class.java).create()
+        val service = controller.get()
+
+        invoke(service, "onPress")
+        await("recording starts") { DictationService.state.value is DictationState.Recording }
+        invoke(service, "onRelease")
+        await("transcript is inserted") { inserted != null }
+
+        assertEquals(listOf("cs"), engine.languages)
+        controller.destroy()
+    }
+
+    @Test
+    fun `auto language is passed as null so whisper detects it`() {
+        SettingsStore(app).language = SettingsStore.LANGUAGE_AUTO
+        val controller = Robolectric.buildService(DictationService::class.java).create()
+        val service = controller.get()
+
+        invoke(service, "onPress")
+        await("recording starts") { DictationService.state.value is DictationState.Recording }
+        invoke(service, "onRelease")
+        await("transcript is inserted") { inserted != null }
+
+        assertEquals(1, engine.languages.size)
+        assertNull(engine.languages.single())
+        controller.destroy()
     }
 
     @Test

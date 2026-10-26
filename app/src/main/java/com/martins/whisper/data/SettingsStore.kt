@@ -17,7 +17,10 @@ class SettingsStore(context: Context) {
         set(value) = prefs.edit().putString(KEY_MODEL_ID, value).apply()
 
     var language: String
-        get() = prefs.getString(KEY_LANGUAGE, LANGUAGE_AUTO) ?: LANGUAGE_AUTO
+        get() {
+            val stored = prefs.getString(KEY_LANGUAGE, DEFAULT_LANGUAGE) ?: DEFAULT_LANGUAGE
+            return stored.takeIf { it in SUPPORTED_LANGUAGES } ?: DEFAULT_LANGUAGE
+        }
         set(value) = prefs.edit().putString(KEY_LANGUAGE, value).apply()
 
     var backend: ComputeBackend
@@ -102,6 +105,10 @@ class SettingsStore(context: Context) {
         const val DEFAULT_MODEL_ID = "base"
         const val DEFAULT_IDLE_UNLOAD_SECONDS = 300
         const val LANGUAGE_AUTO = "auto"
+        const val LANGUAGE_ENGLISH = "en"
+        const val LANGUAGE_CZECH = "cs"
+        const val DEFAULT_LANGUAGE = LANGUAGE_ENGLISH
+        val SUPPORTED_LANGUAGES = setOf(LANGUAGE_AUTO, LANGUAGE_ENGLISH, LANGUAGE_CZECH)
         const val UNSET_POSITION = -1
 
         fun parseBackend(raw: String?): ComputeBackend = runCatching {

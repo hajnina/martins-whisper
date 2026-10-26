@@ -253,16 +253,8 @@ class MainActivity : ComponentActivity() {
         root.addView(label(getString(R.string.language_label)))
         val languages = listOf(
             SettingsStore.LANGUAGE_AUTO to getString(R.string.language_auto),
-            "en" to "English",
-            "de" to "Deutsch",
-            "fr" to "Fran\u00e7ais",
-            "es" to "Espa\u00f1ol",
-            "it" to "Italiano",
-            "pt" to "Portugu\u00eas",
-            "nl" to "Nederlands",
-            "ru" to "Russian",
-            "zh" to "Chinese",
-            "ja" to "Japanese",
+            SettingsStore.LANGUAGE_ENGLISH to getString(R.string.language_english),
+            SettingsStore.LANGUAGE_CZECH to getString(R.string.language_czech),
         )
         root.addView(languageSpinner(languages), matchWidth())
 

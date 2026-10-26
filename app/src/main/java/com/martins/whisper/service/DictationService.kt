@@ -81,8 +81,10 @@ class DictationService : Service() {
         override fun onPress() = this@DictationService.onPress()
         override fun onRelease() = this@DictationService.onRelease()
         override fun onCancel() = cancelSession()
-        override fun onDrag(dx: Float, dy: Float) = overlay.dragBy(dx, dy)
-        override fun onDragEnd() = overlay.persistPosition()
+        override fun onDragStart() = overlay.beginDrag()
+        override fun onDrag(dxFromDown: Float, dyFromDown: Float) =
+            overlay.dragBy(dxFromDown, dyFromDown)
+        override fun onDragEnd() = overlay.endDrag()
         override fun onSettingsTap() = openSettings()
         override fun onStopTap() = stopEverything()
     }
