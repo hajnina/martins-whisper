@@ -19,3 +19,10 @@ worktrees/
 *.zip
 *.tar.gz
 *.log
+
+.kotlin/
+android-toolchain/
+gradle-home/
+e1-models/
+*.ggml
+*.safetensors
