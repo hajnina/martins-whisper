@@ -1,6 +1,6 @@
 # Agent Status (PM view)
 
-Snapshot: 2026-10-26T16:47Z
+Snapshot: 2026-10-26T17:10Z
 
 | ID | State | Evidence | Next PM action |
 |---|---|---|---|
@@ -8,11 +8,11 @@ Snapshot: 2026-10-26T16:47Z
 | C1 | done, merged | 25 tests | closed |
 | I1 | done, merged | 31 tests | closed |
 | U1 | done, merged | APK 8.4 MB | closed |
-| B1 | in progress (sibling PM) | toolchain ready, `:core:test` green; wrapper/Docker/CI uncommitted | wait for committed handoff, then apply ticket 03 gate |
-| E1 | in progress (sibling PM) | ASR layer + tests uncommitted; native/Vulkan unverified | wait for committed handoff, then apply ticket 04 gate |
-| T1 | queued | map ticket 05 | after B1/E1 merge gates |
-| D1 | queued | map ticket 06 | after model facts (01) |
-| G1 | queued | map ticket 10 | after 03-07 |
+| B1 | done, merged | `caf0d09`; wrapper/Docker/CI/scripts; gate green | closed |
+| E1 | done, merged | `9b2ee46`; 35 new tests; native opt-in | closed |
+| T1 | partly done | Layer 2 `assembleDebugAndroidTest` builds; Layer 1 E2E after wiring | run on device at H1 |
+| D1 | queued | map ticket 06 resolved | after G1 UI |
+| G1 | in progress | B1+E1 merged; engine/model UI wiring | finish wiring + full gate |
 | H1/H2 | blocked | map tickets 08/09 | needs physical device + thresholds |
 
 Toolchain: `/work/android-toolchain/TOOLCHAIN-READY.md`. The shared Gradle home is used by a sibling PM; use `GRADLE_USER_HOME=/home/node/gh-pm --offline`.
