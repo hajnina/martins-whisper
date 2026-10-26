@@ -1,0 +1,6 @@
+G3a done: app-level HttpModelDownloaderTest proves ModelRepository -> ResumableModelDownloader ->
+HttpModelSource against a real loopback ServerSocket. Four cases pass: happy path (bytes/SHA-256/
+monotonic progress/.part removed), resume after mid-body cut (Range bytes=N-, resumed=true,
+attempts=2), bad hash (ModelVerificationException, no files), 404 (DownloadException with "404", no
+files). No production changes. Acceptance: ./gradlew :app:testDebugUnitTest --offline ->
+BUILD SUCCESSFUL; 70 tests, 0 failures, 0 errors (new class: 4 tests).
