@@ -1,56 +1,68 @@
-# PARK-ASHA — 2026-10-26 (shift 2, live)
+# PARK-ASHA — owner acceptance list (a1-insert-quality)
 
-Branch `agent/u2-states`, worktree `/work/martins-whisper-worktrees/u2-states`.
-Master merged in at `fbb94d7` (master tip `636b3f9`). App gate: **97 tests / 0 failures**.
+Date: 2026-10-26. Shift: implementing `/work/owner/MFVP.md` ACCEPTANCE items 1–5 on
+`agent/a1-insert-quality` (worktree `/work/martins-whisper-worktrees/a1-insert-quality`).
 
-## DONE (this shift, on branch unless noted)
+## DONE (branch `agent/a1-insert-quality`)
+- `f220ea4` ticket 1 — silence/hallucination gate + token strip; digital silence = mic error.
+  - New `core/TranscriptGate.kt` (`EMPTY_MESSAGE = "Didn't catch that"`,
+    `SILENT_MIC_MESSAGE = "Microphone returned silence"`, strip `[...]/(...)/<...>`,
+    exact-match hallucination set, `evaluate(raw, speechDetected, peakLevel)`).
+  - New `core/AudioEnergy.kt` (peak/rms/digital-silence).
+  - `DictationService`: energy + RMS log (`Log.d(TAG, "captured N samples ... peak=... rms=...")`),
+    digital silence → `Error` before engine; gate decides insert vs `Error`.
+  - Tests: `TranscriptGateTest` (8), `AudioEnergyTest` (3), lifecycle gate tests (2). Green.
+- `608eff1` ticket 2 — capture at START, verify at insert, hint text, caret spacing/case.
+  - `InsertionPolicy`: `NodeSnapshot` + windowId/viewId/isShowingHintText; `TargetGuard`;
+    hint → SetText route.
+  - `TextInsertionPlanner.formatForCaret` (trim, single leading space only after
+    non-whitespace, capital at field start / after `. ! ?` / newline, lowercase mid-sentence).
+  - `DictationAccessibilityService`: `captureTargetAtStart()`, consume-once capture,
+    `Rejected("target field disappeared"/"target changed")`, hint-aware `current`.
+  - `InsertResult.Rejected` (accessibility + service) = insert nothing, no clipboard fallback;
+    `DictationService` publishes `Error("Nothing inserted: <reason>")`; capture seam
+    `DictationService.targetCapture` called at START tap.
+  - Tests: `CaretFormattingTest` (8), `InsertionPolicyTest` (+16 total), lifecycle
+    capture-at-start test. Gate green at this commit (`:core:test` 157, `:app:testDebugUnitTest` 93, 0 failures).
+- `2343c4b` ticket 3 — single-shot proven: one `FLUSH` chunk, `overlapMs == 0`, one transcribe
+  call per tap-to-tap hold; `MAX_HOLD_MS` capped 600 s → 30 s. `grep -rn 'AudioChunker|TranscriptMerger'
+  app/src/main` = none. New lifecycle test holds >30 s and asserts exactly one engine call.
+- `7a5e850` `wip: park` — ticket 4 test only (see RUNNING); WIP, unrun.
 
-- **U2b merged with master** (`fbb94d7`); T2 `OverlayStateMachineRobolectricTest` expectations
-  updated deliberately to the new descriptions (Recording → "Listening; release to transcribe",
-  Error → "Error: …").
-- **U2b-2 / MFVP 4b** (`63a3d9d`): start/stop VIRTUAL_KEY ticks, inserted CONFIRM tick,
-  **error = double REJECT ~90 ms apart**, synchronous state+contentDescription (visible next
-  frame), and a focus-safety test (`FLAG_NOT_FOCUSABLE | FLAG_NOT_TOUCH_MODAL`).
-  Handoff `handoffs/ASHA-5/HANDOFF.md`.
-- **E2E-1 insert link** (`82b1a9e`): `DictationService` default inserter is now
-  `AccessibilityTextInserter` (focused-field `ACTION_SET_TEXT`/`ACTION_PASTE` via
-  `DictationAccessibilityService`) with clipboard fallback; empty text rejected. Added
-  `AccessibilityInserter.insertNow` for main-thread callers. **This was the missing
-  "text appears in the focused field" link.**
-- **MODEL-1 review**: default model `base`, `ModelRepositoryProvider` → `<filesDir>/models`,
-  `ResumableModelDownloader` SHA+resume already covered by `ModelDownloaderTest` (7) and
-  `HttpModelDownloaderTest` (4). No gap found; no change.
+Evidence: all green at `2343c4b`; build outputs excluded (park commit touches one test file only).
 
-## DONE after the first note (same shift)
+## RUNNING when killed
+- Only this session (no worker subagents launched). Ticket 4 (`mic between taps`) partially done:
+  added `stopCalls/stopped` to `ManualAudioSource` and lifecycle test
+  `the microphone is only open between the start and stop taps` (service creation opens no mic,
+  press opens, release closes, no re-open). Committed as `7a5e850` but **not compiled/run**.
+  Ticket 5 not started.
 
-- **APK-1 evidence** (`87a2bcb`): verified NORA-1's arm64 artifact — `native-code: 'arm64-v8a'`,
-  `lib/{whisper,ggml,ggml-base,ggml-cpu,martins_whisper,parakeet}.so`, debug-signed, 12,902,712 B,
-  sha256 `c90e356f...b7476`. Recipe on master in `.github/workflows/native-build.yml`.
-  **Local native build on THIS host is impossible: uname -m = aarch64, NDK clang is x86_64
-  (`Exec format error`).** CI/ubuntu x86_64 or an x86 host must build it.
-- **README-1** (`87a2bcb`): README rewritten to the short MFVP page (what, install, permissions,
-  use). Existing `docs/` left untouched.
-- **Full gate**: `:core:test :app:testDebugUnitTest :app:assembleDebug --offline` → **137 + 97 =
-  234 tests, 0 failures/errors**; default APK 8,982,513 B.
+## NEXT (ordered, each a small ticket)
+1. **Rebase `agent/a1-insert-quality` onto master `1de97d6`** ("park: u2-states reconciled, gate
+   235/0"). Branch was based on `0b71e0e`; master now has the reconciled single
+   `AccessibilityTextInserter` (u2-states) instead of MFVP-1 duplicates. Resolve
+   `DictationService`/`InsertionPolicy`/inserter conflicts; keep ticket 1–3 behavior.
+2. Finish ticket 4: run lifecycle test; ensure mic stops on cancel/error too; confirm RMS log
+   and all-zero→error still covered; commit.
+3. Ticket 5: default language explicit `"en"` (`SettingsStore`, keep `LANGUAGE_AUTO` constant,
+   remove auto from UI list), update `SettingsDefaultsTest` (currently asserts `"auto"`), README
+   note; commit.
+4. Full gate `:core:test :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin`; write
+   `handoffs/ASHA-6/HANDOFF.md`; hand branch to MARA for merge + CI APK.
 
-## NEXT (ordered, small)
-
-1. **MARA: merge `agent/u2-states`** (`87a2bcb`) after re-running the gate; handoff
-   `handoffs/ASHA-5/HANDOFF.md`. Branch includes U2b-2 + the accessibility insert link + README.
-2. **Owner/CI**: push and confirm the native Build workflow produced the arm64 APK (Actions).
-3. **PHONE-1**: on-device wireless adb run; needs Martin's phone. Fix only real bugs it exposes.
-
-## TRAPS / NOTES
-
-- Build env (always `--offline`): `export JAVA_HOME=/work/android-toolchain/jdk
-  ANDROID_HOME=/work/android-toolchain/sdk ANDROID_SDK_ROOT=/work/android-toolchain/sdk
-  GRADLE_USER_HOME=/home/node/gh-asha` (copied this session; never touch the shared home).
-- `ninja` symlinks in `/work/android-toolchain/sdk/cmake/*/bin` point at
-  `/home/node/.nix-profile/bin/ninja`; a refilled container loses it → `nix profile install
-  nixpkgs#ninja`. But the real native-build blocker here is the **aarch64 host**: NDK
-  `linux-x86_64/clang` cannot execute. Use CI or an x86 host for `-Pmartins.native=true`.
-- Do **not** edit `/work/martins-whisper` main checkout; it stays clean for MARA's merge.
-- `DictationService.onStartCommand` still calls `ensureForeground()` + `startOverlay()` after
-  actions; tile work remains out of scope.
-- MFVP scope: no tile, no extra states beyond recording/working/error, no GPU tuning, no lint,
-  no release ceremony, no new docs except the README.
+## TRAPS
+- Host is aarch64: NDK `linux-x86_64/clang` → `Exec format error`. JVM tests fine; APK must be
+  built in CI (`ubuntu-latest`). `ninja` dangling symlinks fixed with `nix profile install nixpkgs#ninja`.
+- Always export `JAVA_HOME=/work/android-toolchain/jdk ANDROID_HOME/ANDROID_SDK_ROOT=/work/android-toolchain/sdk
+  GRADLE_USER_HOME=/home/node/gh-asha` and pass `--offline`.
+- Silence tests: press/release must span ≥ `MIN_HOLD_MS`; use
+  `ShadowSystemClock.advanceBy(500, MILLISECONDS)`; real audio needs frames ≥ ~500/32768 peak to
+  set `speechDetected`.
+- `DictationService.targetCapture` is a test seam: save original in `setUp`, restore in `tearDown`.
+- `AccessibilityTextInserter.insert` copies to clipboard when the accessibility service is not
+  connected — tests must use `InserterFactory` fakes, not the real inserter.
+- Caret formatting expects a leading space when the char before the caret is not whitespace
+  (tests fixed accordingly at `608eff1`).
+- Keep `/work/martins-whisper` clean; all work in `/work/martins-whisper-worktrees/<id>`.
+- Never push from worker containers (no credentials); owner pushes after reviewing this handoff.
