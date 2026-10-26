@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="e2e_text" type="id" />
+    <item name="e2e_password" type="id" />
+    <item name="e2e_hint" type="id" />
+</resources>
