@@ -5,6 +5,7 @@ import android.app.Application
 import android.content.Context
 import android.os.Looper
 import com.martins.whisper.audio.AudioSource
+import com.martins.whisper.core.ChunkReason
 import com.martins.whisper.core.SpeechEngine
 import com.martins.whisper.core.Transcript
 import com.martins.whisper.core.TranscriptGate
@@ -135,6 +136,8 @@ class DictationServiceLifecycleRobolectricTest {
             val chunk = engine.received.single().chunk
             assertEquals(10 * ManualAudioSource.FRAME_SAMPLES, chunk.samples.size)
             assertEquals(200L, chunk.endMs)
+            assertEquals("single-shot path must not chunk", ChunkReason.FLUSH, chunk.reason)
+            assertEquals("single-shot path must not overlap", 0, chunk.overlapMs)
             chunk.samples.forEachIndexed { index, sample ->
                 val frame = index / ManualAudioSource.FRAME_SAMPLES
                 val expected = (100 * (frame + 1)) / 32768f
@@ -273,6 +276,30 @@ class DictationServiceLifecycleRobolectricTest {
             assertEquals(2, engines.size)
             assertEquals(1, engines[0].received.size)
             assertEquals(1, engines[1].received.size)
+        } finally {
+            controller.destroy()
+        }
+    }
+
+    @Test
+    fun `a hold over 30 s stops itself and still makes exactly one transcribe call`() {
+        val engine = FakeSpeechEngine(
+            respond = { _, language -> Transcript("hello from fake", language) },
+        )
+        EngineFactory.factory = { _, _ -> engine }
+        val controller = Robolectric.buildService(DictationService::class.java).create()
+        val service = controller.get()
+        try {
+            invoke(service, "onPress")
+            await("recording starts") {
+                DictationService.state.value is DictationState.Recording
+            }
+            audio.emit(frames = 1_500, firstSample = 1_000, step = 0)
+            shadowOf(Looper.getMainLooper()).idleFor(31, TimeUnit.SECONDS)
+            await("long hold is inserted") { inserted.size == 1 }
+
+            assertEquals(1, engine.received.size)
+            assertTrue(DictationService.state.value is DictationState.Success)
         } finally {
             controller.destroy()
         }

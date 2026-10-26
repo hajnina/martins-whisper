@@ -529,7 +529,8 @@ class DictationService : Service() {
         private const val SAMPLE_RATE = 16_000
         private const val MIN_HOLD_MS = 400L
         private const val MIN_AUDIO_MS = 150L
-        private const val MAX_HOLD_MS = 600_000L
+        /** Single-shot dictation: one tap-to-tap buffer and one transcribe call. */
+        private const val MAX_HOLD_MS = 30_000L
         private const val STATE_RESET_MS = 1_800L
         private const val SPEECH_RMS_THRESHOLD = 0.015f
 
