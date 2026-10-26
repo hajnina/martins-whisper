@@ -1,0 +1,13 @@
+D1 docs + operator scripts on agent/d1-docs (base 1511ca1).
+Docs: README index, BUILD refresh, INSTALL, PERMISSIONS, MODELS, PRIVACY,
+DEVICE-MATRIX, TROUBLESHOOTING, DOCTOR. Scripts: install-apk.sh, push-model.sh
+(catalog SHA-256 enforced, run-as push to files/models/<id>.bin), doctor.sh
+(pasteable, secret-free report).
+Verified on host: bash -n + shellcheck clean; install/doctor no-device exit 3
+with a clear message; push (model supplied) no-device exit 3, bad hash exit 1; Gradle gate green
+(109 tests, 0 failures, APK 8,873,577 B, no native libs); tiny/base model hashes
+match ModelCatalog; no broken doc links.
+All phone steps are UNVERIFIED (no device/KVM; H1-blocked) and marked in docs.
+Blocked on G1: 0.1.0 still uses the fake engine and has no in-app model UI, so the
+"install to real dictation" acceptance cannot be shown yet; docs say so.
+MARA merges; no push, no merge, no app/core edits.

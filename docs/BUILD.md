@@ -45,22 +45,57 @@ This installs the community aarch64 NDK r30 (`30.0.16248370`) under `sdk/ndk/`. 
 
 ### Verified result on this host (2026-10-26)
 
+Last full run in the D1 worktree (private Gradle cache, offline, no daemon):
+
 ```
-$ source scripts/env.sh && ./gradlew clean :core:test :app:assembleDebug --no-build-cache
-BUILD SUCCESSFUL in 1s
-35 actionable tasks: 35 executed
+$ source scripts/env.sh
+$ export GRADLE_USER_HOME=/home/node/gh-dora   # private copy, not the shared cache
+$ ./gradlew :core:test :app:testDebugUnitTest :app:assembleDebug --offline --no-daemon --console=plain
+BUILD SUCCESSFUL in 21s
+47 actionable tasks: 36 executed, 11 from cache
 
 $ ls -l app/build/outputs/apk/debug/app-debug.apk
--rw-r--r-- 8578276 app-debug.apk
+-rw-r--r-- 8873577 app-debug.apk
+$ sha256sum app/build/outputs/apk/debug/app-debug.apk
+004e39e4c6c01b22dc5dc53aeb5c4253e257a5ab407159b3e2395f689630867c  app-debug.apk
 ```
+
+Re-run during the D1 handoff check (same command, APK already assembled):
+
+```
+BUILD SUCCESSFUL in 11s
+47 actionable tasks: 1 executed, 46 up-to-date
+-rw-r--r-- 8873577 app-debug.apk
+867dec1f868a9ed72093d33db13453b2f4d02de1e1167f423105b6e02c141354  app-debug.apk
+```
+
+The APK hash changes on every rebuild (debug-signing timestamp), so both hashes
+above are valid for their own run; compare only within a single run.
+
+Test totals from `*/build/test-results/**/*.xml`: `tests=109 failures=0 errors=0 skipped=0`.
 
 - JDK: Temurin 17.0.21+9 (aarch64)
 - Gradle: 8.9 (wrapper pinned)
 - AGP 8.7.3 / Kotlin 2.0.21 / compileSdk 35 / minSdk 29
-- aapt2: 2.19 (build-tools 35.0.2 native aarch64, used through the override)
-- APK signature: debug v2 scheme verified with `apksigner`; `aapt2 dump badging` reports package `com.martins.whisper`, minSdk 29, targetSdk 35.
+- aapt2: 2.19 (build-tools 35.0.1 native aarch64, used through the override)
+- APK signature: debug v2 scheme verified with `apksigner`; `aapt2 dump badging` reports package `com.martins.whisper`, versionName `0.1.0`, versionCode 1, minSdk 29, targetSdk 35.
 
-Note: `:core:test` currently reports `NO-SOURCE` because the skeleton has no tests. A temporary probe test was run during bring-up (`tests=1 failures=0`), then removed; C1 owns the real tests. Similarly, an `Activity` probe was compiled and dexed to prove Kotlin/Android compilation, then removed (the current skeleton has no Kotlin app sources).
+The APK hash changes on every rebuild; compare only within one handoff. The default
+APK has no native libraries (`-Pmartins.native=false`); the real whisper.cpp engine
+is a G1 build.
+
+When several agents share `/work`, do **not** point `GRADLE_USER_HOME` at
+`/work/android-toolchain/gradle-home` (shared locks). Copy it once and build offline:
+
+```bash
+cp -r /work/android-toolchain/gradle-home /home/node/gh-<agent>
+source scripts/env.sh
+export GRADLE_USER_HOME=/home/node/gh-<agent>
+./gradlew :core:test :app:testDebugUnitTest :app:assembleDebug --offline --no-daemon
+```
+
+The older bring-up note below is kept for history: `:core:test` once reported
+`NO-SOURCE` on the skeleton; it now runs 109 tests.
 
 ### Manual fallback
 
@@ -120,7 +155,7 @@ If E1 pins a different NDK, update `NDK_VERSION` in the workflow and Dockerfile.
 
 ## Native NDK (whisper.cpp arm64)
 
-Details and evidence: `TOOLCHAIN.md` → "Native NDK". Short version:
+Details and evidence: [native-build.md](native-build.md) → "Native NDK". Short version:
 
 - Official NDK archives are `linux-x86_64`; they cannot run natively here.
 - This sandbox cannot run amd64 Docker images (no binfmt), so "use x86_64 Docker" is a CI-only answer.
