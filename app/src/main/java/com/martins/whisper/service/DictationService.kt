@@ -135,7 +135,9 @@ class DictationService : Service() {
         engineHost.beginSession()
         engineReady = false
         stateResetJob?.cancel()
-        val modelName = ModelCatalog.byId(settings.modelId)?.displayName ?: settings.modelId
+        val modelName = settings.customModels.firstOrNull { it.id == settings.modelId }?.displayName
+            ?: ModelCatalog.byId(settings.modelId)?.displayName
+            ?: settings.modelId
         publishState(DictationState.Loading("Loading $modelName\u2026"))
 
         if (!hasMicrophonePermission()) {

@@ -6,6 +6,7 @@ import com.martins.whisper.asr.SpeechEngineUnavailableException
 import com.martins.whisper.core.ComputeBackend
 import com.martins.whisper.core.asr.EngineState
 import com.martins.whisper.core.asr.FakeSpeechEngine
+import com.martins.whisper.core.asr.ModelCatalog
 import com.martins.whisper.core.asr.ModelRepository
 import com.martins.whisper.core.asr.ModelStorage
 import java.io.File

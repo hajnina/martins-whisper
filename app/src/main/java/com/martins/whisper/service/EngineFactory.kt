@@ -7,6 +7,7 @@ import com.martins.whisper.asr.ModelRepositoryProvider
 import com.martins.whisper.asr.SpeechEngineUnavailableException
 import com.martins.whisper.asr.WhisperCppEngine
 import com.martins.whisper.core.ComputeBackend
+import com.martins.whisper.core.ModelSpec
 import com.martins.whisper.core.SpeechEngine
 import com.martins.whisper.core.asr.EngineState
 import com.martins.whisper.core.asr.ModelRepository
@@ -32,6 +33,7 @@ object EngineFactory {
             modelId = settings.modelId,
             backend = settings.backend,
             repository = ModelRepositoryProvider.forContext(context),
+            customModels = settings.customModels,
             nativeAvailable = { WhisperCppEngine.isNativeAvailable },
             engineLoader = { plan -> WhisperCppEngine.create(plan.modelFile.path, plan.backend) },
             previousState = settings.engineState,
@@ -42,13 +44,14 @@ object EngineFactory {
         modelId: String,
         backend: ComputeBackend,
         repository: ModelRepository,
+        customModels: List<ModelSpec> = emptyList(),
         nativeAvailable: () -> Boolean,
         engineLoader: (EnginePlan) -> SpeechEngine,
         previousState: EngineState = EngineState.EMPTY,
         onState: (EngineState) -> Unit = {},
     ): SpeechEngine {
         val plan = try {
-            EnginePlanner.plan(modelId, backend, repository)
+            EnginePlanner.plan(modelId, backend, repository, customModels)
         } catch (e: SpeechEngineUnavailableException) {
             onState(previousState.failed(e.reason, e.message))
             throw e
