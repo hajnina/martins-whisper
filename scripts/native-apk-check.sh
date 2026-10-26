@@ -10,12 +10,12 @@
 #   - uncompressed .so entries are 16 KB aligned inside the zip
 #
 # Usage: scripts/native-apk-check.sh [path/to/app-debug.apk]
-# Env:   MAX_APK_BYTES (default 20 MiB), ANDROID_NDK_HOME, ANDROID_HOME
+# Env:   MAX_APK_BYTES (default 32 MiB; Compose onboarding adds ~12 MiB of debug dex), ANDROID_NDK_HOME, ANDROID_HOME
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APK="${1:-$ROOT/app/build/outputs/apk/debug/app-debug.apk}"
-MAX_APK_BYTES="${MAX_APK_BYTES:-20971520}"
+MAX_APK_BYTES="${MAX_APK_BYTES:-33554432}"
 ABI="arm64-v8a"
 PAGE_ALIGN=0x4000
 REQUIRED_LIBS=(
