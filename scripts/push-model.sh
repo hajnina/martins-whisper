@@ -8,7 +8,6 @@ set -euo pipefail
 
 readonly PACKAGE="com.martins.whisper"
 readonly TMP_PREFIX="mw-model"
-readonly SCRIPT_NAME="$(basename "$0")"
 
 MODEL_FILE=""
 MODEL_ID=""
@@ -192,8 +191,9 @@ main() {
     die "cannot use 'run-as $PACKAGE'. Install the debuggable v1 APK (scripts/install-apk.sh) or use a device build that exposes model import." 4
   fi
 
-  local remote="$TMP_PREFIX-$(basename "$MODEL_FILE")"
-  local target="files/models/$MODEL_ID.bin"
+  local remote target
+  remote="$TMP_PREFIX-$(basename "$MODEL_FILE")"
+  target="files/models/$MODEL_ID.bin"
   local cleanup=0
 
   if "${adb_args[@]}" shell run-as "$PACKAGE" test -f "$target" >/dev/null 2>&1; then

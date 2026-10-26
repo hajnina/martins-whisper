@@ -7,7 +7,6 @@
 set -uo pipefail
 
 readonly PACKAGE="com.martins.whisper"
-readonly SCRIPT_NAME="$(basename "$0")"
 
 SERIAL="${ANDROID_SERIAL:-}"
 

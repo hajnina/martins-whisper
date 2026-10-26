@@ -7,7 +7,6 @@ set -euo pipefail
 
 readonly PACKAGE="com.martins.whisper"
 readonly DEFAULT_APK="app/build/outputs/apk/debug/app-debug.apk"
-readonly SCRIPT_NAME="$(basename "$0")"
 
 APK="$DEFAULT_APK"
 SERIAL="${ANDROID_SERIAL:-}"
