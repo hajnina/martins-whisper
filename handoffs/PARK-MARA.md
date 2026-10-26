@@ -25,3 +25,10 @@
 - Gradle: own copy gh-mara + `--offline --rerun-tasks`; never shared gradle-home. Refill = re-copy toolchain caches once.
 - workers: wip-commit every 10 min; park note live; PROVIDER-STATUS OK as of last read.
 - InsertResult.duplicate TextInserter interfaces exist (service vs accessibilty package); don't unify now (abstraction = churn), adapter bridges them.
+
+## Owner orders executed (this shift, after audit)
+- merged `agent/f1-chunker` (TESS, handoff TESS-F1 @09e6398, real reg tests) -> merge commit `1d9563a`. FULL GATE re-run: `:core:test :app:testDebugUnitTest :app:assembleDebug --offline` => 34 suites, **218 tests, 0 failures/errors**, APK 8,971,253 B. master clean.
+- MFVP-1 note: CODER bg worker running on `agent/mfvp1-inserter` (may overlap owner's mention of ASHA u2-states; whoever hands off first with test output gets merged, other branch reconciled).
+
+### TO VERA (agent/v1-verify) - from owner via MARA
+When you run L1/L2 tracer bullets, they must catch exactly this class of gap: on 2026-10-26 master, 217 tests were green while `DictationService.inserterFactory` (DictationService.kt:514) defaulted to ClipboardTextInserter - transcript was PRODUCED and broadcast but never appeared in the focused text field. So your tracers must assert the FULL chain "transcript produced -> text appears in the focused node", not just that a transcript exists. Ticket `.scratch/device-ready-apk/tickets/MFVP-1-inserter-wired.md` documents the gap.
