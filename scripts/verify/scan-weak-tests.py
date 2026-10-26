@@ -45,9 +45,9 @@ for path in files:
         if m:
             if not is_allowed("A", rel): report("TAUTOLOGY", rel, i + 1, f"assertEquals({m.group(1)},{m.group(1)})")
         if re.search(r"@(Ignore|Disabled)\b", ln):
-            report("SKIP", rel, i + 1, ln.strip())
+            if not is_allowed("SKIP", rel): report("SKIP", rel, i + 1, ln.strip())
         if re.search(r"\bassume(True|False|That)\b", ln):
-            report("SKIP", rel, i + 1, ln.strip())
+            if not is_allowed("SKIP", rel): report("SKIP", rel, i + 1, ln.strip())
     # per @Test block
     i = 0
     n = len(lines)

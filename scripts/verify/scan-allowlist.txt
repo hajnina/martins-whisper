@@ -1,0 +1,2 @@
+# HostWhisperJniTest: assumeTrue guards a native lib/model that CI builds; skip is environmental, not a weakening.
+SKIP:app/src/test/kotlin/com/martins/whisper/asr/HostWhisperJniTest.kt

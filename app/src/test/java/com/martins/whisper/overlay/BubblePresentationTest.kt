@@ -43,12 +43,13 @@ class BubblePresentationTest {
     @Test
     fun `transcribing shows a distinct blue three dot icon`() {
         val visual = BubblePresentation.of(DictationState.Processing())
+        assertEquals(BubbleIcon.SPINNER, BubblePresentation.of(DictationState.Loading()).icon)
         assertEquals(BubblePresentation.TRANSCRIBING_ACCENT, visual.accent)
         assertEquals(BubbleIcon.TRANSCRIBING, visual.icon)
         assertEquals("Transcribing\u2026", visual.contentDescription)
         assertEquals("Transcribing\u2026", visual.label)
-        assertNotEquals(BubblePresentation.of(DictationState.Loading()).icon, visual.icon)
-        assertNotEquals(BubblePresentation.of(DictationState.Loading()).accent, visual.accent)
+        assertNotEquals(BubbleIcon.SPINNER, visual.icon)
+        assertNotEquals(BubblePresentation.LOADING_ACCENT, visual.accent)
     }
 
     @Test
