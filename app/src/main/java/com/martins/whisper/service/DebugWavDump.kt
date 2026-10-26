@@ -34,7 +34,7 @@ object DebugWavDump {
         }
         FileOutputStream(wav).use { out ->
             val dataLen = pcm.size
-                        out.write(byteArrayOf(0x52, 0x49, 0x46, 0x46)) // RIFF
+            out.write(byteArrayOf(0x52, 0x49, 0x46, 0x46)) // RIFF
             out.writeLe32(36 + dataLen)
             out.write(byteArrayOf(0x57, 0x41, 0x56, 0x45)) // WAVE
             out.write(byteArrayOf(0x66, 0x6D, 0x74, 0x20)) // "fmt "
