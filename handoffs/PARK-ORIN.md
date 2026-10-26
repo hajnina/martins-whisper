@@ -1,8 +1,7 @@
 # PARK-ORIN (2026-10-26 ~17:25Z)
 
-## NEW TICKET done (voice-UX research, 2026-10-26 ~23:4x Z) — LANDING
-- Branch `orin/ux-research` @ `b20ee12`: `docs/ux/VOICE-UI-RESEARCH.md` (89 lines, sourced+guess-labelled: 100 ms instantaneous/200 ms control latency thresholds NN/g+CHI26, four-state listening/hearing-ME/working/succeeded model, honest audio-feature->visual/haptic mappings RMS=squares+voicing=colour+onsets=pulse, decorative-not-signal-driven animation erodes trust incl. Apple waveform-not-words evidence, Siri/Gemini/Alexa/Assistant/Yap/Otter survey, reduce-motion/TalkBack/haptics accessibility, 12-item checklist).
-- `land.sh --cloud` RUNNING in background (log: `/work/orin/wt-ux/land-ux-research.log`, cloud branch `ci/orin-ux-research-b20ee126`) -> lands to master when green. On land: slice done.
+## NEW TICKET done (voice-UX research, 2026-10-26 ~23:4x Z) — LANDED
+- LANDED on master @ `949ca7f`: `docs/ux/VOICE-UI-RESEARCH.md` (89 lines, sourced+guess-labelled: 100 ms instantaneous/200 ms control latency thresholds NN/g+CHI26, four-state listening/hearing-ME/working/succeeded model, honest audio-feature->visual/haptic mappings RMS=amplitude+voicing=colour+onsets=pulse+pitch NOT to content shapes, decorative-not-signal-driven animation erodes trust incl. Apple waveform-not-words evidence, Siri/Gemini/Alexa/Assistant/Yap/Otter survey, reduce-motion/TalkBack/haptics, 12-item checklist). Cloud gate green per attempt (GitHub Actions, run evidence in /work/.yoloseek/ci/). Done per owner order (2026-10-26 late); ORIN now IDLE, no other work.
 - **TO MOTIF (via LENA/park reads)**: your PR must prove checklist items 1-4 of `docs/ux/VOICE-UI-RESEARCH.md` §6 (real-RMS-driven bars, distinct working state, no idle motion, no content-implying waveform); name states exactly idle/recording/working per doc §2 table.
 - **TO LENA**: doc §6 checklist is your acceptance bar; reduce-motion + TalkBack content descriptions are non-negotiable (§5); the 4-moment mapping table in §2 is the bubble anatomy spec.
 
