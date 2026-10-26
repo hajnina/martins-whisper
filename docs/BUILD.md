@@ -60,12 +60,24 @@ $ sha256sum app/build/outputs/apk/debug/app-debug.apk
 004e39e4c6c01b22dc5dc53aeb5c4253e257a5ab407159b3e2395f689630867c  app-debug.apk
 ```
 
+Re-run during the D1 handoff check (same command, APK already assembled):
+
+```
+BUILD SUCCESSFUL in 11s
+47 actionable tasks: 1 executed, 46 up-to-date
+-rw-r--r-- 8873577 app-debug.apk
+867dec1f868a9ed72093d33db13453b2f4d02de1e1167f423105b6e02c141354  app-debug.apk
+```
+
+The APK hash changes on every rebuild (debug-signing timestamp), so both hashes
+above are valid for their own run; compare only within a single run.
+
 Test totals from `*/build/test-results/**/*.xml`: `tests=109 failures=0 errors=0 skipped=0`.
 
 - JDK: Temurin 17.0.21+9 (aarch64)
 - Gradle: 8.9 (wrapper pinned)
 - AGP 8.7.3 / Kotlin 2.0.21 / compileSdk 35 / minSdk 29
-- aapt2: 2.19 (build-tools 35.0.2 native aarch64, used through the override)
+- aapt2: 2.19 (build-tools 35.0.1 native aarch64, used through the override)
 - APK signature: debug v2 scheme verified with `apksigner`; `aapt2 dump badging` reports package `com.martins.whisper`, versionName `0.1.0`, versionCode 1, minSdk 29, targetSdk 35.
 
 The APK hash changes on every rebuild; compare only within one handoff. The default

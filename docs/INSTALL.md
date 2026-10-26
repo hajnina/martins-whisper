@@ -32,9 +32,9 @@ Two readers:
    ls -l app/build/outputs/apk/debug/app-debug.apk
    ```
 
-   **VERIFIED (host, 2026-10-26):** `BUILD SUCCESSFUL`, APK `8,873,577` bytes,
-   SHA-256 `004e39e4c6c01b22dc5dc53aeb5c4253e257a5ab407159b3e2395f689630867c`.
-   The hash changes on every rebuild; do not compare across builds.
+   **VERIFIED (host, 2026-10-26):** `BUILD SUCCESSFUL`, APK `8,873,577` bytes.
+   The SHA-256 changes on every rebuild (debug-signing timestamp); compare only
+   against the hash printed for the same build, not across builds.
 
 2. Enable **Developer options → USB debugging** on the phone and accept the RSA
    prompt. Check the connection:
