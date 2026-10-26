@@ -1,0 +1,90 @@
+ `removes duplicated boundary words`() {
+        assertEquals(
+            "Hello world again",
+            TranscriptMerger.merge(listOf("Hello world", "world again")),
+        )
+    }
+
+    @Test
+    fun `dedupe is case insensitive and keeps richer punctuation`() {
+        assertEquals(
+            "Hello, World! Again",
+            TranscriptMerger.merge(listOf("Hello, World!", "world! Again")),
+        )
+        assertEquals(
+            "hello, world",
+            TranscriptMerger.merge(listOf("hello", "hello, world")),
+        )
+    }
+
+    @Test
+    fun `dedupe is limited to eight words`() {
+        val first = "a b c d e f g h"
+        val second = "a b c d e f g h i"
+        assertEquals(
+            "a b c d e f g h i",
+            TranscriptMerger.merge(listOf(first, second)),
+        )
+    }
+
+    @Test
+    fun `zero overlap does not remove words`() {
+        assertEquals(
+            "hello world world again",
+            TranscriptMerger.merge(listOf("hello world", "world again"), listOf(0)),
+        )
+    }
+
+    @Test
+    fun `positive overlap removes words`() {
+        assertEquals(
+            "hello world again",
+            TranscriptMerger.merge(listOf("hello world", "world again"), listOf(250)),
+        )
+    }
+
+    @Test
+    fun `empty and blank parts are ignored`() {
+        assertEquals("", TranscriptMerger.merge(listOf("", "   ", "\n")))
+        assertEquals("hello world", TranscriptMerger.merge(listOf("", " hello ", "world")))
+    }
+
+    @Test
+    fun `does not invent text`() {
+        assertEquals("one two three", TranscriptMerger.merge(listOf("one two three")))
+        assertEquals("one two three", TranscriptMerger.merge(listOf("one two", "three")))
+    }
+}
+
+# Android Device Test Matrix (later, on real device)
+
+## Setup
+- Install APK via `adb install -r app-debug.apk`.
+- Grant: mic, overlay, accessibility (settings deep link), notifications; disable battery optimization.
+- Model: base present in app files (download or `adb push`).
+- Record Android version, OEM, GPU vendor/driver, RAM, free storage.
+
+## Insertion targets (must pass)
+| App | Field type | ACTION_SET_TEXT | Paste fallback | Notes |
+|---|---|---|---|---|
+| AOSP/Google Messages | native EditText | | | baseline |
+| Gmail | native/web-ish | | | |
+| WhatsApp | native | | | |
+| Chrome address bar | WebView/omnibox | | | |
+| Chrome textarea (web form) | WebView | | | |
+| Slack | custom/Compose | | | |
+| Telegram | custom | | | |
+| Google Keep | native | | | |
+| Microsoft Word | custom | | | |
+| Compose sample app (ours) | Compose BasicTextField | | | known hard case |
+| Terminal emulator | custom | | | may fail; clipboard fallback |
+| Search field with existing text + selection | native | | | replace selection |
+| Empty field | native | | | baseline |
+
+Per target record: focus retained after overlay press, cursor position correct, selection replaced, no duplicate text, no app crash, clipboard state.
+
+## Dictation cases
+1. Tap < 400 ms -> no insert, no audio saved.
+2. Hold 2 s "hello world" -> exact text at cursor.
+3. Hold 60 s with pauses -> complete, no duplicate boundary words at 25 s cuts.
+4. Speak immediately after press -> first word not clipped (pre-roll).

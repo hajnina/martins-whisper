@@ -1,0 +1,89 @@
+ptyList()
+    }
+
+    private fun isAudible(rms: Double): Boolean = rms >= speechFloorRms
+
+    private fun chunkDurationMs(): Long {
+        if (chunk.isEmpty()) return 0L
+        return chunk.last().endMs - chunk.first().startMs
+    }
+
+    private fun finalizeSilence(): List<AudioChunk> {
+        val hasMinimumSpeech = speechMsInChunk >= MIN_SPEECH_MS
+        val frames = chunk.toList()
+        val output = if (hasMinimumSpeech) {
+            listOf(buildChunk(frames, ChunkReason.SILENCE, pendingOverlapMs))
+        } else {
+            emptyList()
+        }
+        retainPreRoll(frames)
+        clearActiveState()
+        return output
+    }
+
+    private fun splitAtMaxLength(): AudioChunk {
+        val lastEnd = chunk.last().endMs
+        val windowStart = lastEnd - MAX_CUT_SEARCH_MS
+        var cutIndex = chunk.lastIndex
+        var lowestEnergy = Double.MAX_VALUE
+        for (index in chunk.indices) {
+            val candidate = chunk[index]
+            if (candidate.endMs <= windowStart) continue
+            val energy = AudioMath.rms(candidate.samples)
+            if (energy <= lowestEnergy) {
+                lowestEnergy = energy
+                cutIndex = index
+            }
+        }
+
+        val cutEnd = chunk[cutIndex].endMs
+        val emittedFrames = chunk.subList(0, cutIndex + 1).toList()
+        val overlapStart = cutEnd - OVERLAP_MS
+        val overlapTail = tailFrom(overlapStart)
+        val afterCut = chunk.subList(cutIndex + 1, chunk.size).toList()
+        val remaining = (overlapTail + afterCut).toMutableList()
+
+        val emitted = buildChunk(emittedFrames, ChunkReason.MAX_LENGTH, pendingOverlapMs)
+        chunk = remaining
+        pendingOverlapMs = OVERLAP_MS.toInt()
+        speechMsInChunk = remaining.sumOf { if (isAudible(AudioMath.rms(it.samples))) it.endMs - it.startMs else 0L }
+        if (remaining.isEmpty()) {
+            active = false
+            pendingOverlapMs = 0
+            silenceMs = 0L
+            speechMsInChunk = 0L
+        }
+        return emitted
+    }
+
+    private fun tailFrom(fromMs: Long): MutableList<BufferedFrame> {
+        val result = mutableListOf<BufferedFrame>()
+        for (frame in chunk) {
+            if (frame.endMs <= fromMs) continue
+            if (frame.startMs >= fromMs) {
+                result.add(frame)
+                continue
+            }
+            val skip = ((fromMs - frame.startMs) * SAMPLE_RATE / 1000L).toInt()
+                .coerceIn(0, frame.samples.size)
+            if (skip < frame.samples.size) {
+                val trimmed = frame.samples.copyOfRange(skip, frame.samples.size)
+                val start = frame.startMs + skip * 1000L / SAMPLE_RATE
+                result.add(BufferedFrame(trimmed, start, frame.endMs))
+            }
+        }
+        return result
+    }
+
+    private fun buildChunk(
+        frames: List<BufferedFrame>,
+        reason: ChunkReason,
+        overlapMs: Int,
+    ): AudioChunk {
+        var sampleCount = 0
+        for (frame in frames) sampleCount += frame.samples.size
+        val samples = FloatArray(sampleCount)
+        var offset = 0
+        for (frame in frames) {
+            val converted = AudioMath.shortToFloat(frame.samples)
+      

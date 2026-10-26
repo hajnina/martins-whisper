@@ -1,0 +1,18 @@
+A2 START 2026-10-26T16:59:31Z
+glm-5.3-flash-free A exit=0 wall=11s
+A verify glm-5.3-flash-free exit=0
+mimo-v2.6-flash-free A exit=0 wall=12s
+A verify mimo-v2.6-flash-free exit=0
+big-pickle A exit=0 wall=8s
+A verify big-pickle exit=0
+flint-40b-free A exit=0 wall=21s
+A verify flint-40b-free exit=0
+nemotron-3-ultra-free A exit=1 wall=72s
+A verify nemotron-3-ultra-free exit=1
+nemotron-3.5-lightning-free A exit=0 wall=24s
+A verify nemotron-3.5-lightning-free exit=0
+nemotron-3.5-super-vl-free A exit=0 wall=8s
+A verify nemotron-3.5-super-vl-free exit=0
+beam-free A exit=0 wall=7s
+A verify beam-free exit=0
+A2 END 2026-10-26T17:02:59Z

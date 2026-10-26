@@ -1,0 +1,1 @@
+B1: Built and tested Android/Kotlin project with gradle. BUILD SUCCESSFUL: 74 tests, 0 failures, app-debug.apk 8,800,646 bytes. Changed 4 files: gradlew, Dockerfile.build, .github/workflows/build.yml, scripts/env.sh. Blocked by no physical Android device.

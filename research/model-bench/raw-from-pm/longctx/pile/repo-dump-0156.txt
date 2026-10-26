@@ -1,0 +1,38 @@
+ibrary with both Vulkan and CPU, default to `auto`, fall back to CPU, and show the active backend. The prebuilt sherpa-onnx AAR is a viable emergency fallback, but its GPU path is NNAPI, which Android deprecated in Android 15. Keep SPEC’s overlay shape (`TYPE_APPLICATION_OVERLAY` + microphone FGS + separate AccessibilityService). Insert with `ACTION_SET_TEXT` first, verify by read-back, then custom paste/`ACTION_PASTE`, then clipboard + notification; never write to password fields. Implement the 300 s idle unload with a single ASR dispatcher and leases, because an accessibility-bound process may never receive `onTrimMemory(BACKGROUND)`. Vulkan is buildable but device-dependent (Pixel 8: 73 s -> 67 s for 30 s audio; Adreno 640 fails 16-bit storage; Adreno 840 + Turnip showed 4.3x), so do not block v1 on GPU. PM must decide whether v1 supports GGML-only custom import (recommended) or also ONNX, which implies a second engine. No APK/device validation was possible in this sandbox.
+
+## What was built / changed
+
+Research only; no production code and no changes to `core/` contracts.
+
+- `research/ANDROID_PRIOR_ART.md` (456 lines): engine comparison, native Vulkan build feasibility, overlay/FGS rules, accessibility focus/insertion design, VAD/chunking, ModelManager invariants, failure/privacy matrix, testing plan, code-reuse/license map, model sizes/SHA-256, source line map.
+- `REFERENCES.md`: replaced the R1 TBD section with 18 concrete sources (repos, issues, Android docs, HF weights), each with what was taken and where it landed; refreshed technical notes.
+- `handoffs/R1-research/HANDOFF.md` (this file) and `SUMMARY.txt`.
+
+Repos cloned read-only under `/work/references/repos-android/` (not committed):
+`futo-voice-input d6e1eb2`, `whisper.cpp 231638a`, `sherpa-onnx af2d8d8`, `phone-whisper e6518cd`, `whisperclient-android e25e063`, `flo fd5f102`, `ramblr 10b3834`.
+
+## How to run/validate
+
+There is no build or test suite in R1. The report is self-contained; run these checks when reviewing:
+
+```bash
+cd /work/martins-whisper-worktrees/r1-research
+git diff --check
+git show --stat a44964f
+grep -n "Option A\|ADR-004\|ACTION_SET_TEXT\|300 s\|Vulkan" research/ANDROID_PRIOR_ART.md | head
+```
+
+To reproduce the evidence (network required):
+
+```bash
+curl -sL 'https://huggingface.co/api/models/ggerganov/whisper.cpp?blobs=true' -o /tmp/hf.json
+jq -r '.siblings[] | select(.rfilename|test("^ggml-(tiny|base|small)(\\.en)?\\.bin$")) | [.rfilename,.size,.lfs.sha256] | @tsv' /tmp/hf.json
+
+curl -sL 'https://api.github.com/repos/k2-fsa/sherpa-onnx/releases/latest' -o /tmp/sherpa.json
+jq -r '.tag_name, (.assets[] | select(.name|test("android|\\.aar$")) | [.name,.size] | @tsv)' /tmp/sherpa.json
+
+curl -sL -o /tmp/sherpa.aar 'https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.0/sherpa-onnx-2.0.0.aar'
+unzip -l /tmp/sherpa.aar | grep -E '\\.so|classes.jar'
+```
+
+Expected key results (captured): `ggml-base.bin` = 147,951,465 B, SHA-256 `60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe`; `sherpa-onnx-2.0.0.aar` = 49.2 MB with arm64 `libonnxruntime.so` 22,249,560 B + `libsherpa-onnx-jni.so` 4,555,952 B; latest sherpa release `v2.0.0` at research time (`v2

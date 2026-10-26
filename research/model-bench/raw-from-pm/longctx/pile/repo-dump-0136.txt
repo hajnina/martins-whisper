@@ -1,0 +1,57 @@
+ert, no audio saved.
+2. Hold 2 s "hello world" -> exact text at cursor.
+3. Hold 60 s with pauses -> complete, no duplicate boundary words at 25 s cuts.
+4. Speak immediately after press -> first word not clipped (pre-roll).
+5. Press while model unloaded -> records, shows loading, transcribes after load.
+6. Hold 10 min -> safety cap behaves; app stable.
+7. Switch model tiny->base in settings -> next dictation uses new model; old unloaded.
+8. Idle 5 min -> status unloaded; memory/VRAM drop; next use reloads.
+9. Airplane mode after model downloaded -> dictation still works; no network.
+10. Screen rotate / multi-window / overlay drag / reboot -> overlay restores, position persists.
+11. Revoke mic/overlay/accessibility while running -> clear error and recovery path.
+12. Incoming call / another mic app -> graceful failure.
+13. Screen off/on -> service alive; overlay not blocking.
+14. Low battery / thermal throttling -> no crash; latency reported.
+15. Accessibility off -> copy-to-clipboard + notification fallback.
+
+## GPU / performance
+- Settings/diagnostics shows backend (`vulkan`, `cpu`, `nnapi`).
+- On Vulkan device: force GPU and CPU, transcribe same 10 s clip; record latency, memory.
+- On non-Vulkan device: auto falls back to CPU with visible status.
+- After idle unload, GPU memory returns (best-effort; vendor tools or `dumpsys meminfo`).
+- Report battery impact for 10 dictations.
+
+## OEM quirks
+- Samsung (battery, overlay), Xiaomi/MIUI (autostart, overlay), Pixel (baseline), OnePlus/Oppo, Huawei (no GMS irrelevant), stock AOSP.
+- Background start restrictions (Android 12+): overlay service started from user tap/boot; verify.
+- Android 15/16 foreground service microphone restrictions.
+
+## Evidence to capture
+- `adb logcat` filtered by package, screenshots/GIF per state, `dumpsys meminfo`, test result table, exact device fingerprint.
+
+# Integration Plan (PM)
+
+Wave 1 branches:
+- `agent/r1-research` (report only; merge docs)
+- `agent/b1-build` (toolchain/scripts/CI; build files)
+- `agent/c1-core-audio` (core chunking/merge/tests)
+- `agent/e1-asr` (core model layer + native/JNI scaffolding)
+- `agent/u1-overlay` (Android service/overlay/settings shell)
+- `agent/i1-input` (accessibility service + insertion)
+
+## Merge order
+
+1. **R1** - docs only; append REFERENCES/SPEC notes. No code conflicts.
+2. **B1** - toolchain/docs/CI. Keep its build-file edits if they are improvements; verify Gradle wrapper + versions.
+3. **C1** - core audio. Resolve `Contracts.kt` stub replacement (`TranscriptMerger`) only.
+4. **E1** - core model layer. Must expose `ModelCatalog`, `ModelManager`, `SpeechEngine` concrete impls. Check `Contracts.kt` unchanged.
+5. **I1** - accessibility. Merge manifest entries with U1's; combine service declarations and permissions. Resolve any `TextInsertionPlanner` edits.
+6. **U1** - overlay/service. Rebase on top of I1 manifest if needed; wire to E1/C1 APIs.
+7. **G1 integration agent** - merge/build/fix/test; PM reviews.
+
+Use `git merge --no-ff` per branch. Never squash away evidence; handoffs reference SHAs.
+
+## Integration checklist
+
+- [ ] `Contracts.kt` public API unchanged except agreed stub bodies.
+- [ ] No duplicate permissions/services i

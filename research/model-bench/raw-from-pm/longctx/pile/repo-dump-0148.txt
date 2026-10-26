@@ -1,0 +1,57 @@
+ode/.local/bin/gradle :app:assembleDebug --no-daemon --console=plain
+```
+
+Results:
+- `:core:test` PASS, `TextInsertionPlannerTest`: 20 tests, 0 failures.
+- `:app:testDebugUnitTest` PASS, `InsertionPolicyTest`: 11 tests, 0 failures.
+- `:app:assembleDebug` BUILD SUCCESSFUL; APK produced at `app/build/outputs/apk/debug/app-debug.apk`.
+- Kotlin only emits expected deprecation warnings for `AccessibilityNodeInfo.recycle()` on API 33+.
+
+## Interfaces / invariants
+- `TextInsertionPlanner.insert(current, selectionStart, selectionEnd, insert)`:
+  - clamps both bounds into `0..current.length`; inverted ranges collapse at `selectionStart`;
+  - never splits a UTF-16 surrogate pair at either selection boundary (expands to the full pair);
+  - returns `selectionStart == selectionEnd == start + insert.length` (caret after inserted text);
+  - handles `null`/empty current and empty insert.
+- `InsertionPolicy.route(NodeSnapshot?, ownPackage, text): InsertionRoute`
+  - empty text -> `Reject`;
+  - null/disabled/invisible/password -> `ClipboardOnly`;
+  - own package -> `Reject`;
+  - editable with unreadable text (WebView/Compose) -> `Paste`;
+  - otherwise -> `SetText`.
+- `DictationAccessibilityService : TextInserter`
+  - `insert(text)` is synchronous and must run on the main thread;
+  - finds `FOCUS_INPUT` from `findFocus`, `rootInActiveWindow`, then interactive windows (focused/active first);
+  - `refresh()` validation and one re-find retry for stale nodes; all obtained nodes/windows are recycled;
+  - fallback order: `ACTION_SET_TEXT` (with selection args) -> clipboard + `ACTION_PASTE` -> clipboard + toast + notification (`Copied`);
+  - own package is ignored; password/disabled/invisible fields go to clipboard.
+- `AccessibilityInserter` (process-wide):
+  - `val connected: StateFlow<Boolean>`;
+  - `suspend fun insert(text): InsertResult`, dispatches to `Dispatchers.Main.immediate`;
+  - service reference is cleared on unbind/destroy (no retained context leak).
+- `lastFocusedSnapshot()` exposes the last validated editable focus for diagnostics.
+
+## Contract changes
+No signature changes to `Contracts.kt`. The prior `TextInsertionPlanner` body was replaced with the surrogate-safe implementation. New app-only types `InsertResult`, `TextInserter`, `NodeSnapshot`, `InsertionRoute` are additive.
+
+## Integration notes / manifest merge snippet
+The manifest edits are additive and minimal. If U1 already added a service/permission block, keep one copy (duplicate `<service>` with the same name will break manifest merge).
+
+```xml
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+<service
+    android:name=".accessibility.DictationAccessibilityService"
+    android:exported="true"
+    android:label="@string/accessibility_service_label"
+    android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+    <intent-filter>
+        <action android:name="android.accessibilityservice.AccessibilityService" />
+    </intent-filter>
+    <meta-data
+        android:name="android.accessibilityservice"
+        android:resource="@xml/accessibility_service_config" />
+</service>
+```
+
+- `accessibility_service_config.xml` points `android:settingsActivity` at `com.martins

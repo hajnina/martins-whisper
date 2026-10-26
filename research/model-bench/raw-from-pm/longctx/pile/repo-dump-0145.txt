@@ -1,0 +1,38 @@
+BENCH-CANARY-DECOY-91: irrelevant decoy line.
+ctionable tasks: 4 executed
+```
+
+Test result XML totals: `6 + 7 + 5 + 7 = 25` tests, 0 failures, 0 skipped, 0 errors.
+
+## Interfaces / invariants
+
+- No public contract signatures changed. `AudioChunker` has a default `Vad` constructor (`AudioChunker(vad: Vad = EnergyVad())`).
+- Chunker processes arbitrary frame sizes by splitting into 320-sample sub-frames; timestamps are derived from `capturedAtMs`.
+- Pre-roll is bounded to 300 ms preceding detected speech. Short speech under 250 ms is discarded and does not emit a chunk.
+- Silence finalization is based on actual (audible) silence rather than VAD hangover, so a chunk ends about 500 ms after the last audible frame.
+- MAX_LENGTH chunks are <= 25 s; the following chunk starts 250 ms before the cut with `overlapMs = 250`.
+- Session cap is measured from the first pushed timestamp; no emitted chunk ends beyond `first + 600_000 ms`. A cap-triggered final chunk uses `ChunkReason.FLUSH`.
+- `speechMs` counts audible speech frames seen (including a short discarded blip); chunk-level min-speech gating uses chunk-local audible duration.
+
+## Limitations / next agent
+
+- VAD/audibility thresholds are intentionally simple and not tuned on real microphone data; `speechFloorRms` is 10% of the first speech-frame RMS, bounded below at `1e-4`. Very low-level speech after a loud onset could be undercounted. Tune against a real corpus/service integration.
+- No Android service, recorder, model, or UI integration in this package.
+- MAX_LENGTH cut is frame-boundary based within the last 2 s; exact overlap is sample-trimmed.
+- `AudioChunker.speechMs` counts incoming audible speech, not emitted-chunk duration. If the service needs exact emitted speech seconds, compute from emitted `AudioChunk`s instead.
+
+## References used
+
+- No external code/URLs copied. Implemented from the supplied contract/requirements and the existing Kotlin/JUnit project setup.
+
+## Commit SHA(s)
+
+- `838dc30` - implementation and tests (`feat(core): implement audio chunking, VAD, and transcript merging`).
+- Handoff commit: see this commit (`handoffs/C1-core-audio` docs only).
+
+Implemented the pure-JVM core audio/text layer: normalized RMS math, adaptive energy VAD with hangover, a speech-aware 20 ms chunker with pre-roll/min-speech/silence/max-length/overlap/session-cap behavior, text cleanup, and transcript boundary dedupe. Added 25 focused JUnit tests and all pass with the requested Gradle command. Public contract signatures are unchanged. Commit 838dc30 on agent/c1-core-audio.
+
+# I1-input Handoff
+
+## Executive summary
+Implemented the Android accessibility insertion path: UTF-16/surrogate-safe `TextInsertionPlanner`, focus tracking, `ACTION_SET_TEXT` -> clipboard+`ACTION_PASTE` -> clipboard+toast/notification fallback, and a process-wide `AccessibilityInserter` bridge with `StateFlow<Boolean> connected` and `suspend insert(text)`. Added the accessibility service XML/config, minimal additive manifest entries, and pure policy tests. `:core:test` + `:app:testDebugUnitTest` pass (31 tests) and `:app:assembleDebug` succeeds. Robolectric cannot run in this aarch64 sandbox (bundled conscrypt has x86_64 native only); no device is available, so the on-dev

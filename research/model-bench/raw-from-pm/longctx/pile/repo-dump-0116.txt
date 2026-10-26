@@ -1,0 +1,90 @@
+BENCH-CANARY-DECOY-74: irrelevant decoy line.
+ionStart: Int,
+        selectionEnd: Int,
+        insert: String,
+    ): Result {
+        val base = current.orEmpty()
+        val rawStart = selectionStart.coerceIn(0, base.length)
+        val rawEnd = selectionEnd.coerceIn(rawStart, base.length)
+
+        val start = if (base.splitsSurrogatePair(rawStart)) rawStart - 1 else rawStart
+        val end = if (base.splitsSurrogatePair(rawEnd)) (rawEnd + 1).coerceAtMost(base.length) else rawEnd
+        val boundedEnd = end.coerceAtLeast(start)
+
+        val text = base.substring(0, start) + insert + base.substring(boundedEnd)
+        val caret = start + insert.length
+        return Result(text, caret, caret)
+    }
+
+    private fun String.splitsSurrogatePair(index: Int): Boolean =
+        index in 1 until length &&
+            this[index - 1].isHighSurrogate() &&
+            this[index].isLowSurrogate()
+}
+
+package com.martins.whisper.core.audio
+
+import com.martins.whisper.core.AudioChunk
+import com.martins.whisper.core.AudioChunkerApi
+import com.martins.whisper.core.ChunkReason
+import com.martins.whisper.core.Vad
+import kotlin.math.max
+import kotlin.math.min
+
+class AudioChunker(
+    private val vad: Vad = EnergyVad(),
+) : AudioChunkerApi {
+    private data class BufferedFrame(
+        val samples: ShortArray,
+        val startMs: Long,
+        val endMs: Long,
+    )
+
+    private val preRoll = ArrayDeque<BufferedFrame>()
+    private var chunk = mutableListOf<BufferedFrame>()
+    private var active = false
+    private var speechMsInChunk = 0L
+    private var silenceMs = 0L
+    private var speechFloorRms = MIN_AUDIBLE_RMS
+    private var pendingOverlapMs = 0
+    private var nextIndex = 0
+    private var sessionStartMs: Long? = null
+    private var sessionCapped = false
+    private var totalSpeechMs = 0L
+
+    override val speechMs: Long
+        get() = totalSpeechMs
+
+    override fun push(frame: ShortArray, capturedAtMs: Long): List<AudioChunk> {
+        if (frame.isEmpty() || sessionCapped) return emptyList()
+        if (sessionStartMs == null) sessionStartMs = capturedAtMs
+
+        var offset = 0
+        val output = mutableListOf<AudioChunk>()
+        while (offset < frame.size) {
+            val size = min(FRAME_SAMPLES, frame.size - offset)
+            val startMs = capturedAtMs + offset * 1000L / SAMPLE_RATE
+            val samples = frame.copyOfRange(offset, offset + size)
+            output += processFrame(samples, startMs)
+            offset += size
+            if (sessionCapped) break
+        }
+        return output
+    }
+
+    private fun processFrame(samples: ShortArray, capturedAtMs: Long): List<AudioChunk> {
+        val sessionStart = sessionStartMs ?: capturedAtMs.also { sessionStartMs = it }
+        if (capturedAtMs >= sessionStart + SESSION_CAP_MS) {
+            sessionCapped = true
+            val finalChunk = if (active && chunk.isNotEmpty()) {
+                buildChunk(chunk.toList(), ChunkReason.FLUSH, pendingOverlapMs)
+            } else {
+                null
+            }
+            clearActiveState()
+            return listOfNotNull(finalChunk)
+        }
+
+        val durationMs = samples.size * 1000L / SAMPLE_RATE
+        val frameRms = AudioMath.rms(samples)
+        val buffere

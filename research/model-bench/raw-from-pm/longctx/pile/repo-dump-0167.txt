@@ -1,0 +1,52 @@
+mpleted with only deprecation warnings.
+
+## Interfaces exposed
+
+- Service actions: `com.martins.whisper.action.START`, `.STOP`, `.SETTINGS`, `.TRANSCRIPT`.
+- Companion: `DictationService.start(context)`, `.stop(context)`, `STATE: StateFlow<DictationState>` (property name `state`), `inserterFactory`.
+- Transcript hook for I1:
+  - Explicit-package broadcast `com.martins.whisper.action.TRANSCRIPT` with string extra `transcript`.
+  - Or replace `DictationService.inserterFactory` with an accessibility-backed `TextInserter`.
+- Engine hook for E1: `EngineFactory.factory: (Context, SettingsStore) -> SpeechEngine`; the service calls `transcribe(AudioChunk(...FLUSH), language)` once per hold.
+- Overlay callbacks: `MicBubbleView.Listener` (`onPress`, `onRelease`, `onCancel`, `onDrag`, `onDragEnd`, `onSettingsTap`, `onStopTap`).
+- Settings keys/defaults in `SettingsStore` (`model_id=base`, `language=auto`, `backend=AUTO`, `idle_unload_seconds=300`, `overlay_enabled=false`, `boot_start=true`, bubble x/y).
+
+## Contract changes
+
+- No edits to `core/` and no signature changes to the shared contracts.
+- `ModelOptions` is intentionally a local stub because `core.ModelCatalog` does not exist yet. E1/PM should replace it with `ModelCatalog`; ids match whisper.cpp GGML names.
+- I1 manifest merge snippet (add to `app/src/main/AndroidManifest.xml`; adjust class/package to I1's final names):
+
+```xml
+<service
+    android:name=".accessibility.DictationAccessibilityService"
+    android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+    android:exported="false">
+    <intent-filter>
+        <action android:name="android.accessibilityservice.AccessibilityService" />
+    </intent-filter>
+    <meta-data
+        android:name="android.accessibilityservice"
+        android:resource="@xml/accessibility_service_config" />
+</service>
+```
+
+If I1 uses a manifest receiver for transcripts instead of replacing `inserterFactory`:
+
+```xml
+<receiver
+    android:name=".accessibility.TranscriptReceiver"
+    android:exported="false">
+    <intent-filter>
+        <action android:name="com.martins.whisper.action.TRANSCRIPT" />
+    </intent-filter>
+</receiver>
+```
+
+## Known limitations / blockers
+
+- Runtime validation is blocked: no Android device, no KVM emulator, no microphone, no display/GPU. Overlay drag/render, FGS microphone start, boot restore and clipboard behavior are unverified on hardware.
+- Fake engine only. No native model, no real transcription, no chunker/VAD/merger use yet; each hold produces one `AudioChunk` with `ChunkReason.FLUSH`. C1/E1 should feed `AudioChunker` output and merge transcripts.
+- Insertion currently always copies to clipboard (`InsertResult.Copied`). Accessibility insertion is not wired; `ACTION_TRANSCRIPT` is the handoff hook.
+- Android 14+ restricts microphone FGS starts from the background. Boot restore deliberately starts with foreground type 0; a later press calls `startForeground` with microphone type and may require the app/overlay to be in a user-visible foreground state or an OEM exemption. Documented as a device bring-up item.
+- Overlay expansion clamps to the right edge, so the collapsed bubble can appear shifted left after an expansion 

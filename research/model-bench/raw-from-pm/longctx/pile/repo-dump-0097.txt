@@ -1,0 +1,102 @@
+           is InsertionRoute.ClipboardOnly -> copyFallback(text, route.reason)
+                is InsertionRoute.Reject -> InsertResult.Failed(route.reason)
+            }
+        } finally {
+            node.recycle()
+        }
+    }
+
+    fun lastFocusedSnapshot(): NodeSnapshot? = lastFocused
+
+    private fun obtainTarget(): AccessibilityNodeInfo? {
+        var node = findFocusedEditable()
+        if (node != null && !node.refresh()) {
+            node.recycle()
+            node = findFocusedEditable()
+        }
+        return node
+    }
+
+    private fun findFocusedEditable(): AccessibilityNodeInfo? {
+        findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.let { focused ->
+            if (focused.isEditable) return focused
+            focused.recycle()
+        }
+        rootInActiveWindow?.let { root ->
+            focusedIn(root)?.let { return it }
+        }
+        val windows = windows.orEmpty()
+        try {
+            val ordered = windows.sortedByDescending {
+                (if (it.isFocused) 2 else 0) + (if (it.isActive) 1 else 0)
+            }
+            for (window in ordered) {
+                val root = window.root ?: continue
+                focusedIn(root)?.let { return it }
+            }
+        } finally {
+            windows.forEach { it.recycle() }
+        }
+        return null
+    }
+
+    private fun focusedIn(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        val focused = try {
+            root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+        } catch (t: Throwable) {
+            runCatching { root.recycle() }
+            throw t
+        }
+        if (focused == null) {
+            root.recycle()
+            return null
+        }
+        if (focused === root) {
+            if (focused.isEditable) return focused
+            focused.recycle()
+            return null
+        }
+        if (focused.isEditable) {
+            root.recycle()
+            return focused
+        }
+        focused.recycle()
+        root.recycle()
+        return null
+    }
+
+    private fun setText(
+        node: AccessibilityNodeInfo,
+        snapshot: NodeSnapshot,
+        insert: String,
+    ): InsertResult {
+        val current = node.text?.toString()
+        val plan = TextInsertionPlanner.insert(
+            current = current,
+            selectionStart = snapshot.selectionStart,
+            selectionEnd = snapshot.selectionEnd,
+            insert = insert,
+        )
+        val args = Bundle().apply {
+            putCharSequence(
+                AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
+                plan.text,
+            )
+            putInt(
+                AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT,
+                plan.selectionStart,
+            )
+            putInt(
+                AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT,
+                plan.selectionEnd,
+            )
+        }
+        return if (node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) {
+            InsertResult.Inserted
+        } else {
+            paste(node, insert)
+        }
+    }
+
+    private fun paste(node: AccessibilityNodeInfo, text: String): InsertResult {
+        if (!copyToClipboard(tex

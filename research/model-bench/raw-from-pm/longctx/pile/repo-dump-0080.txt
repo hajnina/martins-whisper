@@ -1,0 +1,73 @@
+dth, height), height / 2f, height / 2f, surfacePaint)
+            ringPaint.color = Color.argb(70, 255, 255, 255)
+            ringPaint.strokeWidth = dp(1f)
+            canvas.drawRoundRect(
+                RectF(dp(0.5f), dp(0.5f), width - dp(0.5f), height - dp(0.5f)),
+                height / 2f,
+                height / 2f,
+                ringPaint,
+            )
+        }
+
+        val circleCenter = if (expanded) height / 2f else min(width, height) / 2f
+        val circleRadius = if (expanded) height / 2f - dp(3f) else min(width, height) / 2f - dp(1f)
+        val circleRect = RectF(
+            circleCenter - circleRadius,
+            circleCenter - circleRadius,
+            circleCenter + circleRadius,
+            circleCenter + circleRadius,
+        )
+        surfacePaint.color = accent
+        canvas.drawOval(circleRect, surfacePaint)
+
+        when (state) {
+            is DictationState.Loading, is DictationState.Processing -> drawSpinner(canvas, circleRect)
+            is DictationState.Success -> drawCheck(canvas, circleCenter)
+            is DictationState.Error -> drawCross(canvas, circleCenter)
+            else -> drawMic(canvas, circleCenter, circleRadius)
+        }
+
+        if (expanded) {
+            drawExpandedContent(canvas, width, height)
+            drawGear(canvas, width - dp(20f), height / 2f)
+            drawStop(canvas, width - dp(52f), height / 2f)
+        }
+    }
+
+    private fun drawExpandedContent(canvas: Canvas, width: Float, height: Float) {
+        val textX = dp(64f)
+        val centerY = height / 2f
+        when (val current = state) {
+            is DictationState.Recording -> {
+                timerPaint.textAlign = Paint.Align.LEFT
+                val text = formatElapsed(current.elapsedMs)
+                canvas.drawText(text, textX, centerY + dp(5f), timerPaint)
+                drawLevelBars(canvas, textX + dp(58f), centerY, current.level)
+            }
+            is DictationState.Loading -> {
+                labelPaint.textAlign = Paint.Align.LEFT
+                drawEllipsized(canvas, current.label, textX, centerY + dp(4f), maxTextWidth)
+            }
+            is DictationState.Processing -> {
+                labelPaint.textAlign = Paint.Align.LEFT
+                drawEllipsized(canvas, current.label, textX, centerY + dp(4f), maxTextWidth)
+            }
+            is DictationState.Success -> {
+                labelPaint.textAlign = Paint.Align.LEFT
+                drawEllipsized(canvas, current.message, textX, centerY + dp(4f), maxTextWidth)
+            }
+            is DictationState.Error -> {
+                labelPaint.textAlign = Paint.Align.LEFT
+                drawEllipsized(canvas, current.message, textX, centerY + dp(4f), maxTextWidth)
+            }
+            DictationState.Idle -> Unit
+        }
+    }
+
+    private fun drawEllipsized(canvas: Canvas, text: String, x: Float, baseline: Float, maxWidth: Float) {
+        val available = (width - dp(78f) - x).coerceAtLeast(dp(40f))
+        val clipped = TextUtils.ellipsize(text, labelPaint, min(available, maxWidth), TextUtils.TruncateAt.END)
+        canvas.drawText(clipped, 0, clipped.length, x, baseline, labelPaint)
+    }
+
+    private fun 

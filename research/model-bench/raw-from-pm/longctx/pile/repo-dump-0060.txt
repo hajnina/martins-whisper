@@ -1,0 +1,85 @@
+.martins.whisper.ui.ModelOptions
+import com.martins.whisper.ui.PermissionGate
+import com.martins.whisper.ui.PermissionSnapshot
+import kotlinx.coroutines.launch
+
+class MainActivity : ComponentActivity() {
+
+    private lateinit var settings: SettingsStore
+    private lateinit var statusView: TextView
+    private lateinit var serviceView: TextView
+    private lateinit var micStatus: TextView
+    private lateinit var overlayStatus: TextView
+    private lateinit var accessibilityStatus: TextView
+    private lateinit var notificationsStatus: TextView
+    private lateinit var overlayButton: Button
+    private var bootSwitch: Switch? = null
+    private var suppressSpinnerCallbacks = false
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        settings = SettingsStore(this)
+        setContentView(buildContent())
+        observeService()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refresh()
+        if (intent?.getBooleanExtra(EXTRA_OPEN_SETTINGS, false) == true) {
+            intent?.removeExtra(EXTRA_OPEN_SETTINGS)
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        refresh()
+    }
+
+    private fun buildContent(): View {
+        val scroll = ScrollView(this)
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(28), dp(22), dp(40))
+        }
+        scroll.addView(root, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+
+        root.addView(title(getString(R.string.onboarding_title)))
+        root.addView(body(getString(R.string.privacy_note)).apply {
+            setPadding(0, dp(10), 0, dp(14))
+            setTextColor(Color.rgb(55, 65, 70))
+        })
+
+        statusView = body("").apply {
+            setTextColor(Color.rgb(19, 93, 102))
+            setTypeface(typeface, Typeface.BOLD)
+            setPadding(0, 0, 0, dp(16))
+        }
+        root.addView(statusView)
+        serviceView = body("").apply {
+            setTextColor(Color.rgb(80, 80, 80))
+            setPadding(0, 0, 0, dp(18))
+        }
+        root.addView(serviceView)
+
+        root.addView(section(getString(R.string.section_permissions)))
+        val micRow = permissionRow(getString(R.string.permission_mic)) { requestMic() }
+        micStatus = micRow.status
+        root.addView(micRow.row)
+        val overlayRow = permissionRow(getString(R.string.permission_overlay)) { openOverlaySettings() }
+        overlayStatus = overlayRow.status
+        root.addView(overlayRow.row)
+        val accessibilityRow = permissionRow(getString(R.string.permission_accessibility)) {
+            openAccessibilitySettings()
+        }
+        accessibilityStatus = accessibilityRow.status
+        root.addView(accessibilityRow.row)
+        val notificationsRow = permissionRow(getString(R.string.permission_notifications)) {
+            requestNotifications()
+        }
+        notificationsStatus = notificationsRow.status
+        root.add

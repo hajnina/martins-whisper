@@ -1,0 +1,100 @@
+BENCH-CANARY-DECOY-57: irrelevant decoy line.
+           screenHeight,
+                margin,
+            )
+            x = clamped.first
+            y = clamped.second
+        } else {
+            x = default.first
+            y = default.second
+        }
+
+        val layoutParams = WindowManager.LayoutParams(
+            bubble,
+            bubble,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            this.x = x
+            this.y = y
+            title = "Martins Whisper bubble"
+        }
+
+        return try {
+            windowManager.addView(bubbleView, layoutParams)
+            view = bubbleView
+            params = layoutParams
+            true
+        } catch (_: Throwable) {
+            view = null
+            params = null
+            false
+        }
+    }
+
+    fun update(state: DictationState) {
+        val bubbleView = view ?: return
+        bubbleView.state = state
+        val expanded = state.overlayExpanded
+        val layoutParams = params ?: return
+        val targetWidth = if (expanded) bubbleView.expandedWidthPx else dp(56f)
+        val targetHeight = if (expanded) bubbleView.expandedHeightPx else dp(56f)
+        if (layoutParams.width == targetWidth && layoutParams.height == targetHeight) return
+
+        if (expanded) {
+            val (screenWidth, screenHeight) = screenSize()
+            val margin = dp(12f)
+            val clamped = OverlayGeometry.clamp(
+                layoutParams.x,
+                layoutParams.y,
+                targetWidth,
+                targetHeight,
+                screenWidth,
+                screenHeight,
+                margin,
+            )
+            layoutParams.x = clamped.first
+            layoutParams.y = clamped.second
+        }
+        layoutParams.width = targetWidth
+        layoutParams.height = targetHeight
+        runCatching { windowManager.updateViewLayout(bubbleView, layoutParams) }
+    }
+
+    fun dragBy(dx: Float, dy: Float) {
+        val bubbleView = view ?: return
+        val layoutParams = params ?: return
+        val (screenWidth, screenHeight) = screenSize()
+        val margin = dp(12f)
+        val clamped = OverlayGeometry.clamp(
+            (layoutParams.x + dx.toInt()),
+            (layoutParams.y + dy.toInt()),
+            layoutParams.width,
+            layoutParams.height,
+            screenWidth,
+            screenHeight,
+            margin,
+        )
+        layoutParams.x = clamped.first
+        layoutParams.y = clamped.second
+        runCatching { windowManager.updateViewLayout(bubbleView, layoutParams) }
+    }
+
+    fun persistPosition() {
+        val layoutParams = params ?: return
+        settings.saveBubblePosition(layoutParams.x, layoutParams.y)
+    }
+
+    fun hide() {
+        val bubbleView = view ?: return
+        runCatching { windowManager.removeView(bubbleView) }
+        view = null
+        params = null
+    }
+
+    private fun screenSize(): Pair<Int, Int> {
+        return if (Bu

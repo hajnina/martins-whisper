@@ -1,0 +1,24 @@
+e-audio :core:test --no-daemon
+
+IMPLEMENT (pure Kotlin, no Android imports):
+1. core/audio/EnergyVad.kt - adaptive noise floor EMA, absolute floor/threshold multiplier, speech hangover, reset; handles zeros/constant noise/loud speech/short blips.
+2. core/audio/AudioChunker.kt implementing AudioChunkerApi - 20ms frames, 300ms pre-roll, min speech 250ms, silence finalize 500ms, max chunk 25s, 250ms overlap on MAX_LENGTH cut near lowest energy in last 2s, 10min cap, timestamps/reason/index/overlapMs/speechMs, flush semantics.
+3. core/audio/RingBuffer.kt + AudioMath (RMS), as needed.
+4. Replace TranscriptMerger stub body in Contracts.kt with token-level suffix/prefix dedupe (case/punctuation-insensitive, <=8 words), preserve punctuation, one space, no invented text; keep signature.
+5. core/text/TextNormalizer.kt - whitespace normalization, low-confidence hallucination blocklist; empty on silence.
+6. JUnit tests under core/src/test: synthetic speech/silence, pre-roll first word, short blips, silence finalize, 25s forced split + overlap, flush, cap, timestamps, merge duplicates/punctuation/case, normalizer.
+7. Run tests with the command above; paste real output. Handoff handoffs/C1-core-audio/HANDOFF.md + SUMMARY.txt, commit. Final message = executive summary + test evidence.
+
+Timebox: 25 minutes of implementation/testing. Do not research further.
+
+You are C1-core-audio (v3). You have 45 minutes. NO RECONNAISSANCE. Do not run ls/find/git log/cat on the repo, do not read SPEC/AGENTS/KANBAN again, do not install anything, do not use nix. The contracts are already known.
+
+WORKTREE: /work/martins-whisper-worktrees/c1-core-audio
+FIRST ACTION MUST BE A FILE WRITE. Write these files now, then test.
+
+Files/packages (pure Kotlin, package com.martins.whisper.core.audio / .text):
+1. core/src/main/kotlin/com/martins/whisper/core/audio/AudioMath.kt - rms(samples: ShortArray): Double, rmsFloat(FloatArray): Double, shortToFloat conversion.
+2. core/src/main/kotlin/com/martins/whisper/core/audio/EnergyVad.kt - class EnergyVad(minSpeechRmsDb: Double = -45.0, thresholdMultiplier: Double = 3.0, hangoverFrames: Int = 8) : Vad. Adaptive noise floor EMA over non-speech (alpha 0.02), speech when db > max(floorDb + 6, minSpeechRmsDb) and above floor*multiplier; reset(); isSpeech(ShortArray).
+3. core/src/main/kotlin/com/martins/whisper/core/audio/AudioChunker.kt - implements AudioChunkerApi from Contracts.kt. 20ms frames (320 samples @16k), 300ms pre-roll, min speech 250ms, finalize after 500ms silence, max chunk 25s, 250ms overlap at MAX_LENGTH cut near lowest-energy point in last 2s, 10min session cap, monotonic index, startMs/endMs, overlapMs, speechMs, flush(). Do not change public contract signatures; you may add constructors/params.
+4. core/src/main/kotlin/com/martins/whisper/core/text/TextNormalizer.kt - normalize whitespace, trim, drop known Whisper hallucinations ("Thank you.", "[BLANK_AUDIO]", "(silence)", etc.), return "" for blank.
+5. In Contracts.kt replace ONLY the TranscriptMerger.merge stub body with token suffix/prefix dedupe: normalize case/punctuation for comparison, max 8 words, keep richer original punctuation, single spaces, no invented text. Keep sign

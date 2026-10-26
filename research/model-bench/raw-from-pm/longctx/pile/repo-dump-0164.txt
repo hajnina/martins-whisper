@@ -1,0 +1,31 @@
+00 s idle unload and boot restore. A deterministic fake engine exercises the whole press -> record -> finalize -> clipboard path; E1 and I1 plug in through `EngineFactory` and `TextInserter`/`ACTION_TRANSCRIPT`. The debug APK builds successfully and 18 pure JVM tests pass. No device/runtime validation exists in this sandbox; Robolectric is blocked on aarch64 by a missing Conscrypt native library.
+
+## Delivered / exact files
+
+All paths are relative to the worktree root.
+
+- `app/src/main/AndroidManifest.xml` - permissions, launcher activity, FGS service (`foregroundServiceType="microphone"`), boot receiver, I1 merge comment.
+- `app/src/main/java/com/martins/whisper/MainActivity.kt` - onboarding/permissions, status, model/language/backend/idle pickers, privacy note, boot switch, start/stop overlay.
+- `app/src/main/java/com/martins/whisper/BootReceiver.kt` - restores overlay on `BOOT_COMPLETED` / `MY_PACKAGE_REPLACED` when enabled; starts without microphone FGS type.
+- `app/src/main/java/com/martins/whisper/service/DictationService.kt` - FGS lifecycle, channel/notification with Settings/Stop, overlay wiring, `START_STICKY`, `StateFlow`, press/release, 400 ms cancel, 10 min cap, timer, RMS level, idle unload, clean stop, transcript broadcast.
+- `app/src/main/java/com/martins/whisper/service/DictationState.kt` - idle/loading/recording/processing/success/error.
+- `app/src/main/java/com/martins/whisper/service/FakeSpeechEngine.kt` - deterministic `SpeechEngine` with load/transcribe delays.
+- `app/src/main/java/com/martins/whisper/service/EngineFactory.kt` - single E1 replacement seam.
+- `app/src/main/java/com/martins/whisper/service/TextInserter.kt` - `TextInserter` + clipboard implementation; I1 replacement seam.
+- `app/src/main/java/com/martins/whisper/audio/AudioSource.kt`, `audio/AudioRecordSource.kt` - 16 kHz mono PCM16, 20 ms (320 sample) frames, RMS helper, permission/release handling.
+- `app/src/main/java/com/martins/whisper/overlay/MicBubbleView.kt` - custom Canvas bubble/pill, states, timer/level bars, mic/check/cross/spinner, gear/stop hit targets, haptics, drag gestures.
+- `app/src/main/java/com/martins/whisper/overlay/OverlayController.kt` - `TYPE_APPLICATION_OVERLAY`, `FLAG_NOT_FOCUSABLE | FLAG_NOT_TOUCH_MODAL | FLAG_LAYOUT_IN_SCREEN`, bottom-end default, drag clamp and persisted x/y.
+- `app/src/main/java/com/martins/whisper/overlay/OverlayGeometry.kt`, `BubbleFormat.kt` - pure clamping/default-position/timer formatting.
+- `app/src/main/java/com/martins/whisper/data/SettingsStore.kt` - SharedPreferences persistence and defensive backend parsing.
+- `app/src/main/java/com/martins/whisper/ui/ModelOptions.kt` - local model catalog stub (base default, tiny/small/medium/large-v3-turbo).
+- `app/src/main/java/com/martins/whisper/ui/PermissionGate.kt` - pure permission readiness/summary logic.
+- `app/src/main/res/values/strings.xml`, `values/themes.xml`, `drawable/ic_mic_notification.xml`.
+- Tests: `app/src/test/java/com/martins/whisper/{data,overlay,service,ui}/*.kt` (6 test classes, 18 tests).
+
+## Build / test evidence
+
+Environment (shared toolchain, no Nix installs):
+
+```sh
+export JAVA_HOME=/work/android-toolchain/jdk
+export ANDROID_HOME=/wor

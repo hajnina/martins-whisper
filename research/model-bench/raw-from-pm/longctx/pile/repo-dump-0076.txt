@@ -1,0 +1,84 @@
+is DictationState.Success -> performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                    is DictationState.Error -> performHapticFeedback(HapticFeedbackConstants.REJECT)
+                    else -> Unit
+                }
+            }
+            contentDescription = when (value) {
+                is DictationState.Idle -> "Hold to dictate"
+                is DictationState.Loading -> value.label
+                is DictationState.Recording -> "Recording"
+                is DictationState.Processing -> value.label
+                is DictationState.Success -> value.message
+                is DictationState.Error -> value.message
+            }
+            invalidate()
+        }
+
+    private val density = resources.displayMetrics.density
+    private val bubbleSizePx = dp(56f)
+    val expandedWidthPx = dp(240f).toInt()
+    val expandedHeightPx = dp(64f).toInt()
+
+    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
+    private val maxTextWidth = dp(240f) - dp(124f)
+
+    private val surfacePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val timerPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = sp(15f)
+        isFakeBoldText = true
+    }
+    private val labelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = sp(12f)
+        alpha = 220
+    }
+
+    private var spinnerAngle = 0f
+    private var spinnerRunning = false
+    private val spinnerTick = object : Runnable {
+        override fun run() {
+            if (!spinnerRunning) return
+            spinnerAngle = (spinnerAngle + 12f) % 360f
+            invalidate()
+            postDelayed(this, 16)
+        }
+    }
+
+    private var downX = 0f
+    private var downY = 0f
+    private var lastX = 0f
+    private var lastY = 0f
+    private var downAt = 0L
+    private var tracking = false
+    private var dragging = false
+    private var pendingControl: Control? = null
+
+    private enum class Control { SETTINGS, STOP }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                downX = event.x
+                downY = event.y
+                lastX = event.x
+                lastY = event.y
+                downAt = SystemClock.elapsedRealtime()
+                dragging = false
+                val control = controlAt(event.x, event.y)
+                if (control != null) {
+                    pendingControl = control
+                    tracking = false
+                } else {
+                    pendingControl = null
+                    tracking = true
+                    performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    listener?.onPress()
+ 

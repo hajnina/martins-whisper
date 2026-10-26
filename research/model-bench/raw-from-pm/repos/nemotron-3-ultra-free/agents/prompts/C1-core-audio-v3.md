@@ -1,0 +1,15 @@
+You are C1-core-audio (v3). You have 45 minutes. NO RECONNAISSANCE. Do not run ls/find/git log/cat on the repo, do not read SPEC/AGENTS/KANBAN again, do not install anything, do not use nix. The contracts are already known.
+
+WORKTREE: /work/martins-whisper-worktrees/c1-core-audio
+FIRST ACTION MUST BE A FILE WRITE. Write these files now, then test.
+
+Files/packages (pure Kotlin, package com.martins.whisper.core.audio / .text):
+1. core/src/main/kotlin/com/martins/whisper/core/audio/AudioMath.kt - rms(samples: ShortArray): Double, rmsFloat(FloatArray): Double, shortToFloat conversion.
+2. core/src/main/kotlin/com/martins/whisper/core/audio/EnergyVad.kt - class EnergyVad(minSpeechRmsDb: Double = -45.0, thresholdMultiplier: Double = 3.0, hangoverFrames: Int = 8) : Vad. Adaptive noise floor EMA over non-speech (alpha 0.02), speech when db > max(floorDb + 6, minSpeechRmsDb) and above floor*multiplier; reset(); isSpeech(ShortArray).
+3. core/src/main/kotlin/com/martins/whisper/core/audio/AudioChunker.kt - implements AudioChunkerApi from Contracts.kt. 20ms frames (320 samples @16k), 300ms pre-roll, min speech 250ms, finalize after 500ms silence, max chunk 25s, 250ms overlap at MAX_LENGTH cut near lowest-energy point in last 2s, 10min session cap, monotonic index, startMs/endMs, overlapMs, speechMs, flush(). Do not change public contract signatures; you may add constructors/params.
+4. core/src/main/kotlin/com/martins/whisper/core/text/TextNormalizer.kt - normalize whitespace, trim, drop known Whisper hallucinations ("Thank you.", "[BLANK_AUDIO]", "(silence)", etc.), return "" for blank.
+5. In Contracts.kt replace ONLY the TranscriptMerger.merge stub body with token suffix/prefix dedupe: normalize case/punctuation for comparison, max 8 words, keep richer original punctuation, single spaces, no invented text. Keep signature.
+6. Tests under core/src/test/kotlin/com/martins/whisper/core/: EnergyVadTest, AudioChunkerTest, TranscriptMergerTest, TextNormalizerTest. Cover first-word pre-roll, short blips ignored, silence finalize, 25s split overlap, flush, cap, duplicate boundary words/punctuation/case, empty/silence.
+7. Run: JAVA_HOME=/work/android-toolchain/jdk /home/node/.local/bin/gradle -p /work/martins-whisper-worktrees/c1-core-audio :core:test --no-daemon
+8. Write handoffs/C1-core-audio/HANDOFF.md + SUMMARY.txt, commit on agent/c1-core-audio.
+Never read .git or whole repo. If a test fails, fix code and rerun. Final message: files, test counts, commit hash.

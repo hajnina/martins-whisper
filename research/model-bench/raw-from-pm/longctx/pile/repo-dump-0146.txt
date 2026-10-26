@@ -1,0 +1,44 @@
+GTH cut is frame-boundary based within the last 2 s; exact overlap is sample-trimmed.
+- `AudioChunker.speechMs` counts incoming audible speech, not emitted-chunk duration. If the service needs exact emitted speech seconds, compute from emitted `AudioChunk`s instead.
+
+## References used
+
+- No external code/URLs copied. Implemented from the supplied contract/requirements and the existing Kotlin/JUnit project setup.
+
+## Commit SHA(s)
+
+- `838dc30` - implementation and tests (`feat(core): implement audio chunking, VAD, and transcript merging`).
+- Handoff commit: see this commit (`handoffs/C1-core-audio` docs only).
+
+Implemented the pure-JVM core audio/text layer: normalized RMS math, adaptive energy VAD with hangover, a speech-aware 20 ms chunker with pre-roll/min-speech/silence/max-length/overlap/session-cap behavior, text cleanup, and transcript boundary dedupe. Added 25 focused JUnit tests and all pass with the requested Gradle command. Public contract signatures are unchanged. Commit 838dc30 on agent/c1-core-audio.
+
+# I1-input Handoff
+
+## Executive summary
+Implemented the Android accessibility insertion path: UTF-16/surrogate-safe `TextInsertionPlanner`, focus tracking, `ACTION_SET_TEXT` -> clipboard+`ACTION_PASTE` -> clipboard+toast/notification fallback, and a process-wide `AccessibilityInserter` bridge with `StateFlow<Boolean> connected` and `suspend insert(text)`. Added the accessibility service XML/config, minimal additive manifest entries, and pure policy tests. `:core:test` + `:app:testDebugUnitTest` pass (31 tests) and `:app:assembleDebug` succeeds. Robolectric cannot run in this aarch64 sandbox (bundled conscrypt has x86_64 native only); no device is available, so the on-device matrix is documented but unverified.
+
+## Files changed / added
+- `core/src/main/kotlin/com/martins/whisper/core/Contracts.kt` (surrogate-safe clamping/selection/caret implementation)
+- `core/src/test/kotlin/com/martins/whisper/core/TextInsertionPlannerTest.kt` (20 tests)
+- `app/src/main/kotlin/com/martins/whisper/accessibility/DictationAccessibilityService.kt`
+- `app/src/main/kotlin/com/martins/whisper/accessibility/InsertionPolicy.kt`
+- `app/src/main/kotlin/com/martins/whisper/accessibility/InsertResult.kt` (`InsertResult`, `TextInserter`)
+- `app/src/test/kotlin/com/martins/whisper/accessibility/InsertionPolicyTest.kt` (11 tests)
+- `app/src/main/res/xml/accessibility_service_config.xml`
+- `app/src/main/res/values/strings.xml` (added service/fallback strings)
+- `app/src/main/AndroidManifest.xml` (additive service + `POST_NOTIFICATIONS`)
+
+## Build / test evidence
+Commands (toolchain env is required; `GRADLE_USER_HOME` points at the shared cache):
+
+```sh
+export JAVA_HOME=/work/android-toolchain/jdk
+export ANDROID_HOME=/work/android-toolchain/sdk ANDROID_SDK_ROOT=/work/android-toolchain/sdk
+export GRADLE_USER_HOME=/work/android-toolchain/gradle-home
+/home/node/.local/bin/gradle :core:test :app:testDebugUnitTest --no-daemon --console=plain
+/home/node/.local/bin/gradle :app:assembleDebug --no-daemon --console=plain
+```
+
+Results:
+- `:core:test` PASS, `TextInsertionPlannerTest`: 20 tests, 0 failures.
+- `:app:testDebugUnitTest` PASS, `InsertionPolicyTest`: 11 tests, 0 

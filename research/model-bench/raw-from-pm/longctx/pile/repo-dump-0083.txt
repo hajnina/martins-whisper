@@ -1,0 +1,86 @@
+          center - bodyWidth / 2f,
+            bodyTop,
+            center + bodyWidth / 2f,
+            bodyTop + bodyHeight,
+        )
+        canvas.drawRoundRect(bodyRect, bodyWidth / 2f, bodyWidth / 2f, iconPaint)
+        val arcRect = RectF(
+            center - radius * 0.45f,
+            center - radius * 0.18f,
+            center + radius * 0.45f,
+            center + radius * 0.5f,
+        )
+        canvas.drawArc(arcRect, 0f, 180f, false, iconPaint)
+        canvas.drawLine(center, center + radius * 0.45f, center, center + radius * 0.66f, iconPaint)
+        canvas.drawLine(
+            center - radius * 0.24f,
+            center + radius * 0.66f,
+            center + radius * 0.24f,
+            center + radius * 0.66f,
+            iconPaint,
+        )
+    }
+
+    private fun drawSpinner(canvas: Canvas, rect: RectF) {
+        iconPaint.color = Color.WHITE
+        iconPaint.strokeWidth = dp(2.4f)
+        iconPaint.strokeCap = Paint.Cap.ROUND
+        val inset = rect.width() * 0.18f
+        val arcRect = RectF(rect.left + inset, rect.top + inset, rect.right - inset, rect.bottom - inset)
+        canvas.drawArc(arcRect, spinnerAngle, 260f, false, iconPaint)
+    }
+
+    private fun drawCheck(canvas: Canvas, center: Float) {
+        iconPaint.color = Color.WHITE
+        iconPaint.strokeWidth = dp(2.6f)
+        iconPaint.strokeCap = Paint.Cap.ROUND
+        iconPaint.strokeJoin = Paint.Join.ROUND
+        val path = Path().apply {
+            moveTo(center - dp(9f), center)
+            lineTo(center - dp(2.5f), center + dp(7f))
+            lineTo(center + dp(10f), center - dp(7f))
+        }
+        canvas.drawPath(path, iconPaint)
+    }
+
+    private fun drawCross(canvas: Canvas, center: Float) {
+        iconPaint.color = Color.WHITE
+        iconPaint.strokeWidth = dp(2.6f)
+        iconPaint.strokeCap = Paint.Cap.ROUND
+        canvas.drawLine(center - dp(7f), center - dp(7f), center + dp(7f), center + dp(7f), iconPaint)
+        canvas.drawLine(center + dp(7f), center - dp(7f), center - dp(7f), center + dp(7f), iconPaint)
+    }
+
+    private fun drawGear(canvas: Canvas, cx: Float, cy: Float) {
+        iconPaint.color = Color.argb(225, 255, 255, 255)
+        iconPaint.strokeWidth = dp(1.6f)
+        iconPaint.strokeCap = Paint.Cap.ROUND
+        val inner = dp(3.4f)
+        val outer = dp(8f)
+        canvas.drawCircle(cx, cy, inner, iconPaint)
+        for (index in 0 until 8) {
+            val angle = Math.toRadians((index * 45).toDouble())
+            val cos = kotlin.math.cos(angle).toFloat()
+            val sin = kotlin.math.sin(angle).toFloat()
+            canvas.drawLine(
+                cx + cos * (inner + dp(1.4f)),
+                cy + sin * (inner + dp(1.4f)),
+                cx + cos * outer,
+                cy + sin * outer,
+                iconPaint,
+            )
+        }
+    }
+
+    private fun drawStop(canvas: Canvas, cx: Float, cy: Float) {
+        fillPaint.color = Color.argb(225, 255, 255, 255)
+        val half = dp(5.5f)
+        canvas.drawRoundRect(
+            RectF(cx - half, cy - half, cx + half, cy + half),
+            dp(2f),
+            dp(2f),
+            fillPaint,
+        )
+    }
+
+    private fun accentFor(state: Dictatio

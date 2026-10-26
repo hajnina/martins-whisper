@@ -1,0 +1,94 @@
+        val remaining = (overlapTail + afterCut).toMutableList()
+
+        val emitted = buildChunk(emittedFrames, ChunkReason.MAX_LENGTH, pendingOverlapMs)
+        chunk = remaining
+        pendingOverlapMs = OVERLAP_MS.toInt()
+        speechMsInChunk = remaining.sumOf { if (isAudible(AudioMath.rms(it.samples))) it.endMs - it.startMs else 0L }
+        if (remaining.isEmpty()) {
+            active = false
+            pendingOverlapMs = 0
+            silenceMs = 0L
+            speechMsInChunk = 0L
+        }
+        return emitted
+    }
+
+    private fun tailFrom(fromMs: Long): MutableList<BufferedFrame> {
+        val result = mutableListOf<BufferedFrame>()
+        for (frame in chunk) {
+            if (frame.endMs <= fromMs) continue
+            if (frame.startMs >= fromMs) {
+                result.add(frame)
+                continue
+            }
+            val skip = ((fromMs - frame.startMs) * SAMPLE_RATE / 1000L).toInt()
+                .coerceIn(0, frame.samples.size)
+            if (skip < frame.samples.size) {
+                val trimmed = frame.samples.copyOfRange(skip, frame.samples.size)
+                val start = frame.startMs + skip * 1000L / SAMPLE_RATE
+                result.add(BufferedFrame(trimmed, start, frame.endMs))
+            }
+        }
+        return result
+    }
+
+    private fun buildChunk(
+        frames: List<BufferedFrame>,
+        reason: ChunkReason,
+        overlapMs: Int,
+    ): AudioChunk {
+        var sampleCount = 0
+        for (frame in frames) sampleCount += frame.samples.size
+        val samples = FloatArray(sampleCount)
+        var offset = 0
+        for (frame in frames) {
+            val converted = AudioMath.shortToFloat(frame.samples)
+            converted.copyInto(samples, offset)
+            offset += converted.size
+        }
+        return AudioChunk(
+            index = nextIndex++,
+            samples = samples,
+            sampleRate = SAMPLE_RATE,
+            startMs = frames.first().startMs,
+            endMs = frames.last().endMs,
+            overlapMs = overlapMs,
+            reason = reason,
+        )
+    }
+
+    override fun flush(capturedAtMs: Long): AudioChunk? {
+        if (sessionCapped || !active || chunk.isEmpty()) {
+            clearActiveState()
+            return null
+        }
+        val result = buildChunk(chunk.toList(), ChunkReason.FLUSH, pendingOverlapMs)
+        clearActiveState()
+        return result
+    }
+
+    override fun reset() {
+        preRoll.clear()
+        clearActiveState()
+        nextIndex = 0
+        sessionStartMs = null
+        sessionCapped = false
+        totalSpeechMs = 0L
+    }
+
+    private fun appendPreRoll(frame: BufferedFrame) {
+        preRoll.addLast(frame)
+        while (preRoll.size > 1 && preRoll.last().endMs - preRoll.first().startMs > PRE_ROLL_MS) {
+            preRoll.removeFirst()
+        }
+    }
+
+    private fun retainPreRoll(frames: List<BufferedFrame>) {
+        preRoll.clear()
+        if (frames.isEmpty()) return
+        val cutoff = frames.last().endMs - PRE_ROLL_MS
+        for (frame in frames) {
+            if (frame.endMs <= cutoff) continue
+            if (frame.startMs >= cutoff) {
+                preRoll.addLast(frame)
+            

@@ -1,0 +1,64 @@
+s/whisper/{data,overlay,service,ui}/*.kt` (6 test classes, 18 tests).
+
+## Build / test evidence
+
+Environment (shared toolchain, no Nix installs):
+
+```sh
+export JAVA_HOME=/work/android-toolchain/jdk
+export ANDROID_HOME=/work/android-toolchain/sdk
+export ANDROID_SDK_ROOT=/work/android-toolchain/sdk
+export GRADLE_USER_HOME=/work/android-toolchain/gradle-home
+printf 'sdk.dir=/work/android-toolchain/sdk\n' > local.properties
+```
+
+```sh
+/home/node/.local/bin/gradle -p /work/martins-whisper-worktrees/u1-overlay \
+  :app:assembleDebug :app:testDebugUnitTest --no-daemon --offline
+```
+
+Result (2026-10-26):
+
+```
+BUILD SUCCESSFUL in 7s
+43 actionable tasks: 8 executed, 35 up-to-date
+```
+
+- APK: `app/build/outputs/apk/debug/app-debug.apk`, 8.4 MB.
+- Tests: 18 passed / 0 failed:
+  - `SettingsDefaultsTest` 5
+  - `BubbleFormatTest` 1
+  - `OverlayGeometryTest` 3
+  - `DictationStateTest` 4
+  - `ServiceContractTest` 2
+  - `PermissionGateTest` 3
+- Robolectric was attempted first for `SettingsStore`/`MicBubbleView` and failed before any test body on this linux-aarch64 host:
+  `UnsatisfiedLinkError: no conscrypt_openjdk_jni-linux-aarch_64` from `AndroidTestEnvironment.setUpApplicationState`. The Groovy-uber jar in the cache only contains `linux-x86_64`. Those tests were replaced with pure helper tests, per the U1 fallback instruction. The Robolectric dependency is left in `app/build.gradle.kts` for T1/x86 runners.
+- No lint/typecheck task was run beyond Kotlin compilation; compilation completed with only deprecation warnings.
+
+## Interfaces exposed
+
+- Service actions: `com.martins.whisper.action.START`, `.STOP`, `.SETTINGS`, `.TRANSCRIPT`.
+- Companion: `DictationService.start(context)`, `.stop(context)`, `STATE: StateFlow<DictationState>` (property name `state`), `inserterFactory`.
+- Transcript hook for I1:
+  - Explicit-package broadcast `com.martins.whisper.action.TRANSCRIPT` with string extra `transcript`.
+  - Or replace `DictationService.inserterFactory` with an accessibility-backed `TextInserter`.
+- Engine hook for E1: `EngineFactory.factory: (Context, SettingsStore) -> SpeechEngine`; the service calls `transcribe(AudioChunk(...FLUSH), language)` once per hold.
+- Overlay callbacks: `MicBubbleView.Listener` (`onPress`, `onRelease`, `onCancel`, `onDrag`, `onDragEnd`, `onSettingsTap`, `onStopTap`).
+- Settings keys/defaults in `SettingsStore` (`model_id=base`, `language=auto`, `backend=AUTO`, `idle_unload_seconds=300`, `overlay_enabled=false`, `boot_start=true`, bubble x/y).
+
+## Contract changes
+
+- No edits to `core/` and no signature changes to the shared contracts.
+- `ModelOptions` is intentionally a local stub because `core.ModelCatalog` does not exist yet. E1/PM should replace it with `ModelCatalog`; ids match whisper.cpp GGML names.
+- I1 manifest merge snippet (add to `app/src/main/AndroidManifest.xml`; adjust class/package to I1's final names):
+
+```xml
+<service
+    android:name=".accessibility.DictationAccessibilityService"
+    android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+    android:exported="false">
+    <intent-filter>
+        <action android:name="android.accessibilityservice.AccessibilityService" />
+    </intent-filter>
+    <meta-dat

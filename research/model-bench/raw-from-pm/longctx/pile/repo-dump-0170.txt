@@ -1,0 +1,52 @@
+ v1 defaults; `large-v3-turbo` f16 has no published memory figure but is in the ~2 GB class at best (8 GB devices only).
+5. **No mirror is required for v1.** Download directly from `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/…` (302 to Hugging Face's CDN; public, no auth). Pin the HF revision `5359861c739e955e79d9a303bcbc70fb988958b1` and verify each file's SHA-256. Show the MIT notices.
+6. **Pin the engine + format:** current whisper.cpp loads **custom GGML**, magic `0x67676d6c`, not GGUF. `GGML_FILE_VERSION` is defined but not enforced by the Whisper loader. E1 must pin an exact whisper.cpp commit/tag **and** the model revision + SHA-256, then load-test on the device.
+
+# 02 — What ASR backend proof is required for v1 sign-off (CPU-first vs Vulkan)?
+
+Type: grilling
+Status: open
+Blocked by: 01
+
+## Question
+
+ADR-004 accepts whisper.cpp with Vulkan + CPU, CPU fallback, and says a CPU-first APK is acceptable if Vulkan is not green by integration. Turn that into a testable acceptance bar:
+
+- What must the host build prove (JVM model-layer tests, fake engine, native library presence) before a device is available?
+- What exactly must the device show for the backend: active backend string, fallback reason persisted, GPU-crash counter behavior, and how many failures trigger CPU default?
+- Is Vulkan required for v1 sign-off, or is CPU-only with a clear "GPU unavailable" status acceptable? Who signs that off?
+- What evidence goes in the handoff so the owner can trust it without running Android themselves?
+
+Output: a short acceptance checklist, not code.
+
+# 03 — What must the B1 build harness guarantee before it merges?
+
+Type: grilling
+Status: open
+Blocked by: none
+
+## Question
+
+B1 has a working toolchain and a green `:core:test`, but its branch still has uncommitted wrapper/Docker/CI/docs/scripts. Decide the merge gate:
+
+- Which files must be committed (Gradle wrapper + jar, `gradlew`, Dockerfile, CI, scripts, docs) and which must stay untracked (SDK, caches, models, keys)?
+- Must `./gradlew` work from a clean checkout with only documented env vars, and must the build be reproducible offline with a warm cache?
+- What is the supported build host matrix: this aarch64 container, x86_64 Docker/CI, or both? What is explicitly unsupported?
+- What evidence (command, output, APK path/size) is required in B1's handoff before merging?
+- How do we avoid clobbering the sibling PM's in-flight B1 worktree?
+
+Output: merge checklist + exact commands for the PM to verify.
+
+# 04 — What must the E1 ASR/model layer prove before it merges?
+
+Type: grilling
+Status: open
+Blocked by: 01, 02
+
+## Question
+
+E1 has an uncommitted ASR model layer (catalog, repository/downloader, storage, manager, whisper.cpp engine seam) and tests on `agent/e1-asr`. Decide the merge gate:
+
+- Which public contracts are frozen for v1 (`SpeechEngine`, `ModelManager`, `ModelCatalog`, `ModelRepository`) and which may still change with PM approval?
+- What must be unit-tested on the JVM: idle unload at 300 s, model swap, download verification/SHA256, failure/retry, fake engine path?
+- Is the native whisper.cpp JNI library required at merge time, or can the engine seam ship with a clearly fa

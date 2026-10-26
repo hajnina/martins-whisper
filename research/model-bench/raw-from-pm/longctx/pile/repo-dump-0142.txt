@@ -1,0 +1,36 @@
+file with one **child** file per ticket.
+
+- **Map**: `.scratch/<effort>/map.md` (the Notes / Decisions-so-far / Fog body).
+- **Child ticket**: `.scratch/<effort>/issues/NN-<slug>.md`, numbered from `01`, with the question in the body. A `Type:` line records the ticket type (`research`/`prototype`/`grilling`/`task`); a `Status:` line records `claimed`/`resolved`.
+- **Blocking**: a `Blocked by: NN, NN` line near the top. A ticket is unblocked when every file it lists is `resolved`.
+- **Frontier**: scan `.scratch/<effort>/issues/` for files that are open, unblocked, and unclaimed; first by number wins.
+- **Claim**: set `Status: claimed` and save before any work.
+- **Resolve**: append the answer under an `## Answer` heading, set `Status: resolved`, then append a context pointer (gist + link) to the map's Decisions-so-far in `map.md`.
+
+# Triage Labels
+
+The skills speak in terms of five canonical triage roles. This file maps those roles to the actual strings used in this repo's local-markdown tracker.
+
+| Label in mattpocock/skills | Label in our tracker | Meaning                                  |
+| -------------------------- | -------------------- | ---------------------------------------- |
+| `needs-triage`             | `needs-triage`       | Maintainer needs to evaluate this issue  |
+| `needs-info`               | `needs-info`         | Waiting on reporter for more information |
+| `ready-for-agent`          | `ready-for-agent`    | Fully specified, ready for an AFK agent  |
+| `ready-for-human`          | `ready-for-human`    | Requires human implementation            |
+| `wontfix`                  | `wontfix`            | Will not be actioned                     |
+
+# C1-core-audio Handoff
+
+Executive summary: Implemented the pure-JVM core audio/text layer: normalized RMS math, adaptive energy VAD with hangover, a speech-aware 20 ms chunker with pre-roll/min-speech/silence/max-length/overlap/session-cap behavior, text cleanup, and transcript boundary dedupe. Added 25 focused JUnit tests and all pass with the requested Gradle command. Public contract signatures are unchanged. Commit 838dc30 on `agent/c1-core-audio`.
+
+## Built / changed
+
+- `core/src/main/kotlin/com/martins/whisper/core/audio/AudioMath.kt`
+  - `rms(ShortArray)`, `rmsFloat(FloatArray)`, `shortToFloat`, `floatToShort`.
+  - RMS is normalized by `Short.MAX_VALUE`; empty input returns `0.0`.
+- `core/src/main/kotlin/com/martins/whisper/core/audio/EnergyVad.kt`
+  - `EnergyVad : Vad` with defaults `minSpeechRmsDb=-45`, `thresholdMultiplier=3`, `hangoverFrames=8`, EMA alpha `0.02`.
+  - Speech requires above both the absolute/floor+6 dB and floor*multiplier thresholds, with 8-frame hangover; `reset()` clears floor/state.
+- `core/src/main/kotlin/com/martins/whisper/core/audio/AudioChunker.kt`
+  - `AudioChunker : AudioChunkerApi`: 16 kHz / 320-sample (20 ms) framing, 300 ms pre-roll, 250 ms minimum speech, 500 ms silence finalize, 25 s max chunk, 250 ms split overlap, 10 min cap, monotonic indices, `startMs/endMs/overlapMs`, `speechMs`, `flush()`, `reset()`.
+  - MAX_LENGTH cut searches the last 2 s for the lowest-energy frame boundary; overlap is exact via sample trimming. `overlapMs` describes

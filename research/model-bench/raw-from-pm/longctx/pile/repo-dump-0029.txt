@@ -1,0 +1,75 @@
+BENCH-CANARY-DECOY-1d: irrelevant decoy line.
+odel swap)  │
+│  └─ SessionStateMachine                                     │
+├─────────────────────────────────────────────────────────────┤
+│ AccessibilityService (separate system-bound service)        │
+│  ├─ tracks focused editable node + selection                 │
+│  ├─ TextInsertionPlanner (pure logic)                        │
+│  └─ ACTION_SET_TEXT -> clipboard/ACTION_PASTE -> toast       │
+├─────────────────────────────────────────────────────────────┤
+│ Activity: onboarding/permissions + settings + model manager  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 3.1 Modules
+
+- `core/` - pure Kotlin/JVM, no Android imports.
+  - `config/` AppSettings data model + validation (persistence in app).
+  - `audio/` `EnergyVad`, `AudioChunker`, `AudioMath`, `RingBuffer`.
+  - `text/` `TranscriptMerger`, `TextNormalizer`, hallucination filter.
+  - `asr/` `SpeechEngine` interface, `Transcript`, `ModelSpec`, `ModelCatalog`, `ModelManager` state machine with injectable clock.
+  - `insert/` `TextInsertionPlanner` (given current text + selection + transcript -> newText + cursor).
+  - Unit tests (JUnit) for all of the above.
+- `app/` - Android.
+  - `service/DictationService` foreground service; owns pipeline + overlay + engine.
+  - `overlay/` window + custom view + drag/position persistence.
+  - `audio/AudioRecordSource`.
+  - `asr/WhisperCppEngine` (JNI), `SherpaOnnxEngine` fallback if chosen, `NativeModelLoader`.
+  - `accessibility/DictationAccessibilityService`, `AccessibilityTextInserter`.
+  - `data/SettingsStore` (SharedPreferences/DataStore), `ModelRepository` (download/import/verify).
+  - `ui/` MainActivity, onboarding, settings, diagnostics.
+  - `BootReceiver`.
+- `native/` (or `app/src/main/cpp`): CMake + JNI wrapper + vendored whisper.cpp (submodule/pinned source).
+- `scripts/`: fetch models, adb push, build, doctor.
+- `docs/`: build, device, testing, permissions.
+
+### 3.2 Core contracts (do not break without PM approval)
+
+```kotlin
+// core
+data class Frame(val samples: ShortArray, val sampleRate: Int = 16000, val capturedAtMs: Long)
+data class AudioChunk(
+  val index: Int,
+  val samples: FloatArray,      // mono, [-1, 1], 16 kHz
+  val sampleRate: Int = 16000,
+  val startMs: Long,
+  val endMs: Long,
+  val overlapMs: Int = 0,
+  val reason: ChunkReason
+)
+enum class ChunkReason { SILENCE, MAX_LENGTH, FLUSH }
+
+interface Vad { fun isSpeech(frame: ShortArray): Boolean; fun reset() }
+class EnergyVad(...) : Vad
+class AudioChunker(vad: Vad, ...) {
+  fun push(frame: ShortArray, capturedAtMs: Long): List<AudioChunk>
+  fun flush(capturedAtMs: Long): AudioChunk?
+  fun reset()
+  val speechMs: Long
+}
+
+data class Transcript(val text: String, val language: String?, val avgLogProb: Float?, val noSpeechProb: Float?)
+interface SpeechEngine {
+  val backend: String            // "whisper.cpp/vulkan", "whisper.cpp/cpu", ...
+  suspend fun transcribe(chunk: AudioChunk, language: String?): Transcript
+  fun close()
+}
+class ModelManager<T: Any>(
+  loader: () -> T, closer: (T) -> Unit, clock: () -> Long, idleMs: Long = 300_000
+) {
+  fun getOrLoad(): T
+  fun markUsed()
+  fun maybeUnload()
+  fun unloadNow()
+  fun <R> withModel(block: (T) -> R): R
+  

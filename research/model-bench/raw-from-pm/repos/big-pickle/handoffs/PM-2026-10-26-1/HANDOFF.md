@@ -1,0 +1,95 @@
+# PM Handoff 2026-10-26-1 - first push milestone
+
+## Executive summary
+- `master` is clean and builds green: **74 JVM tests, 0 failures**, `:app:assembleDebug` produces `app-debug.apk` (8.8 MB).
+- Covers wave-1 work already merged: R1 research, C1 core audio, I1 accessibility input, U1 overlay/service/settings.
+- Added the missing tracked agent prompt and closed `.gitignore` gaps (toolchain, Kotlin caches, model formats).
+- No secrets found in tracked files.
+- Still open: B1 build harness and E1 ASR/model layer are on their agent branches, not merged; T1/D1/G1 not started. H1/H2 blocked on a physical device.
+- Environment note: the shared `/work/android-toolchain/gradle-home` is locked by another PM container, so the verification build used a private copy at `/home/node/gh-pm` with `--offline`. No lock was deleted.
+
+## What changed
+- `agents/prompts/C1-core-audio-v3.md` committed (was the only untracked file).
+- `.gitignore` now also ignores `.kotlin/`, `android-toolchain/`, `gradle-home/`, `e1-models/`, `*.ggml`, `*.safetensors`.
+- This handoff (`handoffs/PM-2026-10-26-1/`).
+
+## Exact commands and real output
+Environment:
+
+```sh
+cd /work/martins-whisper
+export JAVA_HOME=/work/android-toolchain/jdk
+export ANDROID_HOME=/work/android-toolchain/sdk
+export ANDROID_SDK_ROOT=/work/android-toolchain/sdk
+export GRADLE_USER_HOME=/home/node/gh-pm
+export PATH="$JAVA_HOME/bin:/work/android-toolchain/gradle/gradle-8.9/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/35.0.1:$PATH"
+printf 'sdk.dir=/work/android-toolchain/sdk\n' > local.properties
+```
+
+Build (forced test re-run):
+
+```sh
+gradle :core:test :app:testDebugUnitTest --rerun-tasks --console=plain --offline --no-daemon
+```
+
+Real tail:
+
+```
+> Task :core:test
+> Task :app:testDebugUnitTest
+BUILD SUCCESSFUL in 13s
+```
+
+APK:
+
+```sh
+gradle :core:test :app:testDebugUnitTest :app:assembleDebug --console=plain --offline --no-daemon
+```
+
+```
+> Task :app:packageDebug
+> Task :app:assembleDebug
+BUILD SUCCESSFUL in 7s
+45 actionable tasks: 2 executed, 43 up-to-date
+```
+
+Result file: `app/build/outputs/apk/debug/app-debug.apk` (8,800,646 bytes, 2026-10-26 16:39 UTC).
+
+Test totals from `build/test-results/**/TEST-*.xml`:
+
+```
+tests=74 skipped=0 failures=0 errors=0
+```
+
+Per suite:
+
+```
+InsertionPolicyTest 11
+AudioChunkerTest 7
+EnergyVadTest 6
+TextInsertionPlannerTest 20
+TextNormalizerTest 5
+TranscriptMergerTest 7
+SettingsDefaultsTest 5
+BubbleFormatTest 1
+OverlayGeometryTest 3
+DictationStateTest 4
+ServiceContractTest 2
+PermissionGateTest 3
+```
+
+## Secret / hygiene check
+Tracked-file scan for `ghp_`, `github_pat_`, `AKIA`, `sk-`, private-key blocks, Slack/Google keys, and hard-coded `password=` found only the intentional `isPassword`/`password` field names in accessibility code and tests. **No secrets.**
+
+`.gitignore` verified with `git check-ignore -v` for `app/build`, `core/build`, `local.properties`, `models/`, `*.gguf`, `*.apk`, `.gradle`, plus the newly added toolchain and model patterns. No untracked files remain; `git status --short` is empty after the handoff commit.
+
+## Commits
+- `c781ce3` - docs(pm): integrate C1/I1/U1, record 74-test green build (handoff baseline)
+- `07bd75c` - chore(agents): track C1 core-audio v3 prompt
+- Handoff commit: the commit that adds this file (see `git log --oneline -1 handoffs/PM-2026-10-26-1/HANDOFF.md`).
+
+## Blockers / next
+- B1 (`agent/b1-build`): toolchain ready, `:core:test` green, app build proven; worktree still has uncommitted `gradlew`, `Dockerfile.build`, `.github/`, `docs/`, `scripts/`. Needs commit + handoff on its branch, then PM merge.
+- E1 (`agent/e1-asr`): ASR model layer + tests exist uncommitted on the branch; native/NDK build unverified. Needs commit + handoff, then PM merge.
+- T1 (test/emulator harness), D1 (operator docs), G1 (integration) remain queued.
+- H1/H2 (device bring-up, hardware acceptance) blocked: no physical Android device; no `/dev/kvm`, no Android GPU in sandbox.

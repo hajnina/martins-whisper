@@ -1,0 +1,49 @@
+`git merge --no-ff` per branch. Never squash away evidence; handoffs reference SHAs.
+
+## Integration checklist
+
+- [ ] `Contracts.kt` public API unchanged except agreed stub bodies.
+- [ ] No duplicate permissions/services in manifest; accessibility config XML linked.
+- [ ] Foreground service: `foregroundServiceType="microphone"` + `FOREGROUND_SERVICE_MICROPHONE`.
+- [ ] Overlay flags include `FLAG_NOT_FOCUSABLE | FLAG_NOT_TOUCH_MODAL`; overlay permission gate.
+- [ ] Accessibility service config valid; deep link from onboarding.
+- [ ] Model catalog URLs/hashes sane; no silent downloads.
+- [ ] Idle unload 300 s test passes with fake clock.
+- [ ] Chunker/merge tests pass; no Android imports in `:core`.
+- [ ] `assembleDebug` produces APK (if toolchain works here) OR exact blocked report + CI path.
+- [ ] Robolectric/unit tests pass.
+- [ ] README/SPEC/KANBAN/LOGBOOK updated; handoffs present.
+- [ ] No secrets, no telemetry, no cloud inference.
+
+## Branch review gates
+
+A branch is accepted only if:
+1. It has `HANDOFF.md` + `SUMMARY.txt`.
+2. Claims are backed by pasted command output or clearly marked blocked.
+3. Tests exist for new pure logic and were run (or blocker is explicit).
+4. No edits outside its ownership without a note.
+5. `git status` clean and commits are atomic.
+
+## Conflict watch
+
+- `app/src/main/AndroidManifest.xml`: U1 vs I1 (permissions/services). Integration resolves.
+- `core/.../Contracts.kt`: C1 replaces `TranscriptMerger` stub; I1 replaces `TextInsertionPlanner` stub. Both must keep signatures.
+- `app/build.gradle.kts`: U1/E1/B1 may add deps/CMake. Integration merges union, then trims.
+- `settings.gradle.kts`/root build: B1 may adjust versions; keep one source of truth.
+- `README.md`/REFERENCES: union, not overwrite.
+
+## Definition of done for v1
+
+See `SPEC.md` §5. Device-only checks remain blocked until user provides hardware; code must be structured so G1 can hand over a precise device test script.
+
+# Risk Register
+
+| ID | Risk | Impact | Likelihood | Mitigation | Owner |
+|---|---|---|---|---|---|
+| R-01 | Android native build (whisper.cpp/NDK) impossible on aarch64 sandbox | Cannot produce APK/verify JNI here | High | B1/E1 find community toolchains or x86_64 Docker/CI; deliver buildable repo + exact commands | B1/E1 |
+| R-02 | Vulkan not available/not faster on target GPU | GPU requirement unmet | Medium | Backend detection + honest status; benchmark on device; consider NNAPI/sherpa-onnx | E1/H1 |
+| R-03 | Accessibility insertion fails in popular apps (Compose/WebView) | Core UX fails | Medium | ACTION_SET_TEXT + ACTION_PASTE + clipboard fallback; field matrix; on-device iterate | I1/H1 |
+| R-04 | Overlay steals focus / IME opens | Text goes to wrong place | Medium | FLAG_NOT_FOCUSABLE/NOT_TOUCH_MODAL; non-focusable service window tests | U1 |
+| R-05 | OEM kills foreground service | Overlay disappears | Medium | Persistent notification, START_STICKY, battery exemption onboarding, boot receiver | U1 |
+| R-06 | Model download fails/large (base 142 MB) | First-run blocked | Medium | adb push, resumable download, SHA verify, clear UI | E1/D1 |
+| R-07 | Idle unload doesn't free memory (native refs) | Battery/RAM waste | Medium | ex

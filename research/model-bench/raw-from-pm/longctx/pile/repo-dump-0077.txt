@@ -1,0 +1,95 @@
+      isFakeBoldText = true
+    }
+    private val labelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = sp(12f)
+        alpha = 220
+    }
+
+    private var spinnerAngle = 0f
+    private var spinnerRunning = false
+    private val spinnerTick = object : Runnable {
+        override fun run() {
+            if (!spinnerRunning) return
+            spinnerAngle = (spinnerAngle + 12f) % 360f
+            invalidate()
+            postDelayed(this, 16)
+        }
+    }
+
+    private var downX = 0f
+    private var downY = 0f
+    private var lastX = 0f
+    private var lastY = 0f
+    private var downAt = 0L
+    private var tracking = false
+    private var dragging = false
+    private var pendingControl: Control? = null
+
+    private enum class Control { SETTINGS, STOP }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                downX = event.x
+                downY = event.y
+                lastX = event.x
+                lastY = event.y
+                downAt = SystemClock.elapsedRealtime()
+                dragging = false
+                val control = controlAt(event.x, event.y)
+                if (control != null) {
+                    pendingControl = control
+                    tracking = false
+                } else {
+                    pendingControl = null
+                    tracking = true
+                    performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    listener?.onPress()
+                }
+                return true
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                if (pendingControl != null) return true
+                if (!tracking) return true
+                val totalX = event.x - downX
+                val totalY = event.y - downY
+                if (!dragging && (abs(totalX) > touchSlop || abs(totalY) > touchSlop)) {
+                    dragging = true
+                    listener?.onCancel()
+                }
+                if (dragging) {
+                    val dx = event.x - lastX
+                    val dy = event.y - lastY
+                    listener?.onDrag(dx, dy)
+                }
+                lastX = event.x
+                lastY = event.y
+                return true
+            }
+
+            MotionEvent.ACTION_UP -> {
+                pendingControl?.let {
+                    if (it == Control.SETTINGS) listener?.onSettingsTap() else listener?.onStopTap()
+                    pendingControl = null
+                    return true
+                }
+                if (tracking) {
+                    if (dragging) {
+                        listener?.onDragEnd()
+                    } else {
+                        performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                        listener?.onRelease()
+                    }
+                }
+                tracking = false
+                dragging = false
+                return true
+            }
+
+            MotionEvent.ACTION_C

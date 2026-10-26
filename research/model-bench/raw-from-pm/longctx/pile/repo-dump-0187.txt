@@ -1,0 +1,51 @@
+ishing app build + handoff.** | agent/b1-build | skeleton | handoffs/B1-build/HANDOFF.md |
+| E1 | ASR/model layer: SpeechEngine contract, whisper.cpp JNI + CMake + Vulkan, ModelCatalog/Repository, ModelManager idle-unload + tests. Coordinate with R1 decision. | agent/e1-asr | R1 (partial), B1 (partial) | handoffs/E1-asr/HANDOFF.md |
+
+## Ready / queued (next wave)
+
+| ID | Deliverable | Depends on | Notes |
+|---|---|---|---|
+| T1 | Test + emulator harness: Robolectric, instrumented test plan, Docker emulator attempt, fake audio/ASR end-to-end. | B1, C1, E1, U1, I1 | No KVM currently; try software/robolectric. |
+| D1 | Docs + operator scripts: build/install, adb model push, permission checklist, device matrix, privacy. | B1, E1 | Keep tidy. |
+| G1 | Integration: merge branches, resolve contracts, build APK, run all tests, fix breakage, produce final handoff + demo video/screenshots if emulator works. | all above | PM invokes after wave 1. |
+| H1 | Device bring-up: install on real Android device, validate Vulkan/GPU, accessibility insert in apps, idle unload, OEM quirks. | G1 + physical device | BLOCKED until user provides device. |
+| H2 | Hardware acceptance: measure latency, memory, GPU vs CPU, 5-min unload actually frees memory. | H1 | BLOCKED until device. |
+
+## Backlog
+
+- Quick-action tile / shortcut to toggle overlay.
+- Custom vocabulary/hotwords.
+- History (off by default) + copy last transcript.
+- Model import via SAF and download manager with resume.
+- Multi-language UI.
+- On-device LLM punctuation/cleanup (not v1).
+- Play Store packaging/policy.
+
+## Blocked
+
+| ID | Reason | Unblock |
+|---|---|---|
+| H1/H2 | No physical Android device in sandbox. | User supplies device/ADB access later. |
+| EMU1 | Android emulator requires KVM/x86_64 typically; sandbox is aarch64 with no /dev/kvm. | Provide x86_64 KVM runner or accept JVM/Robolectric only. |
+| GPU1 | No Android GPU available in sandbox. | Real device or GPU-capable emulator. |
+
+## Done
+
+| ID | Deliverable | Evidence |
+|---|---|---|
+| P0a | Replanned from Linux desktop to Android/Kotlin. | This document, SPEC.md v2 |
+| P0b | Repo skeleton, kanban, spec, logbook, agent worktree convention. | git commit |
+| R1 | Android prior-art research + ADR-004 recommendation (whisper.cpp/GGML, insertion, model lifecycle). | `research/ANDROID_PRIOR_ART.md`, `handoffs/R1-research/`, merged `d7ce482` |
+| C1 | Core VAD/chunker/merger/normalizer + 25 tests. | merged `agent/c1-core-audio`; `:core:test` green |
+| I1 | Accessibility focus tracking + UTF-16-safe insertion + fallback + 31 tests. | merged `agent/i1-input`; APK builds |
+| U1 | Foreground service, non-focusable overlay bubble, onboarding/settings, boot receiver. | merged `agent/u1-overlay`; APK 8.4 MB |
+| ADR-004 | Accept whisper.cpp + Vulkan/CPU, GGML-only v1, CPU fallback; sherpa emergency only. | `DECISIONS.md` |
+| ADR-007 | Reboot uses tap-to-re-arm notification; no mic FGS from boot. | `DECISIONS.md` |
+
+# LOGBOOK
+
+Chronological project log. PM owns this file; agents add entries via their handoffs.
+
+## 2026-10-26
+
+- 14:50Z - Session starts. Initial (wrong) assumption: Linux desktop overlay. Recon: aarch64 container, no GPU, no audio, no display

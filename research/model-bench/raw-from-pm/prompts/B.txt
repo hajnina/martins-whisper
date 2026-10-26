@@ -1,0 +1,11 @@
+You are doing a research task. Answer both questions using ONLY these three sources (fetch them if your tools allow):
+
+1. https://developer.android.com/ndk/guides/neuralnetworks
+2. https://github.com/ggml-org/whisper.cpp
+3. https://huggingface.co/ggerganov/whisper.cpp
+
+Questions:
+(a) In which Android API level / release was NNAPI deprecated?
+(b) What is the GGML file magic value that whisper.cpp's loader checks, and what license do the whisper.cpp model weights use?
+
+For each answer, cite the source URL. If a source does not support a claim, say so. End with a section "FINAL ANSWERS" containing the two answers and three URLs.

@@ -1,0 +1,87 @@
+Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Bundle
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
+import android.widget.Toast
+import com.martins.whisper.R
+import com.martins.whisper.core.TextInsertionPlanner
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
+
+class DictationAccessibilityService : AccessibilityService(), TextInserter {
+
+    @Volatile
+    private var lastFocused: NodeSnapshot? = null
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        serviceInfo = serviceInfo?.apply {
+            flags = flags or
+                AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
+                AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
+        }
+        AccessibilityInserter.attach(this)
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event == null) return
+        if (event.packageName?.toString() == packageName) {
+            lastFocused = null
+            return
+        }
+        when (event.eventType) {
+            AccessibilityEvent.TYPE_VIEW_FOCUSED,
+            AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED,
+            -> {
+                val source = event.source ?: return
+                try {
+                    if (source.isEditable && source.isEnabled && source.isVisibleToUser) {
+                        lastFocused = source.toSnapshot()
+                    } else if (event.eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED) {
+                        lastFocused = null
+                    }
+                } finally {
+                    source.recycle()
+                }
+            }
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> lastFocused = null
+        }
+    }
+
+    override fun onInterrupt() {
+        lastFocused = null
+    }
+
+    override fun onUnbind(intent: Intent?): Boolean {
+        AccessibilityInserter.detach(this)
+        lastFocused = null
+        return super.onUnbind(intent)
+    }
+
+    override fun onDestroy() {
+        AccessibilityInserter.detach(this)
+        lastFocused = null
+        super.onDestroy()
+    }
+
+    override fun insert(text: String): InsertResult {
+        if (text.isEmpty()) return InsertResult.Failed("empty text")
+        val node = obtainTarget() ?: return copyFallback(text, "no focused editable field")
+        try {
+            val snapshot = node.toSnapshot()
+            return when (val route = InsertionPolicy.route(snapshot, packageName, text)) {
+                InsertionRoute.SetText -> setText(node, snapshot, text)
+                InsertionRoute.Paste -> paste(node, text)
+                is InsertionRoute.ClipboardOnly -> copyFallback(text, route.reason)
+                is InsertionRoute.Reject -> InsertResult.Failed(route.reason)
+            }
+        } finally {
+            node.recycle()
+    

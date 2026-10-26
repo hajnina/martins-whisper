@@ -1,0 +1,60 @@
+lManager<T: Any>(
+  loader: () -> T, closer: (T) -> Unit, clock: () -> Long, idleMs: Long = 300_000
+) {
+  fun getOrLoad(): T
+  fun markUsed()
+  fun maybeUnload()
+  fun unloadNow()
+  fun <R> withModel(block: (T) -> R): R
+  val state: ModelState
+}
+
+object ModelCatalog { val specs: List<ModelSpec>; fun byId(id: String): ModelSpec? }
+object TranscriptMerger { fun merge(parts: List<String>, overlapsMs: List<Int> = emptyList()): String }
+object TextInsertionPlanner {
+  data class Result(val text: String, val selectionStart: Int, val selectionEnd: Int)
+  fun insert(current: String?, selectionStart: Int, selectionEnd: Int, insert: String): Result
+}
+```
+
+App-only interfaces:
+
+```kotlin
+interface AudioSource { fun start(onFrame: (ShortArray, Long) -> Unit); fun stop(); fun release() }
+interface TextInserter { fun insert(text: String): InsertResult }
+sealed interface InsertResult { data object Inserted; data class Copied(val reason: String); data class Failed(val reason: String) }
+```
+
+### 3.3 Dictation state machine
+
+```
+UNLOADED/READY --press--> ARMING (start audio + lazy load model)
+ARMING --frames--> RECORDING (chunks queued to GPU worker)
+RECORDING --release--> FINALIZING (flush last chunk, wait for worker, merge)
+FINALIZING --text--> INSERTING --> IDLE
+any --cancel--> IDLE (discard, keep model state)
+any --error--> ERROR (surface, return to IDLE)
+release with hold < 400 ms and no speech --> IDLE (cancel)
+```
+
+Model load and transcription run off the main thread (coroutines `Dispatchers.Default`/single-thread ASR dispatcher). UI gets state via `StateFlow` + main-thread rendering.
+
+### 3.4 Chunking algorithm (v1)
+
+- AudioRecord: 16 kHz mono PCM16, 20 ms frames (320 samples). Pre-roll ring buffer 300 ms.
+- `EnergyVad`: adaptive noise floor (EMA of non-speech), RMS threshold = max(noiseFloor * k, absoluteFloor); speech start after 2 frames; silence after `minSilenceMs` (500 ms). Reset per session.
+- `AudioChunker`:
+  - accumulates frames after speech start (including pre-roll).
+  - finalizes `SILENCE` chunk when trailing silence >= 500 ms and speech >= 250 ms.
+  - finalizes `MAX_LENGTH` at 25 s; cut at lowest-energy frame in the last 2 s; add 250 ms overlap from the tail to the next chunk.
+  - `flush()` finalizes trailing speech/partial chunk; drops pure-silence.
+  - max session 10 min safety cap.
+- `TranscriptMerger.merge`:
+  - trims, strips duplicate boundary words between adjacent chunks (case/punctuation-insensitive longest suffix/prefix match, up to 8 words).
+  - joins with exactly one space, preserves existing punctuation; never invents punctuation.
+- `TextNormalizer`: drop empty/hallucination segments using `noSpeechProb`, `avgLogProb` threshold, compression ratio (engine-provided), plus a small blocklist ("Thank you.", "Subtitles by...", etc.) only when confidence is low.
+- Engine `transcribe(chunk)` gets `condition_on_previous_text = false` and a stable language from the first detected chunk; no cross-chunk prompt loops.
+
+### 3.5 Model lifecycle
+
+- Default `base` (multilingual GGML, 16-bit). Catalog includes tiny/base/small/medium/large-v3-turbo, `.en` variants where available, plus custom file. Default backend `auto` (GPU if compiled+availab

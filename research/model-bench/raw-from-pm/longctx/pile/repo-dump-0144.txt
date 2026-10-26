@@ -1,0 +1,45 @@
+ap, monotonic indices, `startMs/endMs/overlapMs`, `speechMs`, `flush()`, `reset()`.
+  - MAX_LENGTH cut searches the last 2 s for the lowest-energy frame boundary; overlap is exact via sample trimming. `overlapMs` describes overlap at the **start** of a chunk, so the next chunk carries `250`; the first chunk keeps its prior start overlap (normally `0`).
+- `core/src/main/kotlin/com/martins/whisper/core/text/TextNormalizer.kt`
+  - Whitespace collapse/trim, punctuation spacing cleanup, blank -> `""`, drops common Whisper silence/hallucination strings.
+- `core/src/main/kotlin/com/martins/whisper/core/Contracts.kt`
+  - Only the `TranscriptMerger.merge` body was replaced (local helpers inside the body). Max 8-word suffix/prefix dedupe, case/punctuation-insensitive comparison, richer original punctuation retained, zero/positive `overlapsMs` honored, single-space output, no invented text.
+- Tests:
+  - `core/src/test/kotlin/com/martins/whisper/core/EnergyVadTest.kt` (6)
+  - `core/src/test/kotlin/com/martins/whisper/core/AudioChunkerTest.kt` (7)
+  - `core/src/test/kotlin/com/martins/whisper/core/TextNormalizerTest.kt` (5)
+  - `core/src/test/kotlin/com/martins/whisper/core/TranscriptMergerTest.kt` (7)
+
+## Build / test
+
+Command run from `/work/martins-whisper-worktrees/c1-core-audio`:
+
+```bash
+JAVA_HOME=/work/android-toolchain/jdk /home/node/.local/bin/gradle -p /work/martins-whisper-worktrees/c1-core-audio :core:test --no-daemon
+```
+
+Result:
+
+```text
+BUILD SUCCESSFUL in 9s
+4 actionable tasks: 4 executed
+```
+
+Test result XML totals: `6 + 7 + 5 + 7 = 25` tests, 0 failures, 0 skipped, 0 errors.
+
+## Interfaces / invariants
+
+- No public contract signatures changed. `AudioChunker` has a default `Vad` constructor (`AudioChunker(vad: Vad = EnergyVad())`).
+- Chunker processes arbitrary frame sizes by splitting into 320-sample sub-frames; timestamps are derived from `capturedAtMs`.
+- Pre-roll is bounded to 300 ms preceding detected speech. Short speech under 250 ms is discarded and does not emit a chunk.
+- Silence finalization is based on actual (audible) silence rather than VAD hangover, so a chunk ends about 500 ms after the last audible frame.
+- MAX_LENGTH chunks are <= 25 s; the following chunk starts 250 ms before the cut with `overlapMs = 250`.
+- Session cap is measured from the first pushed timestamp; no emitted chunk ends beyond `first + 600_000 ms`. A cap-triggered final chunk uses `ChunkReason.FLUSH`.
+- `speechMs` counts audible speech frames seen (including a short discarded blip); chunk-level min-speech gating uses chunk-local audible duration.
+
+## Limitations / next agent
+
+- VAD/audibility thresholds are intentionally simple and not tuned on real microphone data; `speechFloorRms` is 10% of the first speech-frame RMS, bounded below at `1e-4`. Very low-level speech after a loud onset could be undercounted. Tune against a real corpus/service integration.
+- No Android service, recorder, model, or UI integration in this package.
+- MAX_LENGTH cut is frame-boundary based within the last 2 s; exact overlap is sample-trimmed.
+- `AudioChunker.speechMs` counts incoming audible speech, not emitted-chunk duration. If the service needs exact emitted speech seconds,

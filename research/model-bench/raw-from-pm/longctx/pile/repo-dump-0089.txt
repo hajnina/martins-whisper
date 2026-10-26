@@ -1,0 +1,104 @@
+) {
+        val bubbleView = view ?: return
+        runCatching { windowManager.removeView(bubbleView) }
+        view = null
+        params = null
+    }
+
+    private fun screenSize(): Pair<Int, Int> {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val bounds = windowManager.currentWindowMetrics.bounds
+            bounds.width() to bounds.height()
+        } else {
+            val display = windowManager.defaultDisplay
+            val point = android.graphics.Point()
+            @Suppress("DEPRECATION")
+            display.getRealSize(point)
+            point.x to point.y
+        }
+    }
+
+    private fun dp(value: Float): Int =
+        (value * appContext.resources.displayMetrics.density).toInt()
+}
+
+package com.martins.whisper.overlay
+
+object OverlayGeometry {
+
+    fun clamp(
+        x: Int,
+        y: Int,
+        width: Int,
+        height: Int,
+        screenWidth: Int,
+        screenHeight: Int,
+        margin: Int,
+    ): Pair<Int, Int> {
+        val maxX = (screenWidth - width - margin).coerceAtLeast(margin)
+        val maxY = (screenHeight - height - margin).coerceAtLeast(margin)
+        return x.coerceIn(margin, maxX) to y.coerceIn(margin, maxY)
+    }
+
+    fun defaultBottomEnd(
+        width: Int,
+        height: Int,
+        screenWidth: Int,
+        screenHeight: Int,
+        margin: Int,
+        bottomInset: Int,
+    ): Pair<Int, Int> {
+        val x = (screenWidth - width - margin).coerceAtLeast(margin)
+        val y = (screenHeight - height - margin - bottomInset).coerceAtLeast(margin)
+        return x to y
+    }
+
+    fun expandedOrCollapsedWidth(expanded: Boolean, bubble: Int, pill: Int): Int =
+        if (expanded) pill else bubble
+
+    fun expandedOrCollapsedHeight(expanded: Boolean, bubble: Int, pill: Int): Int =
+        if (expanded) pill else bubble
+}
+
+package com.martins.whisper.service
+
+sealed interface DictationState {
+    data object Idle : DictationState
+    data class Loading(val label: String = "Loading model\u2026") : DictationState
+    data class Recording(
+        val elapsedMs: Long,
+        val level: Float,
+        val speechDetected: Boolean,
+    ) : DictationState
+    data class Processing(val label: String = "Transcribing\u2026") : DictationState
+    data class Success(val message: String) : DictationState
+    data class Error(val message: String) : DictationState
+
+    val isBusy: Boolean
+        get() = this !is Idle && this !is Success && this !is Error
+
+    val overlayExpanded: Boolean
+        get() = this !is Idle
+}
+
+package com.martins.whisper.service
+
+import android.content.Context
+import com.martins.whisper.core.SpeechEngine
+import com.martins.whisper.data.SettingsStore
+
+/**
+ * Single seam for E1: replace the body with WhisperCppEngine/NativeModelLoader.
+ * Keep the contract (suspend load is optional for real engines, close releases native memory).
+ */
+object EngineFactory {
+    @Volatile
+    var factory: (Context, SettingsStore) -> SpeechEngine = { _, _ -> FakeSpeechEngine() }
+
+    fun create(context: Context, settings: SettingsStore): SpeechEngine =
+        factory(context.applicationContext, settings)
+}
+
+package com.martins.whisper.service
+
+import com.martins.whisper

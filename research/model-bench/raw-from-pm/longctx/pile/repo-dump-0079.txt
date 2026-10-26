@@ -1,0 +1,85 @@
+                   listener?.onRelease()
+                    }
+                }
+                tracking = false
+                dragging = false
+                return true
+            }
+
+            MotionEvent.ACTION_CANCEL -> {
+                pendingControl = null
+                if (tracking && !dragging) listener?.onCancel()
+                tracking = false
+                dragging = false
+                return true
+            }
+        }
+        return super.onTouchEvent(event)
+    }
+
+    private fun controlAt(x: Float, y: Float): Control? {
+        if (state is DictationState.Idle) return null
+        val height = height.toFloat().takeIf { it > 0f } ?: expandedHeightPx.toFloat()
+        val width = width.toFloat().takeIf { it > 0f } ?: expandedWidthPx.toFloat()
+        if (y < height * 0.15f || y > height * 0.85f) return null
+        val stopCenter = width - dp(52f)
+        val gearCenter = width - dp(20f)
+        return when {
+            abs(x - gearCenter) <= dp(17f) -> Control.SETTINGS
+            abs(x - stopCenter) <= dp(17f) -> Control.STOP
+            else -> null
+        }
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        val height = height.toFloat()
+        val width = width.toFloat()
+        val expanded = state !is DictationState.Idle
+        val accent = accentFor(state)
+
+        if (expanded) {
+            surfacePaint.color = Color.argb(242, 22, 28, 32)
+            canvas.drawRoundRect(RectF(0f, 0f, width, height), height / 2f, height / 2f, surfacePaint)
+            ringPaint.color = Color.argb(70, 255, 255, 255)
+            ringPaint.strokeWidth = dp(1f)
+            canvas.drawRoundRect(
+                RectF(dp(0.5f), dp(0.5f), width - dp(0.5f), height - dp(0.5f)),
+                height / 2f,
+                height / 2f,
+                ringPaint,
+            )
+        }
+
+        val circleCenter = if (expanded) height / 2f else min(width, height) / 2f
+        val circleRadius = if (expanded) height / 2f - dp(3f) else min(width, height) / 2f - dp(1f)
+        val circleRect = RectF(
+            circleCenter - circleRadius,
+            circleCenter - circleRadius,
+            circleCenter + circleRadius,
+            circleCenter + circleRadius,
+        )
+        surfacePaint.color = accent
+        canvas.drawOval(circleRect, surfacePaint)
+
+        when (state) {
+            is DictationState.Loading, is DictationState.Processing -> drawSpinner(canvas, circleRect)
+            is DictationState.Success -> drawCheck(canvas, circleCenter)
+            is DictationState.Error -> drawCross(canvas, circleCenter)
+            else -> drawMic(canvas, circleCenter, circleRadius)
+        }
+
+        if (expanded) {
+            drawExpandedContent(canvas, width, height)
+            drawGear(canvas, width - dp(20f), height / 2f)
+            drawStop(canvas, width - dp(52f), height / 2f)
+        }
+    }
+
+    private fun drawExpandedContent(canvas: Canvas, width: Float, height: Float) {
+        val textX = dp(64f)
+        val centerY = height / 2f
+        when (val current = state) {
+            is DictationState.Recording -> {
+                timerPaint.textAlign = Paint.Align.LEFT
+             

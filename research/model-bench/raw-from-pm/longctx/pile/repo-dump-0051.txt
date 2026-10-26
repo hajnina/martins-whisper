@@ -1,0 +1,45 @@
+API, NNAPI/Whisper.
+   - Android accessibility overlays, non-focusable TYPE_APPLICATION_OVERLAY, ACTION_SET_TEXT vs clipboard/ACTION_PASTE.
+   - Any actual "Wispr Flow Android clone" or "voice typing overlay" repos.
+   - Idle model unload / native whisper context free patterns.
+2. Clone candidates with `git clone --depth 1` into `/work/references/repos-android/<name>` (outside your worktree, shared scratch, do not commit clones). Actually read the code, not just READMEs. Record exact file paths/line references for:
+   - overlay window type/flags and touch handling
+   - foreground service manifest + notification + mic permissions
+   - accessibility service config, focus tracking, insertion action sequence, fallbacks
+   - JNI/CMake/Gradle native build, Vulkan flags, ABI/minSdk, prebuilt AAR alternatives
+   - model download/verification/storage, Whisper model URLs and sizes
+   - chunking/VAD/long-form behavior and dedupe
+   - tests/emulator approach
+   - licenses and what we may legally copy/adapt.
+3. Give a clear recommendation:
+   - Engine: whisper.cpp+JNI+Vulkan vs sherpa-onnx AAR vs hybrid; include build risk on this aarch64 sandbox and GPU reality.
+   - Insertion sequence and its failure modes.
+   - Overlay/accessibility architecture.
+   - Top 5 code files/repos to copy/adapt, with license notes.
+4. Deliver in your worktree:
+   - `research/ANDROID_PRIOR_ART.md` (detailed, with links, code snippets, file paths, license table, recommendations).
+   - Update `REFERENCES.md` (append; do not clobber).
+   - `handoffs/R1-research/HANDOFF.md` with required sections from AGENTS.md.
+   - `handoffs/R1-research/SUMMARY.txt` (executive summary).
+   - Commit.
+5. Final message: executive summary (<=10 lines) + best next action for PM.
+
+Rules: be skeptical, verify claims by opening code, do not fabricate results. If a repo is unavailable, note it. Do not install Android SDK or build the app; that is B1/E1. Timebox: stop at a useful, complete report rather than endless searching.
+
+You are U1-overlay (v2), background implementation subagent. START WRITING CODE IMMEDIATELY. Do not install JDK/Gradle/SDK via nix. Shared toolchain READY.
+
+WORKTREE: /work/martins-whisper-worktrees/u1-overlay
+Read: SPEC.md (3.3,3.7,3.8), AGENTS.md. Commit on agent/u1-overlay. Do not merge.
+
+TOOLCHAIN:
+- source /work/android-toolchain/scripts/env.sh
+- JAVA_HOME=/work/android-toolchain/jdk
+- Gradle: /home/node/.local/bin/gradle (wrapper) or /work/android-toolchain/gradle/gradle-8.9/bin/gradle
+- Android SDK: /work/android-toolchain/sdk (platform 35, build-tools 35.0.1, aarch64 aapt2)
+- Create local.properties: sdk.dir=/work/android-toolchain/sdk
+- Build: /home/node/.local/bin/gradle -p /work/martins-whisper-worktrees/u1-overlay :app:assembleDebug --no-daemon
+- If aapt2 override needed: android.aapt2FromMavenOverride=/work/android-toolchain/sdk/build-tools/35.0.1/aapt2
+
+IMPLEMENT:
+1. DictationService foreground service (microphone type, persistent notification + Settings/Stop actions, START_STICKY, StateFlow, fake/pluggable engine, press/release states, timer, RMS callback, clean stop).
+2. OverlayController + MicBubbleView: TYPE_APPLICATION_OVERLAY, FLAG_NOT_FOCUSABLE|FLAG_NOT_TOUCH_M

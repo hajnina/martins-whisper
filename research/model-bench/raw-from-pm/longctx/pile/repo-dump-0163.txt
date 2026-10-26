@@ -1,0 +1,33 @@
+word fields; do not auto-clear clipboard.
+Implement 300 s idle unload with a single ASR dispatcher, leases, off-main free, and trim handling; accessibility-bound processes may never get onTrimMemory(BACKGROUND).
+Vulkan is buildable but device-dependent (Pixel 8 73->67 s/30 s; Adreno 640 16-bit storage failure; Adreno 840+Turnip 4.3x); do not block v1 on GPU.
+Sherpa-onnx AAR is the emergency fallback, not primary: NNAPI is deprecated in Android 15 and there is no Vulkan provider in the AAR.
+PM decisions needed: accept Option A; GGML-only vs GGML+ONNX for v1; reboot re-arm behavior; target device/SoC for GPU validation.
+No APK/device tests were possible here; report is in research/ANDROID_PRIOR_ART.md, report commit a44964f.
+
+# Handoffs
+
+Each background work package writes `handoffs/<ID>-<slug>/HANDOFF.md` and `SUMMARY.txt`.
+
+Required sections: Executive summary | Delivered | Tests/evidence | Interfaces | Contract changes | Limitations/blockers | Next steps | References | Commits.
+
+The PM reads the executive summary and merges accepted branches into `main`.
+
+# U1-overlay handoff
+
+## Executive summary
+
+U1 delivers the Android shell for Martins Whisper: a microphone-type foreground service with a `StateFlow` state machine, a non-focusable draggable overlay bubble (idle/loading/recording/processing/success/error, timer, RMS bars, haptics, gear/stop), and a programmatic onboarding/settings screen for mic, overlay, accessibility, notifications, model, language, GPU/CPU, 300 s idle unload and boot restore. A deterministic fake engine exercises the whole press -> record -> finalize -> clipboard path; E1 and I1 plug in through `EngineFactory` and `TextInserter`/`ACTION_TRANSCRIPT`. The debug APK builds successfully and 18 pure JVM tests pass. No device/runtime validation exists in this sandbox; Robolectric is blocked on aarch64 by a missing Conscrypt native library.
+
+## Delivered / exact files
+
+All paths are relative to the worktree root.
+
+- `app/src/main/AndroidManifest.xml` - permissions, launcher activity, FGS service (`foregroundServiceType="microphone"`), boot receiver, I1 merge comment.
+- `app/src/main/java/com/martins/whisper/MainActivity.kt` - onboarding/permissions, status, model/language/backend/idle pickers, privacy note, boot switch, start/stop overlay.
+- `app/src/main/java/com/martins/whisper/BootReceiver.kt` - restores overlay on `BOOT_COMPLETED` / `MY_PACKAGE_REPLACED` when enabled; starts without microphone FGS type.
+- `app/src/main/java/com/martins/whisper/service/DictationService.kt` - FGS lifecycle, channel/notification with Settings/Stop, overlay wiring, `START_STICKY`, `StateFlow`, press/release, 400 ms cancel, 10 min cap, timer, RMS level, idle unload, clean stop, transcript broadcast.
+- `app/src/main/java/com/martins/whisper/service/DictationState.kt` - idle/loading/recording/processing/success/error.
+- `app/src/main/java/com/martins/whisper/service/FakeSpeechEngine.kt` - deterministic `SpeechEngine` with load/transcribe delays.
+- `app/src/main/java/com/martins/whisper/service/EngineFactory.kt` - single E1 replacement seam.
+- `app/src/main/java/com/martins/whisper/service/TextInserter.kt` - `TextInserter` + clipboard implementati

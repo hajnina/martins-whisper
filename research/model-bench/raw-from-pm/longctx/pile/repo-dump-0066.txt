@@ -1,0 +1,79 @@
+override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+        return spinner
+    }
+
+    private fun spinnerAdapter(items: List<String>): ArrayAdapter<String> =
+        ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, items)
+
+    private fun toggleOverlay() {
+        if (settings.overlayEnabled) {
+            settings.overlayEnabled = false
+            DictationService.stop(this)
+        } else {
+            settings.overlayEnabled = true
+            DictationService.start(this)
+            if (!Settings.canDrawOverlays(this)) {
+                Toast.makeText(this, R.string.error_overlay, Toast.LENGTH_LONG).show()
+            }
+        }
+        rootView?.postDelayed({ refresh() }, 250)
+    }
+
+    private fun refresh() {
+        val snapshot = currentSnapshot()
+        statusView.text = PermissionGate.summary(snapshot)
+        micStatus.text = grantedText(snapshot.microphone)
+        overlayStatus.text = grantedText(snapshot.overlay)
+        accessibilityStatus.text = grantedText(snapshot.accessibility)
+        notificationsStatus.text = grantedText(snapshot.notifications)
+        overlayButton.text = if (settings.overlayEnabled) {
+            getString(R.string.stop_overlay)
+        } else {
+            getString(R.string.start_overlay)
+        }
+        bootSwitch?.isChecked = settings.bootStart
+    }
+
+    private fun observeService() {
+        lifecycleScope.launch {
+            DictationService.state.collect { updateServiceStatus(it) }
+        }
+    }
+
+    private fun updateServiceStatus(state: DictationState) {
+        val label = when (state) {
+            is DictationState.Idle -> "idle"
+            is DictationState.Loading -> state.label
+            is DictationState.Recording -> "recording ${state.elapsedMs / 1000}s"
+            is DictationState.Processing -> state.label
+            is DictationState.Success -> state.message
+            is DictationState.Error -> state.message
+        }
+        serviceView.text = getString(R.string.service_state, label)
+    }
+
+    private fun currentSnapshot(): PermissionSnapshot = PermissionSnapshot(
+        microphone = checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED,
+        overlay = Settings.canDrawOverlays(this),
+        accessibility = isAccessibilityEnabled(),
+        notifications = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED,
+    )
+
+    private fun isAccessibilityEnabled(): Boolean {
+        val manager = getSystemService(ACCESSIBILITY_SERVICE) as AccessibilityManager
+        return manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+            .any { it.resolveInfo.serviceInfo.packageName == packageName }
+    }
+
+    private fun requestMic() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_MIC)
+        }
+    }
+
+    private fun requestNotifications() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requestPermissions(a

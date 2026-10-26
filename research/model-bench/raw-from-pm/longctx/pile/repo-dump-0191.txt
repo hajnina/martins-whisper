@@ -1,0 +1,34 @@
+ally failed, then fixed); still finalizing native/NDK build and handoff. B1 still on aarch64 NDK/emulator feasibility after proving APK build.
+- 16:45Z - First-push milestone prepared: master clean, `agents/prompts/C1-core-audio-v3.md` committed (`07bd75c`), PM handoff `handoffs/PM-2026-10-26-1/HANDOFF.md` (`2472867`) records 74 JVM tests green and `app-debug.apk` 8.8 MB. Build used private `GRADLE_USER_HOME=/home/node/gh-pm --offline` because the shared toolchain cache is locked by the sibling PM. `.gitignore` now covers android-toolchain, `.kotlin`, model formats. No secrets found.
+- 16:47Z - Ran `setup-matt-pocock-skills` for the local-markdown tracker (`docs/agents/`). Charted the wayfinder map `.scratch/device-ready-apk/map.md` with 10 decision tickets: model facts, ASR backend bar, B1/E1 merge gates, T1 harness, D1 docs/matrix, signing, H1/H2 thresholds, device access, G1 checklist. Frontier: model facts, B1 gate, signing, device access.
+
+# Martins Whisper
+
+A local-only, hold-to-talk dictation app for **Android**, in Kotlin. Think "Wispr Flow clone" with no cloud:
+
+- Always-visible floating mic overlay. Hold it, speak, release.
+- Text is inserted into whatever text field currently has focus.
+- Whisper runs on-device (GPU where available), with an idle unload after 5 minutes.
+- Models are configurable (Whisper base by default).
+- Long holds are chunked with VAD and transcribed incrementally.
+
+Status: **active development / replan v2 (Android)**. See `KANBAN.md`, `SPEC.md`, `LOGBOOK.md`.
+
+# REFERENCES
+
+One line per source: URL/repo -> what we took -> where it landed. Maintained by research/integration agents.
+
+## Product / UX
+
+- https://docs.wisprflow.ai/articles/6409258247-starting-your-first-dictation - push-to-talk, release inserts; tap under ~0.5 s cancels -> SPEC 3.7 state machine.
+- https://docs.wisprflow.ai/articles/2772472373-what-is-flow - overlay/any-app insertion, cleanup expectations -> product framing.
+
+## Android prior art (R1)
+
+- https://github.com/futo-org/voice-input (d6e1eb2, FUTO Source First 1.0 non-commercial) -> whisper.cpp CPU Android app, mmap/`whisper_init_from_buffer` load, `audio_ctx` short-utterance trick, `com.konovalov.vad` VAD loop, model catalog/download; design reference only -> `research/ANDROID_PRIOR_ART.md` §3.2, §3.7.
+- https://github.com/ggml-org/whisper.cpp (231638a, MIT) -> upstream JNI example (`examples/whisper.android`), CMake/NDK baseline, `whisper_full_params`, `new_segment_callback`, `GGML_VULKAN` backend and auto-registration fallback -> §3.1, §3.6, §3.7.
+- https://github.com/ggml-org/whisper.cpp/issues/2370 -> Android Vulkan CMake recipe (minSdk 29, `Vulkan_GLSLC_EXECUTABLE`, NDK headers), Pixel 8 73 s -> 67 s data point -> §3.4, §3.6.
+- https://github.com/ggml-org/whisper.cpp/issues/2706 -> Adreno 640 lacks 16-bit storage, Vulkan init fails; CPU fallback requirement -> §3.4.
+- https://github.com/ggml-org/whisper.cpp/discussions/3943 -> Adreno 840 + Turnip 4.3x benchmark, stock driver cm2 pipeline failures, coopmat2 workaround -> §3.4.
+- https://github.com/ggerganov/whisper.cpp/pull/2914 -> ggml Vulkan cross-compilation host shader tool and Android coopmat defaults -> §3.6.
+- https://github.

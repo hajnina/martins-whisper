@@ -1,0 +1,101 @@
+ame in frames) sampleCount += frame.samples.size
+        val samples = FloatArray(sampleCount)
+        var offset = 0
+        for (frame in frames) {
+            val converted = AudioMath.shortToFloat(frame.samples)
+            converted.copyInto(samples, offset)
+            offset += converted.size
+        }
+        return AudioChunk(
+            index = nextIndex++,
+            samples = samples,
+            sampleRate = SAMPLE_RATE,
+            startMs = frames.first().startMs,
+            endMs = frames.last().endMs,
+            overlapMs = overlapMs,
+            reason = reason,
+        )
+    }
+
+    override fun flush(capturedAtMs: Long): AudioChunk? {
+        if (sessionCapped || !active || chunk.isEmpty()) {
+            clearActiveState()
+            return null
+        }
+        val result = buildChunk(chunk.toList(), ChunkReason.FLUSH, pendingOverlapMs)
+        clearActiveState()
+        return result
+    }
+
+    override fun reset() {
+        preRoll.clear()
+        clearActiveState()
+        nextIndex = 0
+        sessionStartMs = null
+        sessionCapped = false
+        totalSpeechMs = 0L
+    }
+
+    private fun appendPreRoll(frame: BufferedFrame) {
+        preRoll.addLast(frame)
+        while (preRoll.size > 1 && preRoll.last().endMs - preRoll.first().startMs > PRE_ROLL_MS) {
+            preRoll.removeFirst()
+        }
+    }
+
+    private fun retainPreRoll(frames: List<BufferedFrame>) {
+        preRoll.clear()
+        if (frames.isEmpty()) return
+        val cutoff = frames.last().endMs - PRE_ROLL_MS
+        for (frame in frames) {
+            if (frame.endMs <= cutoff) continue
+            if (frame.startMs >= cutoff) {
+                preRoll.addLast(frame)
+            } else {
+                val skip = ((cutoff - frame.startMs) * SAMPLE_RATE / 1000L).toInt()
+                    .coerceIn(0, frame.samples.size)
+                if (skip < frame.samples.size) {
+                    val trimmed = frame.samples.copyOfRange(skip, frame.samples.size)
+                    preRoll.addLast(
+                        BufferedFrame(
+                            trimmed,
+                            frame.startMs + skip * 1000L / SAMPLE_RATE,
+                            frame.endMs,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun clearActiveState() {
+        chunk.clear()
+        active = false
+        speechMsInChunk = 0L
+        silenceMs = 0L
+        speechFloorRms = MIN_AUDIBLE_RMS
+        pendingOverlapMs = 0
+    }
+
+    companion object {
+        const val SAMPLE_RATE = 16_000
+        const val FRAME_MS = 20
+        const val FRAME_SAMPLES = SAMPLE_RATE * FRAME_MS / 1000
+        const val PRE_ROLL_MS = 300L
+        const val MIN_SPEECH_MS = 250L
+        const val SILENCE_FINALIZE_MS = 500L
+        const val MAX_CHUNK_MS = 25_000L
+        const val OVERLAP_MS = 250L
+        const val MAX_CUT_SEARCH_MS = 2_000L
+        const val SESSION_CAP_MS = 10 * 60 * 1000L
+        private const val MIN_AUDIBLE_RMS = 0.0001
+    }
+}
+
+package com.martins.whisper.core.audio
+
+import kotlin.math.sqrt
+
+object AudioMath {
+    fun rms(samples: ShortArray): Double {
+        if (samples.isEmpty()) ret

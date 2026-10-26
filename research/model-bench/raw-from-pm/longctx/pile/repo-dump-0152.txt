@@ -1,0 +1,44 @@
+cation permission denied (33+) | clipboard + toast | no crash, notification skipped |
+
+## References used
+- https://developer.android.com/reference/android/accessibilityservice/AccessibilityService - service lifecycle/focus APIs and XML config fields.
+- https://developer.android.com/reference/android/view/accessibility/AccessibilityNodeInfo#ACTION_SET_TEXT - `ACTION_SET_TEXT` + selection bundle arguments.
+- https://developer.android.com/reference/android/view/accessibility/AccessibilityNodeInfo#ACTION_PASTE - paste fallback and focus requirement.
+- https://developer.android.com/develop/ui/views/notifications/notification-permission - Android 13 `POST_NOTIFICATIONS` runtime gate.
+- https://developer.android.com/reference/android/content/ClipboardManager - clipboard fallback semantics.
+- Local SPEC 3.6 / ADR-003 / ADR-006 for route order and non-focusable overlay constraint.
+
+## Commit
+`agent/i1-input` - see `git log -1` after this handoff commit.
+
+Implemented the Android accessibility insertion path: UTF-16/surrogate-safe TextInsertionPlanner, focus tracking, ACTION_SET_TEXT -> clipboard+ACTION_PASTE -> clipboard+toast/notification fallback, and a process-wide AccessibilityInserter bridge with StateFlow connected + suspend insert. Added accessibility service XML/config, minimal additive manifest entries, and pure policy tests. :core:test + :app:testDebugUnitTest pass (31 tests) and :app:assembleDebug succeeds. Robolectric cannot run in this aarch64 sandbox (bundled conscrypt has x86_64 native only); no device is available, so the on-device matrix is documented but unverified.
+
+# PM Handoff 2026-10-26-1 - first push milestone
+
+## Executive summary
+- `master` is clean and builds green: **74 JVM tests, 0 failures**, `:app:assembleDebug` produces `app-debug.apk` (8.8 MB).
+- Covers wave-1 work already merged: R1 research, C1 core audio, I1 accessibility input, U1 overlay/service/settings.
+- Added the missing tracked agent prompt and closed `.gitignore` gaps (toolchain, Kotlin caches, model formats).
+- No secrets found in tracked files.
+- Still open: B1 build harness and E1 ASR/model layer are on their agent branches, not merged; T1/D1/G1 not started. H1/H2 blocked on a physical device.
+- Environment note: the shared `/work/android-toolchain/gradle-home` is locked by another PM container, so the verification build used a private copy at `/home/node/gh-pm` with `--offline`. No lock was deleted.
+
+## What changed
+- `agents/prompts/C1-core-audio-v3.md` committed (was the only untracked file).
+- `.gitignore` now also ignores `.kotlin/`, `android-toolchain/`, `gradle-home/`, `e1-models/`, `*.ggml`, `*.safetensors`.
+- This handoff (`handoffs/PM-2026-10-26-1/`).
+
+## Exact commands and real output
+Environment:
+
+```sh
+cd /work/martins-whisper
+export JAVA_HOME=/work/android-toolchain/jdk
+export ANDROID_HOME=/work/android-toolchain/sdk
+export ANDROID_SDK_ROOT=/work/android-toolchain/sdk
+export GRADLE_USER_HOME=/home/node/gh-pm
+export PATH="$JAVA_HOME/bin:/work/android-toolchain/gradle/gradle-8.9/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/35.0.1:$PATH"
+printf 'sdk.dir=/work/android-toolchain/sdk\n' > local.properties
+```
+
+Build (forced test re-ru

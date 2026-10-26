@@ -1,0 +1,85 @@
+.content.SharedPreferences
+import com.martins.whisper.core.ComputeBackend
+
+class SettingsStore(context: Context) {
+
+    private val prefs: SharedPreferences =
+        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    var modelId: String
+        get() = prefs.getString(KEY_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
+        set(value) = prefs.edit().putString(KEY_MODEL_ID, value).apply()
+
+    var language: String
+        get() = prefs.getString(KEY_LANGUAGE, LANGUAGE_AUTO) ?: LANGUAGE_AUTO
+        set(value) = prefs.edit().putString(KEY_LANGUAGE, value).apply()
+
+    var backend: ComputeBackend
+        get() = parseBackend(prefs.getString(KEY_BACKEND, ComputeBackend.AUTO.name))
+        set(value) = prefs.edit().putString(KEY_BACKEND, value.name).apply()
+
+    var idleUnloadSeconds: Int
+        get() = prefs.getInt(KEY_IDLE_UNLOAD_SECONDS, DEFAULT_IDLE_UNLOAD_SECONDS)
+        set(value) = prefs.edit().putInt(KEY_IDLE_UNLOAD_SECONDS, value).apply()
+
+    var overlayEnabled: Boolean
+        get() = prefs.getBoolean(KEY_OVERLAY_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_OVERLAY_ENABLED, value).apply()
+
+    var bootStart: Boolean
+        get() = prefs.getBoolean(KEY_BOOT_START, true)
+        set(value) = prefs.edit().putBoolean(KEY_BOOT_START, value).apply()
+
+    var bubbleX: Int
+        get() = prefs.getInt(KEY_BUBBLE_X, UNSET_POSITION)
+        set(value) = prefs.edit().putInt(KEY_BUBBLE_X, value).apply()
+
+    var bubbleY: Int
+        get() = prefs.getInt(KEY_BUBBLE_Y, UNSET_POSITION)
+        set(value) = prefs.edit().putInt(KEY_BUBBLE_Y, value).apply()
+
+    fun hasSavedBubblePosition(): Boolean = bubbleX != UNSET_POSITION && bubbleY != UNSET_POSITION
+
+    fun saveBubblePosition(x: Int, y: Int) {
+        prefs.edit().putInt(KEY_BUBBLE_X, x).putInt(KEY_BUBBLE_Y, y).apply()
+    }
+
+    fun languageOrNull(): String? = language.takeUnless { it == LANGUAGE_AUTO }
+
+    fun effectiveLanguage(): String? = languageOrNull()
+
+    companion object {
+        const val PREFS_NAME = "martins_whisper_settings"
+        const val KEY_MODEL_ID = "model_id"
+        const val KEY_LANGUAGE = "language"
+        const val KEY_BACKEND = "backend"
+        const val KEY_IDLE_UNLOAD_SECONDS = "idle_unload_seconds"
+        const val KEY_OVERLAY_ENABLED = "overlay_enabled"
+        const val KEY_BOOT_START = "boot_start"
+        const val KEY_BUBBLE_X = "bubble_x"
+        const val KEY_BUBBLE_Y = "bubble_y"
+        const val DEFAULT_MODEL_ID = "base"
+        const val DEFAULT_IDLE_UNLOAD_SECONDS = 300
+        const val LANGUAGE_AUTO = "auto"
+        const val UNSET_POSITION = -1
+
+        fun parseBackend(raw: String?): ComputeBackend = runCatching {
+            ComputeBackend.valueOf(raw ?: ComputeBackend.AUTO.name)
+        }.getOrDefault(ComputeBackend.AUTO)
+    }
+}
+
+package com.martins.whisper.overlay
+
+object BubbleFormat {
+    fun elapsed(elapsedMs: Long): String {
+        val totalSeconds = (elapsedMs / 1000L).coerceAtLeast(0L)
+        val minutes = totalSeconds / 60
+        val seconds = totalSeconds % 60
+        return "%d:%02d".format(minutes, seconds)
+    }
+}
+
+package com.martins.whisper.overlay
+
+import android.

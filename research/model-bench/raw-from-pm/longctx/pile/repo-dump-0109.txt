@@ -1,0 +1,105 @@
+    assertEquals(12_345L, state.elapsedMs)
+        assertEquals(0.7f, state.level)
+        assertTrue(state.speechDetected)
+    }
+}
+
+package com.martins.whisper.service
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Test
+
+class ServiceContractTest {
+
+    @Test
+    fun `notification actions are distinct`() {
+        val actions = listOf(
+            DictationService.ACTION_START,
+            DictationService.ACTION_STOP,
+            DictationService.ACTION_SETTINGS,
+            DictationService.ACTION_TRANSCRIPT,
+        )
+        assertEquals(actions.size, actions.toSet().size)
+        assertNotEquals(DictationService.ACTION_START, DictationService.ACTION_STOP)
+    }
+
+    @Test
+    fun `action namespace is stable for I1 integration`() {
+        assertEquals("com.martins.whisper.action.TRANSCRIPT", DictationService.ACTION_TRANSCRIPT)
+        assertEquals("transcript", DictationService.EXTRA_TRANSCRIPT)
+        assertEquals("dictation", DictationService.CHANNEL_ID)
+    }
+}
+
+package com.martins.whisper.ui
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class PermissionGateTest {
+
+    @Test
+    fun `all granted means ready`() {
+        val snapshot = PermissionSnapshot(
+            microphone = true,
+            overlay = true,
+            accessibility = true,
+            notifications = true,
+        )
+        assertTrue(PermissionGate.readyForDictation(snapshot))
+        assertEquals("All required permissions granted", PermissionGate.summary(snapshot))
+        assertTrue(PermissionGate.missing(snapshot).isEmpty())
+    }
+
+    @Test
+    fun `missing mic and overlay block dictation but accessibility does not`() {
+        val snapshot = PermissionSnapshot(
+            microphone = false,
+            overlay = true,
+            accessibility = false,
+            notifications = false,
+        )
+        assertFalse(PermissionGate.canRecord(snapshot))
+        assertTrue(PermissionGate.canShowOverlay(snapshot))
+        assertFalse(PermissionGate.readyForDictation(snapshot))
+        assertEquals(
+            listOf(PermissionItem.MICROPHONE, PermissionItem.ACCESSIBILITY, PermissionItem.NOTIFICATIONS),
+            PermissionGate.missing(snapshot),
+        )
+    }
+
+    @Test
+    fun `summary lowercases and spaces items`() {
+        val snapshot = PermissionSnapshot(
+            microphone = false,
+            overlay = false,
+            accessibility = true,
+            notifications = true,
+        )
+        assertEquals("Missing: microphone, overlay", PermissionGate.summary(snapshot))
+    }
+}
+
+package com.martins.whisper.accessibility
+
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+class InsertionPolicyTest {
+
+    private val own = "com.martins.whisper"
+
+    private fun node(
+        packageName: String? = "com.example.chat",
+        editable: Boolean = true,
+        enabled: Boolean = true,
+        visible: Boolean = true,
+        password: Boolean = false,
+        readableText: Boolean = true,
+        selectionStart: Int = 3,
+        selectionEnd: Int = 3,
+    ) = NodeSnapshot(
+        packageName = package

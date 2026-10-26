@@ -1,0 +1,1 @@
+Built and tested the Android project offline. Gradle build succeeded; all 74 tests passed with 0 failures, and app-debug.apk (8,800,646 bytes) assembled successfully. Build config scripts (gradlew, Dockerfile.build, .github/workflows/build.yml, scripts/env.sh) were changed. No physical Android device available for on-device testing.

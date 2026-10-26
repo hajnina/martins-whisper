@@ -1,0 +1,83 @@
+bilityService`, `AccessibilityTextInserter`.
+  - `data/SettingsStore` (SharedPreferences/DataStore), `ModelRepository` (download/import/verify).
+  - `ui/` MainActivity, onboarding, settings, diagnostics.
+  - `BootReceiver`.
+- `native/` (or `app/src/main/cpp`): CMake + JNI wrapper + vendored whisper.cpp (submodule/pinned source).
+- `scripts/`: fetch models, adb push, build, doctor.
+- `docs/`: build, device, testing, permissions.
+
+### 3.2 Core contracts (do not break without PM approval)
+
+```kotlin
+// core
+data class Frame(val samples: ShortArray, val sampleRate: Int = 16000, val capturedAtMs: Long)
+data class AudioChunk(
+  val index: Int,
+  val samples: FloatArray,      // mono, [-1, 1], 16 kHz
+  val sampleRate: Int = 16000,
+  val startMs: Long,
+  val endMs: Long,
+  val overlapMs: Int = 0,
+  val reason: ChunkReason
+)
+enum class ChunkReason { SILENCE, MAX_LENGTH, FLUSH }
+
+interface Vad { fun isSpeech(frame: ShortArray): Boolean; fun reset() }
+class EnergyVad(...) : Vad
+class AudioChunker(vad: Vad, ...) {
+  fun push(frame: ShortArray, capturedAtMs: Long): List<AudioChunk>
+  fun flush(capturedAtMs: Long): AudioChunk?
+  fun reset()
+  val speechMs: Long
+}
+
+data class Transcript(val text: String, val language: String?, val avgLogProb: Float?, val noSpeechProb: Float?)
+interface SpeechEngine {
+  val backend: String            // "whisper.cpp/vulkan", "whisper.cpp/cpu", ...
+  suspend fun transcribe(chunk: AudioChunk, language: String?): Transcript
+  fun close()
+}
+class ModelManager<T: Any>(
+  loader: () -> T, closer: (T) -> Unit, clock: () -> Long, idleMs: Long = 300_000
+) {
+  fun getOrLoad(): T
+  fun markUsed()
+  fun maybeUnload()
+  fun unloadNow()
+  fun <R> withModel(block: (T) -> R): R
+  val state: ModelState
+}
+
+object ModelCatalog { val specs: List<ModelSpec>; fun byId(id: String): ModelSpec? }
+object TranscriptMerger { fun merge(parts: List<String>, overlapsMs: List<Int> = emptyList()): String }
+object TextInsertionPlanner {
+  data class Result(val text: String, val selectionStart: Int, val selectionEnd: Int)
+  fun insert(current: String?, selectionStart: Int, selectionEnd: Int, insert: String): Result
+}
+```
+
+App-only interfaces:
+
+```kotlin
+interface AudioSource { fun start(onFrame: (ShortArray, Long) -> Unit); fun stop(); fun release() }
+interface TextInserter { fun insert(text: String): InsertResult }
+sealed interface InsertResult { data object Inserted; data class Copied(val reason: String); data class Failed(val reason: String) }
+```
+
+### 3.3 Dictation state machine
+
+```
+UNLOADED/READY --press--> ARMING (start audio + lazy load model)
+ARMING --frames--> RECORDING (chunks queued to GPU worker)
+RECORDING --release--> FINALIZING (flush last chunk, wait for worker, merge)
+FINALIZING --text--> INSERTING --> IDLE
+any --cancel--> IDLE (discard, keep model state)
+any --error--> ERROR (surface, return to IDLE)
+release with hold < 400 ms and no speech --> IDLE (cancel)
+```
+
+Model load and transcription run off the main thread (coroutines `Dispatchers.Default`/single-thread ASR dispatcher). UI gets state via `StateFlow` + main-thread rendering.
+
+### 3.4 Chunking algorithm (v1)
+
+- AudioRecord: 16 kHz mono PCM16, 20 ms frames (320 samples). Pre-roll ring 

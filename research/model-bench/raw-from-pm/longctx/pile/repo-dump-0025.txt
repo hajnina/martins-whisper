@@ -1,0 +1,26 @@
+thub.com/trevornk/ramblr (10b3834, GPLv3) -> 5-min idle unload + trim policy, 15 s VAD segments, direct-write-before-paste `DictationTextWriter`, read-back/caret nudge, WebView/Compose quirks, password guard, candidate scan; design reference only -> §3.2, §3.7, §4.2, §5.2-§5.4, §7.
+- https://developer.android.com/about/versions/12/behavior-changes-all#untrusted-touch -> `TYPE_APPLICATION_OVERLAY` is untrusted for pass-through; accessibility/IME windows trusted; 0.8 opacity default -> §4.2.
+- https://developer.android.com/develop/background-work/services/fgs/service-types -> microphone FGS requires `RECORD_AUDIO`, cannot start from background/`BOOT_COMPLETED` without exemptions -> §4.2.
+- https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start -> SAW background-start exemption, Android 15 visible-overlay condition, while-in-use FGS restrictions -> §4.2.
+- https://developer.android.com/ndk/guides/neuralnetworks -> NNAPI deprecated in Android 15; docs expect CPU backend for most devices, recommend TF Lite GPU for performance -> §3.3.
+- https://support.google.com/googleplay/android-developer/answer/10964491 -> `isAccessibilityTool` declaration/prominent disclosure if Play distribution is added -> §5.1, §11.
+- https://huggingface.co/ggerganov/whisper.cpp (MIT weights) -> official GGML model files, sizes and SHA-256 (`ggml-base.bin` 147,951,465 B / `60ed5bc3...`) -> §3.5, Appendix A.
+
+## Technical notes
+
+- https://github.com/SYSTRAN/faster-whisper/discussions/431 - model unload with del + gc (desktop reference; native free needed on Android) -> ModelManager rationale.
+- https://github.com/k2-fsa/sherpa-onnx/blob/master/sherpa-onnx/csrc/session.cc - NNAPI provider availability + API 27 caveat -> Option B analysis.
+- https://github.com/ggml-org/whisper.cpp/blob/master/ggml/src/ggml-vulkan/ggml-vulkan.cpp - Vulkan backend registration catches init exceptions and unregisters; 16-bit storage check -> CPU fallback safety.
+- https://search.nixos.org/packages?channel=unstable&show=androidndk - nixpkgs `androidndk` 27.0.12077973 available on aarch64-linux (checked with `nix eval`) -> B1 build harness.
+- https://search.nixos.org/packages?channel=unstable&show=shaderc - nixpkgs `shaderc` 2026.1 provides host `glslc` for Vulkan shader generation on aarch64 -> B1/E1 build.
+
+# Martins Whisper - Product + Technical Spec (v2, Android)
+
+Updated: 2026-10-26T15:05Z
+Owner: PM (orchestrator)
+Target: Android phone/tablet, arm64-v8a, Android 10+ (minSdk 29), sideloaded APK.
+
+## 1. Product requirements
+
+R1. **Always-on overlay.** A small floating mic bubble stays above other apps while a foreground service runs. Tap-and-hold the bubble to record; release to transcribe. A small settings affordance is also available. The overlay must not steal input focus from the app the user is typing in.
+R2. **Insert into the focused text field.** On release, after transcription, insert text at the current cursor/selection in the previously focused editable field. Preferred mechanism: Android `AccessibilityService` (`ACTION_SET_TEXT`, fallback clipboard + `ACTION_PASTE`). If no editable field is focused, put the text on the clipboard and show a clear noti

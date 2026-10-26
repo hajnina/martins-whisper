@@ -1,0 +1,54 @@
+es:** documented loops/repetition for DeepSeek, GLM, MiMo, big-pickle, Nemotron Ultra and Beam (user report); GLM and MiMo have first-party or OpenCode-specific failure reports. Enable `doom_loop` deny and a stall timeout in the bench.
+- **Gaps:** no independent long-context recall per model on the free endpoint; no published numeric rate limits; unclear which checkpoint each `-free` id serves (esp. DeepSeek 0910 vs 1017, MiMo base vs MOPD, big-pickle identity). These are unknowns for ticket 02, not blockers to this answer.
+
+# 02 — How does each free model actually perform on four controlled tasks?
+
+Type: task
+Status: open
+Blocked by: none
+
+## Question
+
+Run the same four tasks with every model as a worker: `opencode run -m opencode/<model>`, timeout 15 min per run, own scratch copy/worktree, never the shared Gradle home. Cap retries at 2; log failures.
+
+Tasks:
+- **A. Code fix**: a failing Kotlin `core` unit test with a planted bug in a scratch copy; model must make it pass. Harness verifies with `:core:test` after the run.
+- **B. Research**: answer one factual question from three given web sources, with citations.
+- **C. Strict format**: produce a `HANDOFF.md` exactly matching the `AGENTS.md` template from a supplied log.
+- **D. Long context**: find one planted fact in a ~150k-token pile of repo files.
+
+Record per run: wall time, tokens if available, pass/fail, tool-call errors, loops/stalls (idle CPU, repeated identical calls), needless questions, honesty (fabricated results?), and the exact failure output. Store raw logs under `.scratch/model-bench/bench/` (ignored if large) and the results table in `.scratch/model-bench/research/02-bench-results.md`.
+
+No fabricated numbers. A failed or timed-out run is a valid result and must be logged.
+
+# 03 — What is the best mix of free models across PM and worker roles?
+
+Type: grilling
+Status: open
+Blocked by: 01, 02
+
+## Question
+
+Using only the measured results (ticket 02) and sourced evidence (ticket 01), produce `research/MODEL-BENCH.md` with:
+
+- A model × task table (A/B/C/D) with pass/fail, wall time, notable failures.
+- Strengths/weaknesses per model, separating measured from sourced/guess.
+- **Proposed mix**: first choice and fallback for PM/orchestrator, planner/griller, coder, researcher, long-context reader, reviewer.
+- Fallback order when a model stalls, and a concrete stall-detection rule (e.g. no new tool call for N seconds, repeated identical call, empty output).
+- Short lessons that should steer future session prompts.
+- A one-paragraph "confidence and limits" note: what this bench did not test.
+
+Keep the proposed mix under one page. No invented results.
+
+# Wayfinder map: free-model bench and mix
+
+Label: `wayfinder:map`
+
+## Destination
+
+`research/MODEL-BENCH.md` containing real measured behaviour of the nine free opencode models across four tasks, a strengths/weaknesses table, and a proposed PM/worker mix with fallback and stall-detection rules.
+
+## Notes
+
+- Low priority: this effort must never delay B1/E1 merge, the APK map, or device work. Run bench workers in the background.
+- Live model list and specs: `opencode models opencode` and `opencode models opencode --verbose` (accessed 2026

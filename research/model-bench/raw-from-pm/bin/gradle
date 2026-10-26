@@ -1,0 +1,3 @@
+#!/bin/sh
+echo "gradle is disabled during the bench; the harness verifies your work. Do not run builds." >&2
+exit 1

@@ -1,0 +1,36 @@
+tification, drag/persist, and the boot “tap to re-arm” fallback. Do not set `FLAG_NOT_TOUCHABLE` on the bubble.
+- **C1:** implement SPEC’s energy VAD/chunker/merger exactly; keep it swappable for Silero later.
+- **B1:** prove NDK/CMake/Gradle on aarch64 with nix `androidndk`, `shaderc`, and a Vulkan config shim; report exact commands and build logs.
+
+## References used
+
+Full list with links and landing sections is in `REFERENCES.md`. Primary sources:
+`futo-org/voice-input`, `ggml-org/whisper.cpp` and issues #2370/#2706/discussion #3943/PR #2914, `k2-fsa/sherpa-onnx`, `kafkasl/phone-whisper`, `nihal111/WhisperClientAndroid`, `zackify/flo`, `trevornk/ramblr`, Android developer docs (untrusted touch, FGS types/restrictions, NNAPI deprecation, Play accessibility policy), and Hugging Face `ggerganov/whisper.cpp`.
+
+## Commits
+
+- Report + references: `a44964f` — `docs(research): Android dictation prior art and ADR-004 recommendation`.
+- Handoff + summary: see the commit containing this file (`git log -1 --oneline`).
+
+R1 recommends ADR-004 Option A: vendor MIT whisper.cpp, build one arm64-v8a library with Vulkan + CPU, default auto with CPU fallback, and surface the backend in doctor/settings.
+Keep SPEC overlay shape: TYPE_APPLICATION_OVERLAY + microphone FGS + separate AccessibilityService; TYPE_ACCESSIBILITY_OVERLAY is only a no-SAW fallback.
+Insert direct-first (ACTION_SET_TEXT + read-back), then custom paste/ACTION_PASTE, then clipboard + notification; never write password fields; do not auto-clear clipboard.
+Implement 300 s idle unload with a single ASR dispatcher, leases, off-main free, and trim handling; accessibility-bound processes may never get onTrimMemory(BACKGROUND).
+Vulkan is buildable but device-dependent (Pixel 8 73->67 s/30 s; Adreno 640 16-bit storage failure; Adreno 840+Turnip 4.3x); do not block v1 on GPU.
+Sherpa-onnx AAR is the emergency fallback, not primary: NNAPI is deprecated in Android 15 and there is no Vulkan provider in the AAR.
+PM decisions needed: accept Option A; GGML-only vs GGML+ONNX for v1; reboot re-arm behavior; target device/SoC for GPU validation.
+No APK/device tests were possible here; report is in research/ANDROID_PRIOR_ART.md, report commit a44964f.
+
+# Handoffs
+
+Each background work package writes `handoffs/<ID>-<slug>/HANDOFF.md` and `SUMMARY.txt`.
+
+Required sections: Executive summary | Delivered | Tests/evidence | Interfaces | Contract changes | Limitations/blockers | Next steps | References | Commits.
+
+The PM reads the executive summary and merges accepted branches into `main`.
+
+# U1-overlay handoff
+
+## Executive summary
+
+U1 delivers the Android shell for Martins Whisper: a microphone-type foreground service with a `StateFlow` state machine, a non-focusable draggable overlay bubble (idle/loading/recording/processing/success/error, timer, RMS bars, haptics, gear/stop), and a programmatic onboarding/settings screen for mic, overlay, accessibility, notifications, model, language, GPU/CPU, 300 s idle unload and boot restore. A deterministic fake engine exercises the whole press -> record -> finalize -> clipboard path; E1 and I1 plug in through `EngineFactory` and `TextInserter`/`ACTION_TRANSCRIPT`. The debug 

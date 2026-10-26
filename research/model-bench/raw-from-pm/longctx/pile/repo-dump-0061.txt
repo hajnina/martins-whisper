@@ -1,0 +1,78 @@
+ply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(28), dp(22), dp(40))
+        }
+        scroll.addView(root, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+
+        root.addView(title(getString(R.string.onboarding_title)))
+        root.addView(body(getString(R.string.privacy_note)).apply {
+            setPadding(0, dp(10), 0, dp(14))
+            setTextColor(Color.rgb(55, 65, 70))
+        })
+
+        statusView = body("").apply {
+            setTextColor(Color.rgb(19, 93, 102))
+            setTypeface(typeface, Typeface.BOLD)
+            setPadding(0, 0, 0, dp(16))
+        }
+        root.addView(statusView)
+        serviceView = body("").apply {
+            setTextColor(Color.rgb(80, 80, 80))
+            setPadding(0, 0, 0, dp(18))
+        }
+        root.addView(serviceView)
+
+        root.addView(section(getString(R.string.section_permissions)))
+        val micRow = permissionRow(getString(R.string.permission_mic)) { requestMic() }
+        micStatus = micRow.status
+        root.addView(micRow.row)
+        val overlayRow = permissionRow(getString(R.string.permission_overlay)) { openOverlaySettings() }
+        overlayStatus = overlayRow.status
+        root.addView(overlayRow.row)
+        val accessibilityRow = permissionRow(getString(R.string.permission_accessibility)) {
+            openAccessibilitySettings()
+        }
+        accessibilityStatus = accessibilityRow.status
+        root.addView(accessibilityRow.row)
+        val notificationsRow = permissionRow(getString(R.string.permission_notifications)) {
+            requestNotifications()
+        }
+        notificationsStatus = notificationsRow.status
+        root.addView(notificationsRow.row)
+
+        val bootRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(10), 0, dp(4))
+        }
+        val bootLabel = body(getString(R.string.permission_boot)).apply {
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        bootRow.addView(bootLabel)
+        bootSwitch = Switch(this).apply {
+            isChecked = settings.bootStart
+            setOnCheckedChangeListener { _: CompoundButton, checked: Boolean ->
+                settings.bootStart = checked
+            }
+        }
+        bootRow.addView(bootSwitch)
+        root.addView(bootRow)
+        root.addView(caption(getString(R.string.boot_start_summary)).apply {
+            setPadding(0, 0, 0, dp(8))
+        })
+
+        root.addView(section(getString(R.string.section_overlay)))
+        overlayButton = Button(this).apply {
+            setOnClickListener { toggleOverlay() }
+        }
+        root.addView(overlayButton, matchWidth())
+
+        root.addView(section(getString(R.string.section_model)))
+        root.addView(label(getString(R.string.model_label)))
+        val modelSpinner = Spinner(this)
+        val modelAdapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_dropdown_item,
+            ModelOptions.specs.map { it.displayName },
+        )
+        modelSpinner.adapter = modelAdapter

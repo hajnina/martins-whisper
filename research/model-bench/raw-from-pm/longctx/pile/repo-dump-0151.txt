@@ -1,0 +1,37 @@
+ Some WebViews reject both `ACTION_SET_TEXT` and `ACTION_PASTE` and end at clipboard fallback.
+- `ACTION_PASTE` needs the target field to retain input focus; the overlay must stay `FLAG_NOT_FOCUSABLE` (U1).
+- Notification fallback is skipped when `POST_NOTIFICATIONS` is denied (Android 13+); the toast and clipboard still work.
+- Reading `node.text` for non-password fields is required for `SET_TEXT`; spans are flattened to plain text.
+
+## On-device test matrix (unverified in sandbox)
+| Target | Expected route | Checks |
+|---|---|---|
+| AOSP Contacts/Messages `EditText` | SET_TEXT | text at cursor, replace selection, emoji, undo |
+| WhatsApp / Signal / Telegram composer | SET_TEXT, else PASTE | cursor mid-text, selection replace, multiline |
+| Chrome/WebView contenteditable | PASTE (no readable text) | paste at caret, no duplicate, no crash |
+| Compose `BasicTextField` apps | PASTE or clipboard | focus retained while overlay used |
+| Search fields / disabled fields | clipboard fallback | toast + notification; no focus theft |
+| Password fields | clipboard fallback | no text leak into field |
+| Split-screen / freeform multi-window | SET_TEXT in active window | active-window pick, stale-node retry |
+| Own app text field | reject/ignore | nothing inserted; no self-paste loop |
+| Accessibility turned off / revoked | `Failed(not connected)` | U1 shows clipboard fallback and onboarding |
+| Emoji/surrogate text | SET_TEXT | full emoji preserved, caret after emoji |
+| Notification permission denied (33+) | clipboard + toast | no crash, notification skipped |
+
+## References used
+- https://developer.android.com/reference/android/accessibilityservice/AccessibilityService - service lifecycle/focus APIs and XML config fields.
+- https://developer.android.com/reference/android/view/accessibility/AccessibilityNodeInfo#ACTION_SET_TEXT - `ACTION_SET_TEXT` + selection bundle arguments.
+- https://developer.android.com/reference/android/view/accessibility/AccessibilityNodeInfo#ACTION_PASTE - paste fallback and focus requirement.
+- https://developer.android.com/develop/ui/views/notifications/notification-permission - Android 13 `POST_NOTIFICATIONS` runtime gate.
+- https://developer.android.com/reference/android/content/ClipboardManager - clipboard fallback semantics.
+- Local SPEC 3.6 / ADR-003 / ADR-006 for route order and non-focusable overlay constraint.
+
+## Commit
+`agent/i1-input` - see `git log -1` after this handoff commit.
+
+Implemented the Android accessibility insertion path: UTF-16/surrogate-safe TextInsertionPlanner, focus tracking, ACTION_SET_TEXT -> clipboard+ACTION_PASTE -> clipboard+toast/notification fallback, and a process-wide AccessibilityInserter bridge with StateFlow connected + suspend insert. Added accessibility service XML/config, minimal additive manifest entries, and pure policy tests. :core:test + :app:testDebugUnitTest pass (31 tests) and :app:assembleDebug succeeds. Robolectric cannot run in this aarch64 sandbox (bundled conscrypt has x86_64 native only); no device is available, so the on-device matrix is documented but unverified.
+
+# PM Handoff 2026-10-26-1 - first push milestone
+
+## Executive summary
+- `master` is clean and builds green:

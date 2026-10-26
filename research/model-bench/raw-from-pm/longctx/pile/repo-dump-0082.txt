@@ -1,0 +1,83 @@
+(dp(40f))
+        val clipped = TextUtils.ellipsize(text, labelPaint, min(available, maxWidth), TextUtils.TruncateAt.END)
+        canvas.drawText(clipped, 0, clipped.length, x, baseline, labelPaint)
+    }
+
+    private fun drawLevelBars(canvas: Canvas, startX: Float, centerY: Float, level: Float) {
+        val barWidth = dp(4f)
+        val gap = dp(3f)
+        val maxHeight = dp(24f)
+        val normalized = level.coerceIn(0f, 1f)
+        fillPaint.color = Color.WHITE
+        for (index in 0 until 5) {
+            val factor = when (index) {
+                0 -> 0.35f
+                1 -> 0.6f
+                2 -> 1f
+                3 -> 0.7f
+                4 -> 0.4f
+                else -> 0.5f
+            }
+            val barHeight = (maxHeight * (0.15f + normalized * factor)).coerceAtLeast(dp(3f))
+            val left = startX + index * (barWidth + gap)
+            val rect = RectF(left, centerY - barHeight / 2f, left + barWidth, centerY + barHeight / 2f)
+            fillPaint.alpha = 200
+            canvas.drawRoundRect(rect, barWidth / 2f, barWidth / 2f, fillPaint)
+        }
+        fillPaint.alpha = 255
+    }
+
+    private fun drawMic(canvas: Canvas, center: Float, radius: Float) {
+        iconPaint.color = Color.WHITE
+        iconPaint.strokeWidth = dp(2.2f)
+        iconPaint.strokeCap = Paint.Cap.ROUND
+        val bodyWidth = radius * 0.44f
+        val bodyHeight = radius * 0.58f
+        val bodyTop = center - radius * 0.42f
+        val bodyRect = RectF(
+            center - bodyWidth / 2f,
+            bodyTop,
+            center + bodyWidth / 2f,
+            bodyTop + bodyHeight,
+        )
+        canvas.drawRoundRect(bodyRect, bodyWidth / 2f, bodyWidth / 2f, iconPaint)
+        val arcRect = RectF(
+            center - radius * 0.45f,
+            center - radius * 0.18f,
+            center + radius * 0.45f,
+            center + radius * 0.5f,
+        )
+        canvas.drawArc(arcRect, 0f, 180f, false, iconPaint)
+        canvas.drawLine(center, center + radius * 0.45f, center, center + radius * 0.66f, iconPaint)
+        canvas.drawLine(
+            center - radius * 0.24f,
+            center + radius * 0.66f,
+            center + radius * 0.24f,
+            center + radius * 0.66f,
+            iconPaint,
+        )
+    }
+
+    private fun drawSpinner(canvas: Canvas, rect: RectF) {
+        iconPaint.color = Color.WHITE
+        iconPaint.strokeWidth = dp(2.4f)
+        iconPaint.strokeCap = Paint.Cap.ROUND
+        val inset = rect.width() * 0.18f
+        val arcRect = RectF(rect.left + inset, rect.top + inset, rect.right - inset, rect.bottom - inset)
+        canvas.drawArc(arcRect, spinnerAngle, 260f, false, iconPaint)
+    }
+
+    private fun drawCheck(canvas: Canvas, center: Float) {
+        iconPaint.color = Color.WHITE
+        iconPaint.strokeWidth = dp(2.6f)
+        iconPaint.strokeCap = Paint.Cap.ROUND
+        iconPaint.strokeJoin = Paint.Join.ROUND
+        val path = Path().apply {
+            moveTo(center - dp(9f), center)
+            lineTo(center - dp(2.5f), center + dp(7f))
+            lineTo(center + dp(10f), center - dp(7f))
+        }
+        canvas.drawPath(path, iconPaint)
+    }
+
+    private fun drawCross(canvas: Canvas, cente

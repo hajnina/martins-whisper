@@ -1,0 +1,30 @@
+ld`, `local.properties`, `models/`, `*.gguf`, `*.apk`, `.gradle`, plus the newly added toolchain and model patterns. No untracked files remain; `git status --short` is empty after the handoff commit.
+
+## Commits
+- `c781ce3` - docs(pm): integrate C1/I1/U1, record 74-test green build (handoff baseline)
+- `07bd75c` - chore(agents): track C1 core-audio v3 prompt
+- Handoff commit: the commit that adds this file (see `git log --oneline -1 handoffs/PM-2026-10-26-1/HANDOFF.md`).
+
+## Blockers / next
+- B1 (`agent/b1-build`): toolchain ready, `:core:test` green, app build proven; worktree still has uncommitted `gradlew`, `Dockerfile.build`, `.github/`, `docs/`, `scripts/`. Needs commit + handoff on its branch, then PM merge.
+- E1 (`agent/e1-asr`): ASR model layer + tests exist uncommitted on the branch; native/NDK build unverified. Needs commit + handoff, then PM merge.
+- T1 (test/emulator harness), D1 (operator docs), G1 (integration) remain queued.
+- H1/H2 (device bring-up, hardware acceptance) blocked: no physical Android device; no `/dev/kvm`, no Android GPU in sandbox.
+
+master is clean and green: 74 JVM tests, 0 failures, app-debug.apk builds (8.8 MB). Includes R1/C1/I1/U1; agent prompt committed; .gitignore gaps closed; no secrets. B1/E1 still unmerged on agent branches; T1/D1/G1 queued; H1/H2 blocked on device.
+
+# R1 Research Handoff — Android Prior Art
+
+## Executive summary
+
+R1 recommends **Option A for ADR-004**: vendor MIT-licensed whisper.cpp, build one arm64-v8a library with both Vulkan and CPU, default to `auto`, fall back to CPU, and show the active backend. The prebuilt sherpa-onnx AAR is a viable emergency fallback, but its GPU path is NNAPI, which Android deprecated in Android 15. Keep SPEC’s overlay shape (`TYPE_APPLICATION_OVERLAY` + microphone FGS + separate AccessibilityService). Insert with `ACTION_SET_TEXT` first, verify by read-back, then custom paste/`ACTION_PASTE`, then clipboard + notification; never write to password fields. Implement the 300 s idle unload with a single ASR dispatcher and leases, because an accessibility-bound process may never receive `onTrimMemory(BACKGROUND)`. Vulkan is buildable but device-dependent (Pixel 8: 73 s -> 67 s for 30 s audio; Adreno 640 fails 16-bit storage; Adreno 840 + Turnip showed 4.3x), so do not block v1 on GPU. PM must decide whether v1 supports GGML-only custom import (recommended) or also ONNX, which implies a second engine. No APK/device validation was possible in this sandbox.
+
+## What was built / changed
+
+Research only; no production code and no changes to `core/` contracts.
+
+- `research/ANDROID_PRIOR_ART.md` (456 lines): engine comparison, native Vulkan build feasibility, overlay/FGS rules, accessibility focus/insertion design, VAD/chunking, ModelManager invariants, failure/privacy matrix, testing plan, code-reuse/license map, model sizes/SHA-256, source line map.
+- `REFERENCES.md`: replaced the R1 TBD section with 18 concrete sources (repos, issues, Android docs, HF weights), each with what was taken and where it landed; refreshed technical notes.
+- `handoffs/R1-research/HANDOFF.md` (this file) and `SUMMARY.txt`.
+
+Repos cloned read-only under `/work/references/repos-android/` (no

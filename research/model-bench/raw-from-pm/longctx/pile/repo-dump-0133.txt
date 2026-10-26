@@ -1,0 +1,109 @@
+ength)
+            assertEquals(result.selectionStart, result.selectionEnd)
+        }
+    }
+}
+
+package com.martins.whisper.core
+
+import com.martins.whisper.core.text.TextNormalizer
+import kotlin.test.Test
+import kotlin.test.assertEquals
+
+class TextNormalizerTest {
+    @Test
+    fun `normalizes whitespace and trims`() {
+        assertEquals("Hello world", TextNormalizer.normalize("  Hello   world  "))
+        assertEquals("a b c", TextNormalizer.normalize("a\tb\nc"))
+    }
+
+    @Test
+    fun `removes space before punctuation`() {
+        assertEquals("Hello, world.", TextNormalizer.normalize("Hello ,  world ."))
+    }
+
+    @Test
+    fun `blank text becomes empty`() {
+        assertEquals("", TextNormalizer.normalize(""))
+        assertEquals("", TextNormalizer.normalize("   \n\t "))
+    }
+
+    @Test
+    fun `drops known hallucinations`() {
+        assertEquals("", TextNormalizer.normalize("Thank you."))
+        assertEquals("", TextNormalizer.normalize(" thank you "))
+        assertEquals("", TextNormalizer.normalize("[BLANK_AUDIO]"))
+        assertEquals("", TextNormalizer.normalize("(silence)"))
+        assertEquals("", TextNormalizer.normalize("Thanks for watching!"))
+    }
+
+    @Test
+    fun `keeps normal speech`() {
+        assertEquals("Please transcribe this.", TextNormalizer.normalize(" Please transcribe this. "))
+    }
+}
+
+package com.martins.whisper.core
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+
+class TranscriptMergerTest {
+    @Test
+    fun `removes duplicated boundary words`() {
+        assertEquals(
+            "Hello world again",
+            TranscriptMerger.merge(listOf("Hello world", "world again")),
+        )
+    }
+
+    @Test
+    fun `dedupe is case insensitive and keeps richer punctuation`() {
+        assertEquals(
+            "Hello, World! Again",
+            TranscriptMerger.merge(listOf("Hello, World!", "world! Again")),
+        )
+        assertEquals(
+            "hello, world",
+            TranscriptMerger.merge(listOf("hello", "hello, world")),
+        )
+    }
+
+    @Test
+    fun `dedupe is limited to eight words`() {
+        val first = "a b c d e f g h"
+        val second = "a b c d e f g h i"
+        assertEquals(
+            "a b c d e f g h i",
+            TranscriptMerger.merge(listOf(first, second)),
+        )
+    }
+
+    @Test
+    fun `zero overlap does not remove words`() {
+        assertEquals(
+            "hello world world again",
+            TranscriptMerger.merge(listOf("hello world", "world again"), listOf(0)),
+        )
+    }
+
+    @Test
+    fun `positive overlap removes words`() {
+        assertEquals(
+            "hello world again",
+            TranscriptMerger.merge(listOf("hello world", "world again"), listOf(250)),
+        )
+    }
+
+    @Test
+    fun `empty and blank parts are ignored`() {
+        assertEquals("", TranscriptMerger.merge(listOf("", "   ", "\n")))
+        assertEquals("hello world", TranscriptMerger.merge(listOf("", " hello ", "world")))
+    }
+
+    @Test
+    fun `does not invent text`() {
+        assertEquals("one two three", TranscriptMerger.merge(listOf("one two three")))
+        assertEquals("one two three", TranscriptMerger.merge(listOf("one two", "three")))
+    }
+}

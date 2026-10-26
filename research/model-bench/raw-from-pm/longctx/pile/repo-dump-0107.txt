@@ -1,0 +1,103 @@
+UTO, SettingsStore.parseBackend("nonsense"))
+        assertEquals(ComputeBackend.GPU, SettingsStore.parseBackend("GPU"))
+        assertEquals(ComputeBackend.CPU, SettingsStore.parseBackend("CPU"))
+    }
+
+    @Test
+    fun `auto language has no engine override`() {
+        assertEquals("auto", SettingsStore.LANGUAGE_AUTO)
+        assertNull(ModelOptions.byId("missing"))
+    }
+}
+
+package com.martins.whisper.overlay
+
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+class BubbleFormatTest {
+
+    @Test
+    fun `elapsed formatter pads seconds`() {
+        assertEquals("0:00", BubbleFormat.elapsed(0))
+        assertEquals("0:00", BubbleFormat.elapsed(-500))
+        assertEquals("0:04", BubbleFormat.elapsed(4_900))
+        assertEquals("1:05", BubbleFormat.elapsed(65_000))
+        assertEquals("10:00", BubbleFormat.elapsed(600_000))
+    }
+}
+
+package com.martins.whisper.overlay
+
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+class OverlayGeometryTest {
+
+    @Test
+    fun `clamps into screen with margin`() {
+        assertEquals(12 to 12, OverlayGeometry.clamp(-50, -50, 56, 56, 1080, 1920, 12))
+        assertEquals(1012 to 1852, OverlayGeometry.clamp(5000, 5000, 56, 56, 1080, 1920, 12))
+        assertEquals(500 to 700, OverlayGeometry.clamp(500, 700, 56, 56, 1080, 1920, 12))
+    }
+
+    @Test
+    fun `default is bottom end above inset`() {
+        assertEquals(
+            1080 - 56 - 12 to 1920 - 56 - 12 - 72,
+            OverlayGeometry.defaultBottomEnd(56, 56, 1080, 1920, 12, 72),
+        )
+    }
+
+    @Test
+    fun `expanded sizes are selected`() {
+        assertEquals(240, OverlayGeometry.expandedOrCollapsedWidth(true, 56, 240))
+        assertEquals(56, OverlayGeometry.expandedOrCollapsedWidth(false, 56, 240))
+    }
+}
+
+package com.martins.whisper.service
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class DictationStateTest {
+
+    @Test
+    fun `idle is collapsed and not busy`() {
+        assertFalse(DictationState.Idle.overlayExpanded)
+        assertFalse(DictationState.Idle.isBusy)
+    }
+
+    @Test
+    fun `active states expand the overlay`() {
+        assertTrue(DictationState.Loading().overlayExpanded)
+        assertTrue(DictationState.Recording(1000, 0.2f, true).overlayExpanded)
+        assertTrue(DictationState.Processing().overlayExpanded)
+        assertTrue(DictationState.Success("ok").overlayExpanded)
+        assertTrue(DictationState.Error("bad").overlayExpanded)
+    }
+
+    @Test
+    fun `transient result states are not busy`() {
+        assertFalse(DictationState.Success("ok").isBusy)
+        assertFalse(DictationState.Error("bad").isBusy)
+        assertTrue(DictationState.Loading().isBusy)
+        assertTrue(DictationState.Processing().isBusy)
+    }
+
+    @Test
+    fun `recording exposes timer and level`() {
+        val state = DictationState.Recording(elapsedMs = 12_345, level = 0.7f, speechDetected = true)
+        assertEquals(12_345L, state.elapsedMs)
+        assertEquals(0.7f, state.level)
+        assertTrue(state.speechDetected)
+    }
+}
+
+package com.martins.whisper.service
+
+import org.junit.Assert.assertEquals
+import org.juni

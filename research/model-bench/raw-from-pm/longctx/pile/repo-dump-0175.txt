@@ -1,0 +1,54 @@
+ access?
+
+Type: task
+Status: open
+Blocked by: none
+
+## Question
+
+H1/H2 cannot start without hardware. Resolve the prerequisite:
+
+- Which device can Martin provide (model, Android version, RAM, GPU vendor), and is it available now or later?
+- Can it be reached over ADB from a container/host (USB passthrough, `adb connect` over Wi-Fi), or must Martin run commands and paste output?
+- If no device: is there an x86_64 KVM runner available instead, and does that satisfy H1/H2 or only T1?
+
+This is HITL: ask Martin in `owner/ASKS.md` if the answer is not already known. Record the device profile and access method; the support matrix and H2 thresholds depend on it.
+
+# 10 — What is the G1 integration acceptance checklist?
+
+Type: grilling
+Status: open
+Blocked by: 03, 04, 05, 06, 07
+
+## Question
+
+Turn integration into a repeatable gate for the PM:
+
+- Merge order for B1, E1, T1, D1 onto master; how to resolve contract conflicts without losing C1/I1/U1 work; who reviews (`code-review`) and what blocks a merge.
+- Required commands and evidence: `:core:test`, `:app:testDebugUnitTest`, `:app:assembleDebug`, test counts, APK size/sha256, no-secrets scan, clean `git status`.
+- KANBAN/LOGBOOK/DECISIONS/STATUS updates required at merge, and the exact handoff shape for the owner.
+- What to do if E1 native/Vulkan is not buildable: ship the seam + CPU path, or hold the APK? Tie to ticket 02.
+- Definition of done for G1: artifact path, docs, known issues, and the H1/H2 checklist ready to run on device.
+
+Output: ordered checklist with commands, evidence requirements, and abort conditions.
+
+# Wayfinder map: device-ready APK
+
+Label: `wayfinder:map`
+
+## Destination
+
+A signed-off APK that dictates into any app on a real Android phone: H1 device bring-up passes and H2 latency/memory/unload acceptance is measured, local-only, sideloaded.
+
+## Notes
+
+- Domain: Android/Kotlin, arm64-v8a, minSdk 29, sideloaded. Read `SPEC.md`, `DECISIONS.md`, `KANBAN.md` before any ticket.
+- Skills every session should consult: `grilling` + `domain-modeling` (default), `tdd`/`implement`/`diagnosing-bugs` when a task needs code, `handoff` for workers, `code-review` before merge.
+- Standing preferences: local-only inference, no telemetry, no secrets. The owner holds GitHub credentials and pushes; PM never looks for them.
+- Environment: `/work/android-toolchain/gradle-home` is shared with a sibling PM container. Never delete its lock or kill its daemons; use a private copy (`/home/node/gh-pm`) and `--offline`.
+- B1/E1 worktrees are owned by the sibling PM right now. Do not edit `/work/martins-whisper-worktrees/{b1-build,e1-asr}` from this effort.
+- Tracker: local markdown, per `docs/agents/issue-tracker.md`. Tags `worktrees/` and build outputs are ignored.
+
+## Decisions so far
+
+- [01 — Which Whisper GGML models can v1 ship, from where, at what size?](issues/01-model-facts.md): v1 default `base` f16 (141 MiB, ~388 MB RAM), `tiny` first-class, `small` optional on 8 GB; `medium`/`large-v3-turbo` catalog-only and RAM-gated. Direct HF download from the pinned `ggerganov/whisper.cpp` revision, SHA-256 verified, MIT notices. Custom GGML (magic `0x67676d6c`), not GGUF; E1 must pin the whisper.cpp revision.

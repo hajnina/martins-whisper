@@ -1,0 +1,51 @@
+n on device.
+
+Output: ordered checklist with commands, evidence requirements, and abort conditions.
+
+# Wayfinder map: device-ready APK
+
+Label: `wayfinder:map`
+
+## Destination
+
+A signed-off APK that dictates into any app on a real Android phone: H1 device bring-up passes and H2 latency/memory/unload acceptance is measured, local-only, sideloaded.
+
+## Notes
+
+- Domain: Android/Kotlin, arm64-v8a, minSdk 29, sideloaded. Read `SPEC.md`, `DECISIONS.md`, `KANBAN.md` before any ticket.
+- Skills every session should consult: `grilling` + `domain-modeling` (default), `tdd`/`implement`/`diagnosing-bugs` when a task needs code, `handoff` for workers, `code-review` before merge.
+- Standing preferences: local-only inference, no telemetry, no secrets. The owner holds GitHub credentials and pushes; PM never looks for them.
+- Environment: `/work/android-toolchain/gradle-home` is shared with a sibling PM container. Never delete its lock or kill its daemons; use a private copy (`/home/node/gh-pm`) and `--offline`.
+- B1/E1 worktrees are owned by the sibling PM right now. Do not edit `/work/martins-whisper-worktrees/{b1-build,e1-asr}` from this effort.
+- Tracker: local markdown, per `docs/agents/issue-tracker.md`. Tags `worktrees/` and build outputs are ignored.
+
+## Decisions so far
+
+- [01 — Which Whisper GGML models can v1 ship, from where, at what size?](issues/01-model-facts.md): v1 default `base` f16 (141 MiB, ~388 MB RAM), `tiny` first-class, `small` optional on 8 GB; `medium`/`large-v3-turbo` catalog-only and RAM-gated. Direct HF download from the pinned `ggerganov/whisper.cpp` revision, SHA-256 verified, MIT notices. Custom GGML (magic `0x67676d6c`), not GGUF; E1 must pin the whisper.cpp revision. Details: `research/01-model-facts.md`.
+
+## Not yet specified
+
+- OEM-specific overlay/accessibility/mic restrictions once the real device is known (ticket 08 sets the matrix; quirks appear only on hardware).
+- Model-download UX details (resume, storage pressure, which larger models to offer) once ticket 01 facts land.
+- Post-sign-off release hardening: R8/minify, upgrade path, long-term diagnostics, only if Martin wants ongoing distribution beyond sideload.
+
+## Out of scope
+
+- Play Store packaging and policy (v1 is sideload only).
+- Cloud inference, telemetry, accounts, sync.
+- History, custom vocabulary, on-device LLM cleanup, multi-language UI (v1 backlog, not this destination).
+
+# 01 — What do reviews, benchmarks and issue reports say about each free model?
+
+Type: research
+Status: resolved
+Blocked by: none
+
+## Question
+
+For each of the nine models (deepseek-v4.1-flash-free, glm-5.3-flash-free, mimo-v2.6-flash-free, big-pickle, flint-40b-free, nemotron-3-ultra-free, nemotron-3.5-lightning-free, nemotron-3.5-super-vl-free, beam-free), collect evidence on:
+
+- Model identity/family, release date, context/output limits, image support (from `opencode models opencode --verbose`; record access date).
+- Published benchmark or review evidence: coding, reasoning, tool-call reliability, long-context recall, speed.
+- Known weaknesses: loops, repeated tool calls, empty/idle turns, refusal/over-asking, context degradation.
+- opencode-specific reports: issues, docs, release not

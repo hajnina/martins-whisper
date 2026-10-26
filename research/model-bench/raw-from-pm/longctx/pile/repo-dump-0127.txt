@@ -1,0 +1,104 @@
+<AudioChunk>()
+        var time = feed(chunker, 26_000, 2_000, 0, chunks)
+        feed(chunker, 600, 0, time, chunks)
+
+        assertTrue(chunks.size >= 2)
+        val first = chunks.first { it.reason == ChunkReason.MAX_LENGTH }
+        val next = chunks[chunks.indexOf(first) + 1]
+        assertEquals(25_000, first.endMs - first.startMs)
+        assertEquals(0, first.overlapMs)
+        assertEquals(250, next.overlapMs)
+        assertEquals(first.endMs - 250, next.startMs)
+    }
+
+    @Test
+    fun `flush emits pending speech`() {
+        val chunker = AudioChunker()
+        val chunks = mutableListOf<AudioChunk>()
+        val time = feed(chunker, 300, 2_000, 0, chunks)
+        val flushed = chunker.flush(time)
+
+        assertNotNull(flushed)
+        assertEquals(ChunkReason.FLUSH, flushed.reason)
+        assertTrue(flushed.samples.isNotEmpty())
+        assertEquals(null, chunker.flush(time + 20))
+    }
+
+    @Test
+    fun `session cap stops chunk production`() {
+        val chunker = AudioChunker()
+        val chunks = mutableListOf<AudioChunk>()
+        feed(chunker, 10 * 60 * 1000 + 2_000, 2_000, 0, chunks)
+
+        assertTrue(chunks.isNotEmpty())
+        assertTrue(chunks.all { it.endMs <= 10 * 60 * 1000 })
+        assertEquals(ChunkReason.FLUSH, chunks.last().reason)
+        assertTrue(chunker.push(frame(2_000), 10 * 60 * 1000 + 3_000).isEmpty())
+    }
+
+    @Test
+    fun `reset starts a fresh session`() {
+        val chunker = AudioChunker()
+        val chunks = mutableListOf<AudioChunk>()
+        val time = feed(chunker, 300, 2_000, 0, chunks)
+        chunker.flush(time)
+        chunker.reset()
+
+        val afterReset = feed(chunker, 300, 2_000, 0)
+        val flushed = chunker.flush(afterReset)
+        assertEquals(0, flushed?.index)
+        assertEquals(300, chunker.speechMs)
+    }
+}
+
+package com.martins.whisper.core
+
+import com.martins.whisper.core.audio.EnergyVad
+import kotlin.test.Test
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+
+class EnergyVadTest {
+    private val silence = ShortArray(320)
+    private val speech = ShortArray(320) { 2_000 }
+
+    @Test
+    fun `silence is not speech`() {
+        val vad = EnergyVad()
+        assertFalse(vad.isSpeech(silence))
+        assertFalse(vad.isSpeech(silence))
+    }
+
+    @Test
+    fun `tone is detected immediately`() {
+        val vad = EnergyVad()
+        assertTrue(vad.isSpeech(speech))
+    }
+
+    @Test
+    fun `hangover keeps speech active for configured frames`() {
+        val vad = EnergyVad(hangoverFrames = 8)
+        assertTrue(vad.isSpeech(speech))
+        repeat(8) { assertTrue(vad.isSpeech(silence)) }
+        assertFalse(vad.isSpeech(silence))
+    }
+
+    @Test
+    fun `reset clears hangover and floor`() {
+        val vad = EnergyVad()
+        assertTrue(vad.isSpeech(speech))
+        vad.reset()
+        assertFalse(vad.isSpeech(silence))
+    }
+
+    @Test
+    fun `minimum speech level rejects quiet tone`() {
+        val vad = EnergyVad(minSpeechRmsDb = -30.0)
+        val quiet = ShortArray(320) { 500 }
+        assertFalse(vad.isSpeech(quiet))
+    }
+
+    @Test
+    fun `adaptive floor eventually rejects constant background`() {
+        val vad = EnergyVad()
+        val 

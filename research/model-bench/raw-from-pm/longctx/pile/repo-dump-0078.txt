@@ -1,0 +1,86 @@
+               } else {
+                    pendingControl = null
+                    tracking = true
+                    performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    listener?.onPress()
+                }
+                return true
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                if (pendingControl != null) return true
+                if (!tracking) return true
+                val totalX = event.x - downX
+                val totalY = event.y - downY
+                if (!dragging && (abs(totalX) > touchSlop || abs(totalY) > touchSlop)) {
+                    dragging = true
+                    listener?.onCancel()
+                }
+                if (dragging) {
+                    val dx = event.x - lastX
+                    val dy = event.y - lastY
+                    listener?.onDrag(dx, dy)
+                }
+                lastX = event.x
+                lastY = event.y
+                return true
+            }
+
+            MotionEvent.ACTION_UP -> {
+                pendingControl?.let {
+                    if (it == Control.SETTINGS) listener?.onSettingsTap() else listener?.onStopTap()
+                    pendingControl = null
+                    return true
+                }
+                if (tracking) {
+                    if (dragging) {
+                        listener?.onDragEnd()
+                    } else {
+                        performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                        listener?.onRelease()
+                    }
+                }
+                tracking = false
+                dragging = false
+                return true
+            }
+
+            MotionEvent.ACTION_CANCEL -> {
+                pendingControl = null
+                if (tracking && !dragging) listener?.onCancel()
+                tracking = false
+                dragging = false
+                return true
+            }
+        }
+        return super.onTouchEvent(event)
+    }
+
+    private fun controlAt(x: Float, y: Float): Control? {
+        if (state is DictationState.Idle) return null
+        val height = height.toFloat().takeIf { it > 0f } ?: expandedHeightPx.toFloat()
+        val width = width.toFloat().takeIf { it > 0f } ?: expandedWidthPx.toFloat()
+        if (y < height * 0.15f || y > height * 0.85f) return null
+        val stopCenter = width - dp(52f)
+        val gearCenter = width - dp(20f)
+        return when {
+            abs(x - gearCenter) <= dp(17f) -> Control.SETTINGS
+            abs(x - stopCenter) <= dp(17f) -> Control.STOP
+            else -> null
+        }
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        val height = height.toFloat()
+        val width = width.toFloat()
+        val expanded = state !is DictationState.Idle
+        val accent = accentFor(state)
+
+        if (expanded) {
+            surfacePaint.color = Color.argb(242, 22, 28, 32)
+            canvas.drawRoundRect(RectF(0f, 0f, width, height), height / 2f, height / 2f, surfacePaint)
+            ringPaint.color = Color.argb(70, 255, 255, 255)
+            ringPaint.strokeWidth = dp(1f)
+            canvas.drawRoundRect(
+                RectF(dp(0.5f),

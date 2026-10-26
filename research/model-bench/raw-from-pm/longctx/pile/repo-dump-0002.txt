@@ -1,0 +1,58 @@
+d string, fallback reason persisted, GPU-crash counter behavior, and how many failures trigger CPU default?
+- Is Vulkan required for v1 sign-off, or is CPU-only with a clear "GPU unavailable" status acceptable? Who signs that off?
+- What evidence goes in the handoff so the owner can trust it without running Android themselves?
+
+Output: a short acceptance checklist, not code.
+
+# 03 — What must the B1 build harness guarantee before it merges?
+
+Type: grilling
+Status: open
+Blocked by: none
+
+## Question
+
+B1 has a working toolchain and a green `:core:test`, but its branch still has uncommitted wrapper/Docker/CI/docs/scripts. Decide the merge gate:
+
+- Which files must be committed (Gradle wrapper + jar, `gradlew`, Dockerfile, CI, scripts, docs) and which must stay untracked (SDK, caches, models, keys)?
+- Must `./gradlew` work from a clean checkout with only documented env vars, and must the build be reproducible offline with a warm cache?
+- What is the supported build host matrix: this aarch64 container, x86_64 Docker/CI, or both? What is explicitly unsupported?
+- What evidence (command, output, APK path/size) is required in B1's handoff before merging?
+- How do we avoid clobbering the sibling PM's in-flight B1 worktree?
+
+Output: merge checklist + exact commands for the PM to verify.
+
+# 04 — What must the E1 ASR/model layer prove before it merges?
+
+Type: grilling
+Status: open
+Blocked by: 01, 02
+
+## Question
+
+E1 has an uncommitted ASR model layer (catalog, repository/downloader, storage, manager, whisper.cpp engine seam) and tests on `agent/e1-asr`. Decide the merge gate:
+
+- Which public contracts are frozen for v1 (`SpeechEngine`, `ModelManager`, `ModelCatalog`, `ModelRepository`) and which may still change with PM approval?
+- What must be unit-tested on the JVM: idle unload at 300 s, model swap, download verification/SHA256, failure/retry, fake engine path?
+- Is the native whisper.cpp JNI library required at merge time, or can the engine seam ship with a clearly failing/stubbed native load until G1/device? What does ADR-004 require?
+- Does the catalog match the model facts from ticket 01, and how are licenses/attribution surfaced?
+- What evidence goes in the E1 handoff, and what is the exact PM verification command?
+
+Output: merge checklist, accepted limitations, and follow-ups.
+
+# 05 — Which test layers can T1 deliver without KVM, and what waits for device?
+
+Type: grilling
+Status: open
+Blocked by: 03, 04
+
+## Question
+
+The sandbox has no `/dev/kvm` and is aarch64. Decide what T1 actually delivers:
+
+- Layer 1: existing JVM/Robolectric suites as the merge gate — what must be added (fake audio source, fake `SpeechEngine`, end-to-end chunk→VAD→merge→insertion-plan test)?
+- Layer 2: instrumentation tests that compile and are documented but cannot run here — which flows (overlay, accessibility, permissions, service lifecycle) and how are they kept green-on-device later?
+- Layer 3: attempted emulator/Docker path — is a software-emulated x86_64 runner worth one timeboxed try, or explicitly out of scope until hardware?
+- What is the pass/fail command list for G1, and what is documented as device-only?
+
+Output: T1 scope, test inventory, exact commands, devic

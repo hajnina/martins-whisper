@@ -1,0 +1,45 @@
+o `tiny` and reload; next dictation uses tiny. Custom model import works.
+6. Backend shows GPU on a Vulkan device; falls back to CPU with a clear indication if not.
+7. After 5 min idle, model is unloaded (status + memory/VRAM drop); next hold reloads and works.
+8. Tap < 400 ms does not insert; cancel path discards audio.
+9. No network traffic during dictation; audio not persisted.
+10. Unit tests + build pass; device test checklist documented.
+
+## 6. Open questions / risks
+
+- **ASR engine choice**: whisper.cpp+JNI+Vulkan vs sherpa-onnx AAR (NNAPI/CPU) vs both. Native build on this aarch64 sandbox is hard; ADR pending research spike.
+- **GPU reality on Android**: Vulkan whisper.cpp speedup is modest on some devices; NNAPI may not use GPU. Must measure on the eventual device.
+- **Accessibility insertion** varies by app (Compose/WebView/custom editors). Need field matrix + fallback.
+- **Model licensing/size**: Whisper weights MIT; base ~142 MB. Bundling vs download.
+- **Emulator**: no `/dev/kvm`, host aarch64; official Android emulator likely unavailable here. Build/tests may be limited to JVM/Robolectric until a device/x86_64 runner is available.
+- **Background service OEM killers**: document battery settings.
+- **Target device specifics** (Android version, GPU vendor, RAM) unknown until provided.
+
+# Agent Status (PM view)
+
+Snapshot: 2026-10-26T16:47Z
+
+| ID | State | Evidence | Next PM action |
+|---|---|---|---|
+| R1 | done, merged | `handoffs/R1-research/` | closed |
+| C1 | done, merged | 25 tests | closed |
+| I1 | done, merged | 31 tests | closed |
+| U1 | done, merged | APK 8.4 MB | closed |
+| B1 | in progress (sibling PM) | toolchain ready, `:core:test` green; wrapper/Docker/CI uncommitted | wait for committed handoff, then apply ticket 03 gate |
+| E1 | in progress (sibling PM) | ASR layer + tests uncommitted; native/Vulkan unverified | wait for committed handoff, then apply ticket 04 gate |
+| T1 | queued | map ticket 05 | after B1/E1 merge gates |
+| D1 | queued | map ticket 06 | after model facts (01) |
+| G1 | queued | map ticket 10 | after 03-07 |
+| H1/H2 | blocked | map tickets 08/09 | needs physical device + thresholds |
+
+Toolchain: `/work/android-toolchain/TOOLCHAIN-READY.md`. The shared Gradle home is used by a sibling PM; use `GRADLE_USER_HOME=/home/node/gh-pm --offline`.
+Map: `.scratch/device-ready-apk/map.md`. First-push handoff: `handoffs/PM-2026-10-26-1/HANDOFF.md`.
+
+You are B1-build, a background build-infrastructure subagent for the Martins Whisper Android project.
+
+WORKTREE (work only here): /work/martins-whisper-worktrees/b1-build
+Read first: SPEC.md, KANBAN.md, DECISIONS.md, AGENTS.md in that worktree.
+Do not edit the main checkout /work/martins-whisper. Do not merge. Commit on branch agent/b1-build.
+
+CONTEXT
+Android/Kotlin app; Gradle skeleton already exists (AGP 8.7.3, Kotlin 2.0.21, compileSdk 35, minSdk 29, modules :app and :core). Host is aarch64 Linux, unprivileged `node` user, no sudo/apt, no JDK/Android SDK, Docker 29.9.2 (aarch64) available, no /dev/kvm, network available. Nix and uv are available; `nix profile install nixpkgs#<pkg>` works. Android SDK official tools are x86_64-only; community aarch64 builds of aapt2/

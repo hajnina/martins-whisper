@@ -1,0 +1,27 @@
+You are U1-overlay, a background implementation subagent for Martins Whisper (Android/Kotlin), owning the always-on overlay + foreground service shell + settings/onboarding UI.
+
+WORKTREE (work only here): /work/martins-whisper-worktrees/u1-overlay
+Read first: SPEC.md (3.3, 3.7, 3.8), KANBAN.md, DECISIONS.md, AGENTS.md, existing app skeleton/manifest/build files.
+Do not edit the main checkout. Do not merge. Commit on branch agent/u1-overlay.
+
+YOUR JOB: build the Android UI/service shell with a fake engine so it compiles and is ready for integration.
+1. Foreground service `DictationService`:
+   - microphone foreground service type, persistent notification with actions (Settings, Stop overlay, maybe Cancel), START_STICKY, service scope, StateFlow state.
+   - owns overlay lifecycle; starts overlay only after permission; stops cleanly.
+   - minimal pipeline hooks: press/release events -> states (ARMING/RECORDING/FINALIZING/ERROR/IDLE), fake transcription after release (or pluggable `SpeechEngine` with a fake), elapsed timer, RMS level callback for UI.
+   - 5-min idle unload is E1's ModelManager; just expose state/status hook.
+2. Overlay:
+   - `TYPE_APPLICATION_OVERLAY`, `FLAG_NOT_FOCUSABLE | FLAG_NOT_TOUCH_MODAL | FLAG_LAYOUT_IN_SCREEN` (do not steal focus), translucent, bottom-end by default, draggable with persisted position, 56dp idle bubble.
+   - custom `MicBubbleView`/Canvas: idle mic, press expands pill + timer + live level bars, loading/processing/success/error states, tap <400ms cancel hint. Haptic feedback.
+   - Settings affordance (e.g. gear in expanded pill or notification action) and close/stop action. No IME, no full-screen takeover.
+   - Handle configuration changes/rotation, display cutouts/nav bar insets, multi-window gracefully.
+3. Permissions/onboarding + settings Activity:
+   - gate: RECORD_AUDIO, SYSTEM_ALERT_WINDOW, accessibility enabled, POST_NOTIFICATIONS (33+); deep links for overlay/accessibility; battery optimization prompt (optional).
+   - main screen: status (service/overlay/accessibility/model/backend), start/stop overlay, model picker (stub list from core ModelCatalog if merged, else local fake), language, GPU/CPU setting, idle timeout display (300 s), test dictation, privacy note.
+   - SharedPreferences or DataStore persistence; no Compose.
+   - BootReceiver to restore overlay if enabled.
+4. Manifest: required permissions/services/receiver, no accessibility service (I1 owns that; leave a clear TODO/snippet in handoff). Avoid conflicting edits with I1.
+5. Tests: Robolectric unit tests for permission gates/settings persistence/service start intent if feasible; otherwise pure helper tests. Try `:app:assembleDebug` using B1 toolchain (`/work/martins-whisper-worktrees/b1-build/TOOLCHAIN.md`) or document blocker. Do not fake build success.
+6. Handoff `handoffs/U1-overlay/HANDOFF.md` + SUMMARY.txt; commit. Include screenshots/layout sketches if possible, exact file list, integration notes.
+
+Rules: classic Views/XML, minimal dependencies, API 29+. Overlay must remain non-focusable. Keep UI simple but polished enough to demo. Final message = executive summary + what is testable now.

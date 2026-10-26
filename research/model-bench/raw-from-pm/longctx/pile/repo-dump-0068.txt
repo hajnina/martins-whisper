@@ -1,0 +1,90 @@
+ssions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_MIC)
+        }
+    }
+
+    private fun requestNotifications() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
+        }
+    }
+
+    private fun openOverlaySettings() {
+        val intent = Intent(
+            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            Uri.parse("package:$packageName"),
+        )
+        runCatching { startActivity(intent) }
+            .onFailure { Toast.makeText(this, R.string.error_overlay, Toast.LENGTH_LONG).show() }
+    }
+
+    private fun openAccessibilitySettings() {
+        runCatching { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+    }
+
+    private fun grantedText(granted: Boolean): String =
+        if (granted) getString(R.string.status_granted) else getString(R.string.status_denied)
+
+    private data class PermissionRow(val row: LinearLayout, val status: TextView)
+
+    private fun permissionRow(title: String, onClick: () -> Unit): PermissionRow {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(6), 0, dp(6))
+        }
+        val titleView = body(title).apply {
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        row.addView(titleView)
+        val status = body(getString(R.string.status_unknown)).apply {
+            setPadding(dp(8), 0, dp(8), 0)
+            setTextColor(Color.rgb(100, 100, 100))
+        }
+        row.addView(status)
+        row.addView(Button(this).apply {
+            text = getString(R.string.grant)
+            minWidth = 0
+            minimumWidth = 0
+            setOnClickListener { onClick() }
+        })
+        return PermissionRow(row, status)
+    }
+
+    private fun title(text: String): TextView = TextView(this).apply {
+        this.text = text
+        textSize = 28f
+        setTextColor(Color.rgb(19, 93, 102))
+        setTypeface(typeface, Typeface.BOLD)
+    }
+
+    private fun section(text: String): TextView = TextView(this).apply {
+        this.text = text
+        textSize = 17f
+        setTypeface(typeface, Typeface.BOLD)
+        setTextColor(Color.rgb(30, 40, 45))
+        setPadding(0, dp(22), 0, dp(6))
+    }
+
+    private fun label(text: String): TextView = TextView(this).apply {
+        this.text = text
+        textSize = 14f
+        setTextColor(Color.rgb(60, 70, 75))
+        setPadding(0, dp(8), 0, dp(2))
+    }
+
+    private fun body(text: String): TextView = TextView(this).apply {
+        this.text = text
+        textSize = 14f
+        setTextColor(Color.rgb(35, 42, 46))
+    }
+
+    private fun caption(text: String): TextView = TextView(this).apply {
+        this.text = text
+        textSize = 12f
+        setTextColor(Color.rgb(100, 105, 110))
+    }
+
+    private fun matchWidth(): LinearLayout.LayoutParams =
+        LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toIn

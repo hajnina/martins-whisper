@@ -1,0 +1,98 @@
+          url = null,
+            sha256 = null,
+            sizeBytes = 75L * 1024 * 1024,
+            multilingual = true,
+        ),
+        ModelSpec(
+            id = "base",
+            displayName = "Base (multilingual, default)",
+            fileName = "ggml-base.bin",
+            url = null,
+            sha256 = null,
+            sizeBytes = 142L * 1024 * 1024,
+            multilingual = true,
+        ),
+        ModelSpec(
+            id = "small",
+            displayName = "Small (multilingual)",
+            fileName = "ggml-small.bin",
+            url = null,
+            sha256 = null,
+            sizeBytes = 466L * 1024 * 1024,
+            multilingual = true,
+        ),
+        ModelSpec(
+            id = "medium",
+            displayName = "Medium (multilingual)",
+            fileName = "ggml-medium.bin",
+            url = null,
+            sha256 = null,
+            sizeBytes = 1500L * 1024 * 1024,
+            multilingual = true,
+        ),
+        ModelSpec(
+            id = "large-v3-turbo",
+            displayName = "Large v3 Turbo",
+            fileName = "ggml-large-v3-turbo.bin",
+            url = null,
+            sha256 = null,
+            sizeBytes = 1600L * 1024 * 1024,
+            multilingual = true,
+        ),
+    )
+
+    fun byId(id: String): ModelSpec? = specs.firstOrNull { it.id == id }
+
+    fun displayName(id: String): String = byId(id)?.displayName ?: id
+}
+
+package com.martins.whisper.ui
+
+data class PermissionSnapshot(
+    val microphone: Boolean,
+    val overlay: Boolean,
+    val accessibility: Boolean,
+    val notifications: Boolean,
+)
+
+enum class PermissionItem { MICROPHONE, OVERLAY, ACCESSIBILITY, NOTIFICATIONS }
+
+object PermissionGate {
+
+    fun missing(snapshot: PermissionSnapshot): List<PermissionItem> = buildList {
+        if (!snapshot.microphone) add(PermissionItem.MICROPHONE)
+        if (!snapshot.overlay) add(PermissionItem.OVERLAY)
+        if (!snapshot.accessibility) add(PermissionItem.ACCESSIBILITY)
+        if (!snapshot.notifications) add(PermissionItem.NOTIFICATIONS)
+    }
+
+    fun canRecord(snapshot: PermissionSnapshot): Boolean = snapshot.microphone
+
+    fun canShowOverlay(snapshot: PermissionSnapshot): Boolean = snapshot.overlay
+
+    fun readyForDictation(snapshot: PermissionSnapshot): Boolean =
+        snapshot.microphone && snapshot.overlay
+
+    fun summary(snapshot: PermissionSnapshot): String =
+        if (missing(snapshot).isEmpty()) "All required permissions granted" else {
+            "Missing: " + missing(snapshot).joinToString { it.name.lowercase().replace('_', ' ') }
+        }
+}
+
+package com.martins.whisper.accessibility
+
+import android.Manifest
+import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Bundle
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
+import android.v

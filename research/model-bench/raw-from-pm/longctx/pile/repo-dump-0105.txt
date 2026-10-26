@@ -1,0 +1,74 @@
+ext">Only JVM/Robolectric validation has run. Device microphone, overlay and GPU behavior require a physical Android device.</string>
+    <string name="language_auto">Auto detect</string>
+    <string name="backend_auto">Auto (GPU when available)</string>
+    <string name="backend_gpu">GPU</string>
+    <string name="backend_cpu">CPU</string>
+    <string name="boot_start_summary">Restore the bubble after reboot (Android may restrict microphone startup until the app is opened).</string>
+    <string name="hold_to_talk">Hold to talk</string>
+    <string name="error_mic">Microphone permission required</string>
+    <string name="error_overlay">Enable display over other apps</string>
+    <string name="model_stub_note">Using local model catalog stub until E1 lands com.martins.whisper.core.ModelCatalog.</string>
+</resources>
+
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.MartinsWhisper" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:colorPrimary">#135D66</item>
+        <item name="android:colorAccent">#135D66</item>
+        <item name="android:windowBackground">#FFFBF7</item>
+        <item name="android:statusBarColor">#135D66</item>
+    </style>
+</resources>
+
+<?xml version="1.0" encoding="utf-8"?>
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeViewFocused|typeViewTextSelectionChanged|typeWindowStateChanged|typeWindowContentChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews"
+    android:canRetrieveWindowContent="true"
+    android:description="@string/accessibility_service_description"
+    android:notificationTimeout="100"
+    android:settingsActivity="com.martins.whisper.MainActivity" />
+
+package com.martins.whisper.data
+
+import com.martins.whisper.core.ComputeBackend
+import com.martins.whisper.ui.ModelOptions
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Test
+
+class SettingsDefaultsTest {
+
+    @Test
+    fun `default model is base and exists in catalog stub`() {
+        assertEquals("base", SettingsStore.DEFAULT_MODEL_ID)
+        assertNotNull(ModelOptions.byId("base"))
+        assertEquals("base", ModelOptions.byId(SettingsStore.DEFAULT_MODEL_ID)?.id)
+    }
+
+    @Test
+    fun `catalog covers product requirement ids`() {
+        val ids = ModelOptions.specs.map { it.id }.toSet()
+        assertEquals(
+            setOf("tiny", "base", "small", "medium", "large-v3-turbo"),
+            ids,
+        )
+    }
+
+    @Test
+    fun `idle unload default is five minutes`() {
+        assertEquals(300, SettingsStore.DEFAULT_IDLE_UNLOAD_SECONDS)
+    }
+
+    @Test
+    fun `backend parser is defensive`() {
+        assertEquals(ComputeBackend.AUTO, SettingsStore.parseBackend(null))
+        assertEquals(ComputeBackend.AUTO, SettingsStore.parseBackend("nonsense"))
+        assertEquals(ComputeBackend.GPU, SettingsStore.parseBackend("GPU"))
+        assertEquals(ComputeBackend.CPU, SettingsStore.parseBackend("CPU"))
+    }
+
+    @Test
+    fun 

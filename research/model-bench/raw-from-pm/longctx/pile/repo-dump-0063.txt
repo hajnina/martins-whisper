@@ -1,0 +1,71 @@
+   val modelAdapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_dropdown_item,
+            ModelOptions.specs.map { it.displayName },
+        )
+        modelSpinner.adapter = modelAdapter
+        val modelIndex = ModelOptions.specs.indexOfFirst { it.id == settings.modelId }.coerceAtLeast(0)
+        suppressSpinnerCallbacks = true
+        modelSpinner.setSelection(modelIndex, false)
+        suppressSpinnerCallbacks = false
+        modelSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                if (suppressSpinnerCallbacks) return
+                settings.modelId = ModelOptions.specs[position].id
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+        root.addView(modelSpinner, matchWidth())
+        root.addView(caption(getString(R.string.model_stub_note)).apply {
+            setPadding(0, dp(4), 0, dp(10))
+        })
+
+        root.addView(section(getString(R.string.section_asr)))
+        root.addView(label(getString(R.string.language_label)))
+        val languages = listOf(
+            SettingsStore.LANGUAGE_AUTO to getString(R.string.language_auto),
+            "en" to "English",
+            "de" to "Deutsch",
+            "fr" to "Fran\u00e7ais",
+            "es" to "Espa\u00f1ol",
+            "it" to "Italiano",
+            "pt" to "Portugu\u00eas",
+            "nl" to "Nederlands",
+            "ru" to "Russian",
+            "zh" to "Chinese",
+            "ja" to "Japanese",
+        )
+        root.addView(languageSpinner(languages), matchWidth())
+
+        root.addView(label(getString(R.string.backend_label)))
+        val backends = listOf(
+            ComputeBackend.AUTO to getString(R.string.backend_auto),
+            ComputeBackend.GPU to getString(R.string.backend_gpu),
+            ComputeBackend.CPU to getString(R.string.backend_cpu),
+        )
+        val backendSpinner = Spinner(this)
+        backendSpinner.adapter = spinnerAdapter(backends.map { it.second })
+        backendSpinner.setSelection(backends.indexOfFirst { it.first == settings.backend }.coerceAtLeast(0), false)
+        backendSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                settings.backend = backends[position].first
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+        root.addView(backendSpinner, matchWidth())
+
+        root.addView(label(getString(R.string.idle_unload_label)))
+        val idleOptions = listOf(
+            60 to "1 minute (60 s)",
+            300 to "5 minutes (300 s, default)",
+            600 to "10 minutes (600 s)",
+            900 to "15 minutes (900 s)",
+        )
+        val idleSpinner = Spinner(this)
+        idleSpinner.adapter = spinnerAdapter(idleOptions.map { it.second })
+        idleSpinner.setSelection(
+            idleOptions.indexOfFirst { it.first == settings.idleUnloadSeconds }.coerceAtLeast(1),
+            false,
+ 

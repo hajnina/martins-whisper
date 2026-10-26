@@ -1,0 +1,12 @@
+Produce a file named HANDOFF.md in your current directory that follows the repository's AGENTS.md handoff template EXACTLY. Use only these facts; do not invent anything:
+
+- Work ID: B1
+- Branch: agent/b1-build
+- Commit: 592fb7d
+- Command run: gradle :core:test :app:assembleDebug --offline
+- Result: BUILD SUCCESSFUL; 74 tests, 0 failures; app-debug.apk 8,800,646 bytes
+- Changed files: gradlew, Dockerfile.build, .github/workflows/build.yml, scripts/env.sh
+- Blocker: no physical Android device
+- References: https://developer.android.com/studio, https://docs.gradle.org
+
+The template sections are: Executive summary (<=10 lines), What was built / changed, How to run tests/build, Interfaces exposed/invariants/contract changes, Evidence, Known limitations/blockers/next agent, References used, Commit SHA(s). Include a SUMMARY.txt with only the executive summary. Reply DONE when both files exist.

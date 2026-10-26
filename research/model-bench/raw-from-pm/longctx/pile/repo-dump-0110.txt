@@ -1,0 +1,103 @@
+eadyForDictation(snapshot))
+        assertEquals("All required permissions granted", PermissionGate.summary(snapshot))
+        assertTrue(PermissionGate.missing(snapshot).isEmpty())
+    }
+
+    @Test
+    fun `missing mic and overlay block dictation but accessibility does not`() {
+        val snapshot = PermissionSnapshot(
+            microphone = false,
+            overlay = true,
+            accessibility = false,
+            notifications = false,
+        )
+        assertFalse(PermissionGate.canRecord(snapshot))
+        assertTrue(PermissionGate.canShowOverlay(snapshot))
+        assertFalse(PermissionGate.readyForDictation(snapshot))
+        assertEquals(
+            listOf(PermissionItem.MICROPHONE, PermissionItem.ACCESSIBILITY, PermissionItem.NOTIFICATIONS),
+            PermissionGate.missing(snapshot),
+        )
+    }
+
+    @Test
+    fun `summary lowercases and spaces items`() {
+        val snapshot = PermissionSnapshot(
+            microphone = false,
+            overlay = false,
+            accessibility = true,
+            notifications = true,
+        )
+        assertEquals("Missing: microphone, overlay", PermissionGate.summary(snapshot))
+    }
+}
+
+package com.martins.whisper.accessibility
+
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+class InsertionPolicyTest {
+
+    private val own = "com.martins.whisper"
+
+    private fun node(
+        packageName: String? = "com.example.chat",
+        editable: Boolean = true,
+        enabled: Boolean = true,
+        visible: Boolean = true,
+        password: Boolean = false,
+        readableText: Boolean = true,
+        selectionStart: Int = 3,
+        selectionEnd: Int = 3,
+    ) = NodeSnapshot(
+        packageName = packageName,
+        isEditable = editable,
+        isEnabled = enabled,
+        isVisible = visible,
+        isPassword = password,
+        hasReadableText = readableText,
+        selectionStart = selectionStart,
+        selectionEnd = selectionEnd,
+    )
+
+    @Test
+    fun `empty text is rejected`() {
+        assertEquals(InsertionRoute.Reject("empty text"), InsertionPolicy.route(node(), own, ""))
+    }
+
+    @Test
+    fun `missing node falls back to clipboard`() {
+        assertEquals(
+            InsertionRoute.ClipboardOnly("no focused editable field"),
+            InsertionPolicy.route(null, own, "hello"),
+        )
+    }
+
+    @Test
+    fun `own package is ignored`() {
+        assertEquals(
+            InsertionRoute.Reject("own package focused"),
+            InsertionPolicy.route(node(packageName = own), own, "hello"),
+        )
+    }
+
+    @Test
+    fun `unknown package is allowed`() {
+        assertEquals(InsertionRoute.SetText, InsertionPolicy.route(node(packageName = null), own, "hi"))
+    }
+
+    @Test
+    fun `non editable focus falls back to clipboard`() {
+        assertEquals(
+            InsertionRoute.ClipboardOnly("focused field is not editable"),
+            InsertionPolicy.route(node(editable = false), own, "hi"),
+        )
+    }
+
+    @Test
+    fun `disabled field falls back to clipboard`() {
+        assertEquals(
+            InsertionRoute.ClipboardOnly("focused field is disabled"),
+            InsertionPolicy.route(node(enabled = false), own, "hi"),
+   

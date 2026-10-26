@@ -1,0 +1,93 @@
+BENCH-CANARY-DECOY-3a: irrelevant decoy line.
+     <service
+            android:name=".accessibility.DictationAccessibilityService"
+            android:exported="true"
+            android:label="@string/accessibility_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+
+</manifest>
+
+package com.martins.whisper
+
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import com.martins.whisper.data.SettingsStore
+import com.martins.whisper.service.DictationService
+
+class BootReceiver : BroadcastReceiver() {
+
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action != Intent.ACTION_BOOT_COMPLETED &&
+            intent.action != Intent.ACTION_MY_PACKAGE_REPLACED
+        ) {
+            return
+        }
+        val settings = SettingsStore(context)
+        if (!settings.overlayEnabled || !settings.bootStart) return
+        val serviceIntent = Intent(context, DictationService::class.java)
+            .setAction(DictationService.ACTION_START)
+            .putExtra(DictationService.EXTRA_NO_MIC, true)
+        runCatching { context.startForegroundService(serviceIntent) }
+    }
+}
+
+package com.martins.whisper
+
+import android.Manifest
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.Color
+import android.graphics.Typeface
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.provider.Settings
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
+import android.view.accessibility.AccessibilityManager
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.CompoundButton
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.Spinner
+import android.widget.Switch
+import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.lifecycle.lifecycleScope
+import com.martins.whisper.core.ComputeBackend
+import com.martins.whisper.data.SettingsStore
+import com.martins.whisper.service.DictationService
+import com.martins.whisper.service.DictationState
+import com.martins.whisper.ui.ModelOptions
+import com.martins.whisper.ui.PermissionGate
+import com.martins.whisper.ui.PermissionSnapshot
+import kotlinx.coroutines.launch
+
+class MainActivity : ComponentActivity() {
+
+    private latei

@@ -1,0 +1,100 @@
+a) ?: return
+        manager.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_ID,
+                getString(R.string.insertion_channel_name),
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ),
+        )
+        val notification = Notification.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_edit)
+            .setContentTitle(getString(R.string.insertion_copied_title))
+            .setContentText(getString(R.string.insertion_copied_text))
+            .setStyle(
+                Notification.BigTextStyle().bigText(getString(R.string.insertion_copied_text)),
+            )
+            .setAutoCancel(true)
+            .build()
+        runCatching { manager.notify(NOTIFICATION_ID, notification) }
+    }
+
+    private fun AccessibilityNodeInfo.toSnapshot(): NodeSnapshot {
+        val password = isPassword
+        return NodeSnapshot(
+            packageName = packageName?.toString(),
+            isEditable = isEditable,
+            isEnabled = isEnabled,
+            isVisible = isVisibleToUser,
+            isPassword = password,
+            hasReadableText = !password && text != null,
+            selectionStart = textSelectionStart,
+            selectionEnd = textSelectionEnd,
+        )
+    }
+
+    companion object {
+        const val CHANNEL_ID = "martins_whisper_insertion"
+        const val NOTIFICATION_ID = 2001
+    }
+}
+
+object AccessibilityInserter {
+    private val _connected = MutableStateFlow(false)
+    val connected: StateFlow<Boolean> = _connected.asStateFlow()
+
+    @Volatile
+    private var service: DictationAccessibilityService? = null
+
+    internal fun attach(service: DictationAccessibilityService) {
+        this.service = service
+        _connected.value = true
+    }
+
+    internal fun detach(service: DictationAccessibilityService) {
+        if (this.service === service) {
+            this.service = null
+            _connected.value = false
+        }
+    }
+
+    suspend fun insert(text: String): InsertResult {
+        if (text.isEmpty()) return InsertResult.Failed("empty text")
+        return withContext(Dispatchers.Main.immediate) {
+            val active = service ?: return@withContext InsertResult.Failed(
+                "accessibility service not connected",
+            )
+            active.insert(text)
+        }
+    }
+}
+
+package com.martins.whisper.accessibility
+
+sealed interface InsertResult {
+    data object Inserted : InsertResult
+    data class Copied(val reason: String) : InsertResult
+    data class Failed(val reason: String) : InsertResult
+}
+
+fun interface TextInserter {
+    fun insert(text: String): InsertResult
+}
+
+package com.martins.whisper.accessibility
+
+data class NodeSnapshot(
+    val packageName: String?,
+    val isEditable: Boolean,
+    val isEnabled: Boolean,
+    val isVisible: Boolean,
+    val isPassword: Boolean,
+    val hasReadableText: Boolean,
+    val selectionStart: Int,
+    val selectionEnd: Int,
+)
+
+sealed interface InsertionRoute {
+    data object SetText : InsertionRoute
+    data object Paste : InsertionRoute
+    data class ClipboardOnly(val reason: String) : InsertionRoute
+    data class Reject(val reason: String) : InsertionRout

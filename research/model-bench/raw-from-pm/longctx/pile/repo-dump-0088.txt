@@ -1,0 +1,105 @@
+= targetHeight) return
+
+        if (expanded) {
+            val (screenWidth, screenHeight) = screenSize()
+            val margin = dp(12f)
+            val clamped = OverlayGeometry.clamp(
+                layoutParams.x,
+                layoutParams.y,
+                targetWidth,
+                targetHeight,
+                screenWidth,
+                screenHeight,
+                margin,
+            )
+            layoutParams.x = clamped.first
+            layoutParams.y = clamped.second
+        }
+        layoutParams.width = targetWidth
+        layoutParams.height = targetHeight
+        runCatching { windowManager.updateViewLayout(bubbleView, layoutParams) }
+    }
+
+    fun dragBy(dx: Float, dy: Float) {
+        val bubbleView = view ?: return
+        val layoutParams = params ?: return
+        val (screenWidth, screenHeight) = screenSize()
+        val margin = dp(12f)
+        val clamped = OverlayGeometry.clamp(
+            (layoutParams.x + dx.toInt()),
+            (layoutParams.y + dy.toInt()),
+            layoutParams.width,
+            layoutParams.height,
+            screenWidth,
+            screenHeight,
+            margin,
+        )
+        layoutParams.x = clamped.first
+        layoutParams.y = clamped.second
+        runCatching { windowManager.updateViewLayout(bubbleView, layoutParams) }
+    }
+
+    fun persistPosition() {
+        val layoutParams = params ?: return
+        settings.saveBubblePosition(layoutParams.x, layoutParams.y)
+    }
+
+    fun hide() {
+        val bubbleView = view ?: return
+        runCatching { windowManager.removeView(bubbleView) }
+        view = null
+        params = null
+    }
+
+    private fun screenSize(): Pair<Int, Int> {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val bounds = windowManager.currentWindowMetrics.bounds
+            bounds.width() to bounds.height()
+        } else {
+            val display = windowManager.defaultDisplay
+            val point = android.graphics.Point()
+            @Suppress("DEPRECATION")
+            display.getRealSize(point)
+            point.x to point.y
+        }
+    }
+
+    private fun dp(value: Float): Int =
+        (value * appContext.resources.displayMetrics.density).toInt()
+}
+
+package com.martins.whisper.overlay
+
+object OverlayGeometry {
+
+    fun clamp(
+        x: Int,
+        y: Int,
+        width: Int,
+        height: Int,
+        screenWidth: Int,
+        screenHeight: Int,
+        margin: Int,
+    ): Pair<Int, Int> {
+        val maxX = (screenWidth - width - margin).coerceAtLeast(margin)
+        val maxY = (screenHeight - height - margin).coerceAtLeast(margin)
+        return x.coerceIn(margin, maxX) to y.coerceIn(margin, maxY)
+    }
+
+    fun defaultBottomEnd(
+        width: Int,
+        height: Int,
+        screenWidth: Int,
+        screenHeight: Int,
+        margin: Int,
+        bottomInset: Int,
+    ): Pair<Int, Int> {
+        val x = (screenWidth - width - margin).coerceAtLeast(margin)
+        val y = (screenHeight - height - margin - bottomInset).coerceAtLeast(margin)
+        return x to y
+    }
+
+    fun expandedOrCollapsedWidth(expanded: Boolean, bubble: Int, pill: Int): Int =
+        if (expanded) pill else bubble
+
+   

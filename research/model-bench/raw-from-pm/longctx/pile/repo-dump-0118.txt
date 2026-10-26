@@ -1,0 +1,91 @@
+        }
+            clearActiveState()
+            return listOfNotNull(finalChunk)
+        }
+
+        val durationMs = samples.size * 1000L / SAMPLE_RATE
+        val frameRms = AudioMath.rms(samples)
+        val buffered = BufferedFrame(samples, capturedAtMs, capturedAtMs + durationMs)
+        val speech = vad.isSpeech(samples)
+
+        if (!active) {
+            if (!speech) {
+                appendPreRoll(buffered)
+                return emptyList()
+            }
+            active = true
+            chunk = preRoll.toMutableList()
+            preRoll.clear()
+            chunk.add(buffered)
+            speechFloorRms = max(frameRms * 0.10, MIN_AUDIBLE_RMS)
+            speechMsInChunk = if (isAudible(frameRms)) durationMs else 0L
+            silenceMs = if (isAudible(frameRms)) 0L else durationMs
+            if (isAudible(frameRms)) totalSpeechMs += durationMs
+            pendingOverlapMs = 0
+        } else {
+            chunk.add(buffered)
+            val audible = isAudible(frameRms)
+            if (speech && audible) {
+                speechMsInChunk += durationMs
+                totalSpeechMs += durationMs
+                silenceMs = 0L
+            } else {
+                silenceMs += durationMs
+            }
+        }
+
+        if (chunk.isNotEmpty() && chunkDurationMs() >= MAX_CHUNK_MS) {
+            return listOf(splitAtMaxLength())
+        }
+
+        if (silenceMs >= SILENCE_FINALIZE_MS) {
+            return finalizeSilence()
+        }
+        return emptyList()
+    }
+
+    private fun isAudible(rms: Double): Boolean = rms >= speechFloorRms
+
+    private fun chunkDurationMs(): Long {
+        if (chunk.isEmpty()) return 0L
+        return chunk.last().endMs - chunk.first().startMs
+    }
+
+    private fun finalizeSilence(): List<AudioChunk> {
+        val hasMinimumSpeech = speechMsInChunk >= MIN_SPEECH_MS
+        val frames = chunk.toList()
+        val output = if (hasMinimumSpeech) {
+            listOf(buildChunk(frames, ChunkReason.SILENCE, pendingOverlapMs))
+        } else {
+            emptyList()
+        }
+        retainPreRoll(frames)
+        clearActiveState()
+        return output
+    }
+
+    private fun splitAtMaxLength(): AudioChunk {
+        val lastEnd = chunk.last().endMs
+        val windowStart = lastEnd - MAX_CUT_SEARCH_MS
+        var cutIndex = chunk.lastIndex
+        var lowestEnergy = Double.MAX_VALUE
+        for (index in chunk.indices) {
+            val candidate = chunk[index]
+            if (candidate.endMs <= windowStart) continue
+            val energy = AudioMath.rms(candidate.samples)
+            if (energy <= lowestEnergy) {
+                lowestEnergy = energy
+                cutIndex = index
+            }
+        }
+
+        val cutEnd = chunk[cutIndex].endMs
+        val emittedFrames = chunk.subList(0, cutIndex + 1).toList()
+        val overlapStart = cutEnd - OVERLAP_MS
+        val overlapTail = tailFrom(overlapStart)
+        val afterCut = chunk.subList(cutIndex + 1, chunk.size).toList()
+        val remaining = (overlapTail + afterCut).toMutableList()
+
+        val emitted = buildChunk(emittedFrames, ChunkReason.MAX_LENGTH, pendingOverlapMs)
+        chunk = remaining
+        pendingOverlapMs = OVERLAP_MS.to

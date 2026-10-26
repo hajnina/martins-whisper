@@ -1,0 +1,91 @@
+      }
+        val settings = SettingsStore(context)
+        if (!settings.overlayEnabled || !settings.bootStart) return
+        val serviceIntent = Intent(context, DictationService::class.java)
+            .setAction(DictationService.ACTION_START)
+            .putExtra(DictationService.EXTRA_NO_MIC, true)
+        runCatching { context.startForegroundService(serviceIntent) }
+    }
+}
+
+package com.martins.whisper
+
+import android.Manifest
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.Color
+import android.graphics.Typeface
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.provider.Settings
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
+import android.view.accessibility.AccessibilityManager
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.CompoundButton
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.Spinner
+import android.widget.Switch
+import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.lifecycle.lifecycleScope
+import com.martins.whisper.core.ComputeBackend
+import com.martins.whisper.data.SettingsStore
+import com.martins.whisper.service.DictationService
+import com.martins.whisper.service.DictationState
+import com.martins.whisper.ui.ModelOptions
+import com.martins.whisper.ui.PermissionGate
+import com.martins.whisper.ui.PermissionSnapshot
+import kotlinx.coroutines.launch
+
+class MainActivity : ComponentActivity() {
+
+    private lateinit var settings: SettingsStore
+    private lateinit var statusView: TextView
+    private lateinit var serviceView: TextView
+    private lateinit var micStatus: TextView
+    private lateinit var overlayStatus: TextView
+    private lateinit var accessibilityStatus: TextView
+    private lateinit var notificationsStatus: TextView
+    private lateinit var overlayButton: Button
+    private var bootSwitch: Switch? = null
+    private var suppressSpinnerCallbacks = false
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        settings = SettingsStore(this)
+        setContentView(buildContent())
+        observeService()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refresh()
+        if (intent?.getBooleanExtra(EXTRA_OPEN_SETTINGS, false) == true) {
+            intent?.removeExtra(EXTRA_OPEN_SETTINGS)
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        refresh()
+    }
+
+    private fun buildContent(): View {
+        val scroll = ScrollView(this)
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(28), dp(22), dp(40))
+        }
+        scroll.addView(root, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)

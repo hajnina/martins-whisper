@@ -1,0 +1,93 @@
+                    val copy = if (read == frame.size) frame.copyOf() else frame.copyOf(read)
+                        onFrame(copy, SystemClock.elapsedRealtime())
+                    } else if (read < 0) {
+                        throw IllegalStateException("AudioRecord read error $read")
+                    }
+                }
+            } catch (t: Throwable) {
+                if (running.get()) onError(t)
+            } finally {
+                try {
+                    recorder.stop()
+                } catch (_: Throwable) {
+                }
+                recorder.release()
+            }
+        }, "audio-capture").apply { isDaemon = true }
+        thread?.start()
+    }
+
+    override fun stop() {
+        running.set(false)
+        thread?.join(500)
+        thread = null
+        record = null
+    }
+
+    override fun release() = stop()
+
+    companion object {
+        fun rms(samples: ShortArray): Float {
+            if (samples.isEmpty()) return 0f
+            var sum = 0.0
+            for (sample in samples) {
+                val normalized = sample / 32768.0
+                sum += normalized * normalized
+            }
+            return sqrt(sum / samples.size).toFloat().coerceIn(0f, 1f)
+        }
+    }
+}
+
+package com.martins.whisper.audio
+
+interface AudioSource {
+    fun start(onFrame: (ShortArray, Long) -> Unit, onError: (Throwable) -> Unit)
+    fun stop()
+    fun release()
+}
+
+package com.martins.whisper.data
+
+import android.content.Context
+import android.content.SharedPreferences
+import com.martins.whisper.core.ComputeBackend
+
+class SettingsStore(context: Context) {
+
+    private val prefs: SharedPreferences =
+        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    var modelId: String
+        get() = prefs.getString(KEY_MODEL_ID, DEFAULT_MODEL_ID) ?: DEFAULT_MODEL_ID
+        set(value) = prefs.edit().putString(KEY_MODEL_ID, value).apply()
+
+    var language: String
+        get() = prefs.getString(KEY_LANGUAGE, LANGUAGE_AUTO) ?: LANGUAGE_AUTO
+        set(value) = prefs.edit().putString(KEY_LANGUAGE, value).apply()
+
+    var backend: ComputeBackend
+        get() = parseBackend(prefs.getString(KEY_BACKEND, ComputeBackend.AUTO.name))
+        set(value) = prefs.edit().putString(KEY_BACKEND, value.name).apply()
+
+    var idleUnloadSeconds: Int
+        get() = prefs.getInt(KEY_IDLE_UNLOAD_SECONDS, DEFAULT_IDLE_UNLOAD_SECONDS)
+        set(value) = prefs.edit().putInt(KEY_IDLE_UNLOAD_SECONDS, value).apply()
+
+    var overlayEnabled: Boolean
+        get() = prefs.getBoolean(KEY_OVERLAY_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_OVERLAY_ENABLED, value).apply()
+
+    var bootStart: Boolean
+        get() = prefs.getBoolean(KEY_BOOT_START, true)
+        set(value) = prefs.edit().putBoolean(KEY_BOOT_START, value).apply()
+
+    var bubbleX: Int
+        get() = prefs.getInt(KEY_BUBBLE_X, UNSET_POSITION)
+        set(value) = prefs.edit().putInt(KEY_BUBBLE_X, value).apply()
+
+    var bubbleY: Int
+        get() = prefs.getInt(KEY_BUBBLE_Y, UNSET_POSITION)
+        set(value) = prefs.edit().putInt(KEY_BUBBLE_Y, value).apply()
+
+    fun hasSavedBubblePosition(): Boolean = bubbleX != UNSET_POSITION && bu

@@ -1,0 +1,57 @@
+store? If release: who generates and holds the keystore, where does it live (never in the repo), and how is it backed up?
+- What is the versionCode/versionName policy for the first push and subsequent builds?
+- Where is the APK published for the device test: local path, GitHub release asset by the owner, or private file share? What checksum is published?
+- What must never be committed (keystore, passwords, `local.properties`, model files), and how do we verify before the owner pushes?
+- What is the upgrade path if the signing key changes (uninstall/reinstall acceptable)?
+
+Output: signed-artifact decision, custody/backup steps for Martin, and push checklist.
+
+# 08 — What H1/H2 thresholds and app matrix define hardware acceptance?
+
+Type: grilling
+Status: open
+Blocked by: 02, 06
+
+## Question
+
+Make hardware acceptance measurable before a device exists:
+
+- Which apps/fields form the insertion matrix (Compose, classic EditText, WebView, chat apps, browser address bar, password/PIN must-refuse, multiline, RTL/emoji)? Pick a realistic short list.
+- H1 pass: install, permissions, overlay focus retention, insertion with accessibility on, graceful fallback with it off, reboot re-arm notification, idle unload, no crash across the matrix.
+- H2 thresholds: cold/warm latency for base and tiny, peak RAM, idle-unload frees memory (measure method), GPU vs CPU on the actual device, thermal/battery sanity. What numbers pass, what is "report only"?
+- How is each result captured (screen recording, `dumpsys meminfo`, logcat excerpt) and attached to the handoff without secrets?
+- What blocks sign-off vs what becomes a documented known issue?
+
+Output: H1 checklist + H2 measurement table with pass/fail criteria.
+
+# 09 — Can we obtain a physical Android device and ADB access?
+
+Type: task
+Status: open
+Blocked by: none
+
+## Question
+
+H1/H2 cannot start without hardware. Resolve the prerequisite:
+
+- Which device can Martin provide (model, Android version, RAM, GPU vendor), and is it available now or later?
+- Can it be reached over ADB from a container/host (USB passthrough, `adb connect` over Wi-Fi), or must Martin run commands and paste output?
+- If no device: is there an x86_64 KVM runner available instead, and does that satisfy H1/H2 or only T1?
+
+This is HITL: ask Martin in `owner/ASKS.md` if the answer is not already known. Record the device profile and access method; the support matrix and H2 thresholds depend on it.
+
+# 10 — What is the G1 integration acceptance checklist?
+
+Type: grilling
+Status: open
+Blocked by: 03, 04, 05, 06, 07
+
+## Question
+
+Turn integration into a repeatable gate for the PM:
+
+- Merge order for B1, E1, T1, D1 onto master; how to resolve contract conflicts without losing C1/I1/U1 work; who reviews (`code-review`) and what blocks a merge.
+- Required commands and evidence: `:core:test`, `:app:testDebugUnitTest`, `:app:assembleDebug`, test counts, APK size/sha256, no-secrets scan, clean `git status`.
+- KANBAN/LOGBOOK/DECISIONS/STATUS updates required at merge, and the exact handoff shape for the owner.
+- What to do if E1 native/Vulkan is not buildable: ship the seam + CPU path, or hold the APK? Tie to ticket 02.
+- Definition of done for G1: artifact p

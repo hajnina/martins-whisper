@@ -1,0 +1,92 @@
+tinue
+            }
+
+            val shouldDedupe = overlapsMs.isEmpty() ||
+                (overlapsMs.getOrNull(partIndex - 1) ?: 0) > 0
+            var matched = 0
+            if (shouldDedupe) {
+                val limit = minOf(maxOverlapWords, merged.size, tokens.size)
+                for (candidate in limit downTo 1) {
+                    val left = merged.subList(merged.size - candidate, merged.size)
+                    val right = tokens.subList(0, candidate)
+                    if (left.map(::normalizedToken) == right.map(::normalizedToken)) {
+                        matched = candidate
+                        break
+                    }
+                }
+            }
+
+            if (matched > 0) {
+                val start = merged.size - matched
+                for (offset in 0 until matched) {
+                    merged[start + offset] = richerToken(merged[start + offset], tokens[offset])
+                }
+                merged.addAll(tokens.drop(matched))
+            } else {
+                merged.addAll(tokens)
+            }
+        }
+        return merged.joinToString(" ")
+    }
+}
+
+object TextInsertionPlanner {
+    data class Result(val text: String, val selectionStart: Int, val selectionEnd: Int)
+
+    /**
+     * Insert [insert] into [current] replacing [selectionStart]..[selectionEnd]. Must clamp
+     * out-of-range selections and handle null/empty current text. Implemented by I1.
+     */
+    fun insert(
+        current: String?,
+        selectionStart: Int,
+        selectionEnd: Int,
+        insert: String,
+    ): Result {
+        val base = current.orEmpty()
+        val rawStart = selectionStart.coerceIn(0, base.length)
+        val rawEnd = selectionEnd.coerceIn(rawStart, base.length)
+
+        val start = if (base.splitsSurrogatePair(rawStart)) rawStart - 1 else rawStart
+        val end = if (base.splitsSurrogatePair(rawEnd)) (rawEnd + 1).coerceAtMost(base.length) else rawEnd
+        val boundedEnd = end.coerceAtLeast(start)
+
+        val text = base.substring(0, start) + insert + base.substring(boundedEnd)
+        val caret = start + insert.length
+        return Result(text, caret, caret)
+    }
+
+    private fun String.splitsSurrogatePair(index: Int): Boolean =
+        index in 1 until length &&
+            this[index - 1].isHighSurrogate() &&
+            this[index].isLowSurrogate()
+}
+
+package com.martins.whisper.core.audio
+
+import com.martins.whisper.core.AudioChunk
+import com.martins.whisper.core.AudioChunkerApi
+import com.martins.whisper.core.ChunkReason
+import com.martins.whisper.core.Vad
+import kotlin.math.max
+import kotlin.math.min
+
+class AudioChunker(
+    private val vad: Vad = EnergyVad(),
+) : AudioChunkerApi {
+    private data class BufferedFrame(
+        val samples: ShortArray,
+        val startMs: Long,
+        val endMs: Long,
+    )
+
+    private val preRoll = ArrayDeque<BufferedFrame>()
+    private var chunk = mutableListOf<BufferedFrame>()
+    private var active = false
+    private var speechMsInChunk = 0L
+    private var silenceMs = 0L
+    private var speechFloorRms = MIN_AUDIBLE_RMS
+    private var pendingOverlapMs = 0
+    private var nextIndex = 0
+    private var sessionStartMs: Long? = null
+    private

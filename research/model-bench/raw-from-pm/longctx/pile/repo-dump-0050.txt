@@ -1,0 +1,42 @@
+ Do not change shared contract signatures. Keep privacy: no transcript logging. Final message = executive summary + confidence/limits.
+
+You are R1-research, a background research subagent for the Martins Whisper Android project.
+
+WORKTREE (work only here): /work/martins-whisper-worktrees/r1-research
+Read first: ../SPEC.md, ../KANBAN.md, ../DECISIONS.md, ../AGENTS.md (paths inside your worktree: SPEC.md etc.).
+Do not edit the main checkout /work/martins-whisper. Do not merge. Commit your work on branch agent/r1-research.
+
+CONTEXT
+The target changed to Android/Kotlin. We are building a local-only, hold-to-talk Wispr Flow clone: always-on floating overlay, on-device Whisper, text inserted into the focused text field via AccessibilityService, GPU preferred (Vulkan or NNAPI), model unloaded after 5 min idle, VAD chunking for long holds, configurable models, default whisper base. Environment is aarch64 Linux Docker, no KVM, no Android SDK/GPU/audio, network available.
+
+YOUR JOB: find analogous Android projects and extract concrete, reusable design/code. This is the main research task the user asked for. Do not write production app code.
+
+1. Search GitHub/web thoroughly for:
+   - Android offline Whisper dictation apps/services with floating overlay and accessibility insertion.
+   - futo-org/voice-input (offline whisper.cpp Android; long-form chunking; model management).
+   - ggml-org/whisper.cpp Android example/JNI/Vulkan build.
+   - k2-fsa/sherpa-onnx Android AAR/Kotlin API, NNAPI/Whisper.
+   - Android accessibility overlays, non-focusable TYPE_APPLICATION_OVERLAY, ACTION_SET_TEXT vs clipboard/ACTION_PASTE.
+   - Any actual "Wispr Flow Android clone" or "voice typing overlay" repos.
+   - Idle model unload / native whisper context free patterns.
+2. Clone candidates with `git clone --depth 1` into `/work/references/repos-android/<name>` (outside your worktree, shared scratch, do not commit clones). Actually read the code, not just READMEs. Record exact file paths/line references for:
+   - overlay window type/flags and touch handling
+   - foreground service manifest + notification + mic permissions
+   - accessibility service config, focus tracking, insertion action sequence, fallbacks
+   - JNI/CMake/Gradle native build, Vulkan flags, ABI/minSdk, prebuilt AAR alternatives
+   - model download/verification/storage, Whisper model URLs and sizes
+   - chunking/VAD/long-form behavior and dedupe
+   - tests/emulator approach
+   - licenses and what we may legally copy/adapt.
+3. Give a clear recommendation:
+   - Engine: whisper.cpp+JNI+Vulkan vs sherpa-onnx AAR vs hybrid; include build risk on this aarch64 sandbox and GPU reality.
+   - Insertion sequence and its failure modes.
+   - Overlay/accessibility architecture.
+   - Top 5 code files/repos to copy/adapt, with license notes.
+4. Deliver in your worktree:
+   - `research/ANDROID_PRIOR_ART.md` (detailed, with links, code snippets, file paths, license table, recommendations).
+   - Update `REFERENCES.md` (append; do not clobber).
+   - `handoffs/R1-research/HANDOFF.md` with required sections from AGENTS.md.
+   - `handoffs/R1-research/SUMMARY.txt` (executive summary).
+   - Commit.
+5. Final message: executive summary 

@@ -1,0 +1,59 @@
+eline), OnePlus/Oppo, Huawei (no GMS irrelevant), stock AOSP.
+- Background start restrictions (Android 12+): overlay service started from user tap/boot; verify.
+- Android 15/16 foreground service microphone restrictions.
+
+## Evidence to capture
+- `adb logcat` filtered by package, screenshots/GIF per state, `dumpsys meminfo`, test result table, exact device fingerprint.
+
+# Integration Plan (PM)
+
+Wave 1 branches:
+- `agent/r1-research` (report only; merge docs)
+- `agent/b1-build` (toolchain/scripts/CI; build files)
+- `agent/c1-core-audio` (core chunking/merge/tests)
+- `agent/e1-asr` (core model layer + native/JNI scaffolding)
+- `agent/u1-overlay` (Android service/overlay/settings shell)
+- `agent/i1-input` (accessibility service + insertion)
+
+## Merge order
+
+1. **R1** - docs only; append REFERENCES/SPEC notes. No code conflicts.
+2. **B1** - toolchain/docs/CI. Keep its build-file edits if they are improvements; verify Gradle wrapper + versions.
+3. **C1** - core audio. Resolve `Contracts.kt` stub replacement (`TranscriptMerger`) only.
+4. **E1** - core model layer. Must expose `ModelCatalog`, `ModelManager`, `SpeechEngine` concrete impls. Check `Contracts.kt` unchanged.
+5. **I1** - accessibility. Merge manifest entries with U1's; combine service declarations and permissions. Resolve any `TextInsertionPlanner` edits.
+6. **U1** - overlay/service. Rebase on top of I1 manifest if needed; wire to E1/C1 APIs.
+7. **G1 integration agent** - merge/build/fix/test; PM reviews.
+
+Use `git merge --no-ff` per branch. Never squash away evidence; handoffs reference SHAs.
+
+## Integration checklist
+
+- [ ] `Contracts.kt` public API unchanged except agreed stub bodies.
+- [ ] No duplicate permissions/services in manifest; accessibility config XML linked.
+- [ ] Foreground service: `foregroundServiceType="microphone"` + `FOREGROUND_SERVICE_MICROPHONE`.
+- [ ] Overlay flags include `FLAG_NOT_FOCUSABLE | FLAG_NOT_TOUCH_MODAL`; overlay permission gate.
+- [ ] Accessibility service config valid; deep link from onboarding.
+- [ ] Model catalog URLs/hashes sane; no silent downloads.
+- [ ] Idle unload 300 s test passes with fake clock.
+- [ ] Chunker/merge tests pass; no Android imports in `:core`.
+- [ ] `assembleDebug` produces APK (if toolchain works here) OR exact blocked report + CI path.
+- [ ] Robolectric/unit tests pass.
+- [ ] README/SPEC/KANBAN/LOGBOOK updated; handoffs present.
+- [ ] No secrets, no telemetry, no cloud inference.
+
+## Branch review gates
+
+A branch is accepted only if:
+1. It has `HANDOFF.md` + `SUMMARY.txt`.
+2. Claims are backed by pasted command output or clearly marked blocked.
+3. Tests exist for new pure logic and were run (or blocker is explicit).
+4. No edits outside its ownership without a note.
+5. `git status` clean and commits are atomic.
+
+## Conflict watch
+
+- `app/src/main/AndroidManifest.xml`: U1 vs I1 (permissions/services). Integration resolves.
+- `core/.../Contracts.kt`: C1 replaces `TranscriptMerger` stub; I1 replaces `TextInsertionPlanner` stub. Both must keep signatures.
+- `app/build.gradle.kts`: U1/E1/B1 may add deps/CMake. Integration merges union, then trims.
+- `settings.gradle.kts`/root build: B1 may adjust versions; keep one source of truth.

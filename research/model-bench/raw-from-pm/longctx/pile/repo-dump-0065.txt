@@ -1,0 +1,81 @@
+  idleSpinner.adapter = spinnerAdapter(idleOptions.map { it.second })
+        idleSpinner.setSelection(
+            idleOptions.indexOfFirst { it.first == settings.idleUnloadSeconds }.coerceAtLeast(1),
+            false,
+        )
+        idleSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                settings.idleUnloadSeconds = idleOptions[position].first
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+        root.addView(idleSpinner, matchWidth())
+
+        root.addView(section(getString(R.string.section_diagnostics)))
+        root.addView(caption(getString(R.string.diagnostics_text)).apply {
+            setPadding(0, 0, 0, dp(8))
+        })
+        return scroll
+    }
+
+    private fun languageSpinner(languages: List<Pair<String, String>>): Spinner {
+        val spinner = Spinner(this)
+        spinner.adapter = spinnerAdapter(languages.map { it.second })
+        spinner.setSelection(
+            languages.indexOfFirst { it.first == settings.language }.coerceAtLeast(0),
+            false,
+        )
+        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                settings.language = languages[position].first
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+        return spinner
+    }
+
+    private fun spinnerAdapter(items: List<String>): ArrayAdapter<String> =
+        ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, items)
+
+    private fun toggleOverlay() {
+        if (settings.overlayEnabled) {
+            settings.overlayEnabled = false
+            DictationService.stop(this)
+        } else {
+            settings.overlayEnabled = true
+            DictationService.start(this)
+            if (!Settings.canDrawOverlays(this)) {
+                Toast.makeText(this, R.string.error_overlay, Toast.LENGTH_LONG).show()
+            }
+        }
+        rootView?.postDelayed({ refresh() }, 250)
+    }
+
+    private fun refresh() {
+        val snapshot = currentSnapshot()
+        statusView.text = PermissionGate.summary(snapshot)
+        micStatus.text = grantedText(snapshot.microphone)
+        overlayStatus.text = grantedText(snapshot.overlay)
+        accessibilityStatus.text = grantedText(snapshot.accessibility)
+        notificationsStatus.text = grantedText(snapshot.notifications)
+        overlayButton.text = if (settings.overlayEnabled) {
+            getString(R.string.stop_overlay)
+        } else {
+            getString(R.string.start_overlay)
+        }
+        bootSwitch?.isChecked = settings.bootStart
+    }
+
+    private fun observeService() {
+        lifecycleScope.launch {
+            DictationService.state.collect { updateServiceStatus(it) }
+        }
+    }
+
+    private fun updateServiceStatus(state: DictationState) {
+        val label = when (state) {
+            is DictationState.Idle -> "idle"
+            is DictationState.Loading -> state.label
+ 

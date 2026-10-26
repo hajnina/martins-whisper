@@ -1,0 +1,58 @@
+x86_64 runner worth one timeboxed try, or explicitly out of scope until hardware?
+- What is the pass/fail command list for G1, and what is documented as device-only?
+
+Output: T1 scope, test inventory, exact commands, device-only checklist.
+
+# 06 — Which operators, devices and permissions does D1 document for v1?
+
+Type: grilling
+Status: open
+Blocked by: 01
+
+## Question
+
+Decide the D1 documentation set and its audience:
+
+- Who installs v1: a technical sideloader (Martin/dev) or a non-technical user? What does that imply for the permission checklist and troubleshooting?
+- Which minimum device profile is v1 supported on (Android version, RAM, arm64, Vulkan presence)? What is best-effort vs unsupported?
+- Which docs are required: build, install/sideload, adb model push, permission wizard, privacy/data-flow, known OEM quirks, uninstall/cleanup?
+- How are model download/import, accessibility enablement, and overlay/mic permissions explained without assuming Android expertise?
+- What is the "doctor" output that should be pasted into a bug report (backend, model, permissions, device, version), with no secrets?
+
+Output: doc outline with owners and acceptance ("a new user can install and dictate from this alone").
+
+# 07 — How is the v1 APK signed and distributed?
+
+Type: grilling
+Status: open
+Blocked by: none
+
+## Question
+
+Decide before G1 so the artifact is reproducible and upgrades work:
+
+- Is v1 a debug-signed APK for Martin's device only, or a release-signed APK with a keystore? If release: who generates and holds the keystore, where does it live (never in the repo), and how is it backed up?
+- What is the versionCode/versionName policy for the first push and subsequent builds?
+- Where is the APK published for the device test: local path, GitHub release asset by the owner, or private file share? What checksum is published?
+- What must never be committed (keystore, passwords, `local.properties`, model files), and how do we verify before the owner pushes?
+- What is the upgrade path if the signing key changes (uninstall/reinstall acceptable)?
+
+Output: signed-artifact decision, custody/backup steps for Martin, and push checklist.
+
+# 08 — What H1/H2 thresholds and app matrix define hardware acceptance?
+
+Type: grilling
+Status: open
+Blocked by: 02, 06
+
+## Question
+
+Make hardware acceptance measurable before a device exists:
+
+- Which apps/fields form the insertion matrix (Compose, classic EditText, WebView, chat apps, browser address bar, password/PIN must-refuse, multiline, RTL/emoji)? Pick a realistic short list.
+- H1 pass: install, permissions, overlay focus retention, insertion with accessibility on, graceful fallback with it off, reboot re-arm notification, idle unload, no crash across the matrix.
+- H2 thresholds: cold/warm latency for base and tiny, peak RAM, idle-unload frees memory (measure method), GPU vs CPU on the actual device, thermal/battery sanity. What numbers pass, what is "report only"?
+- How is each result captured (screen recording, `dumpsys meminfo`, logcat excerpt) and attached to the handoff without secrets?
+- What blocks sign-off vs what becomes a documented known issue?
+
+Output: H1 checklist + H2 measurement table with pass/fail crite

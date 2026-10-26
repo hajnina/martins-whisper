@@ -1,0 +1,36 @@
+nes `Dispatchers.Default`/single-thread ASR dispatcher). UI gets state via `StateFlow` + main-thread rendering.
+
+### 3.4 Chunking algorithm (v1)
+
+- AudioRecord: 16 kHz mono PCM16, 20 ms frames (320 samples). Pre-roll ring buffer 300 ms.
+- `EnergyVad`: adaptive noise floor (EMA of non-speech), RMS threshold = max(noiseFloor * k, absoluteFloor); speech start after 2 frames; silence after `minSilenceMs` (500 ms). Reset per session.
+- `AudioChunker`:
+  - accumulates frames after speech start (including pre-roll).
+  - finalizes `SILENCE` chunk when trailing silence >= 500 ms and speech >= 250 ms.
+  - finalizes `MAX_LENGTH` at 25 s; cut at lowest-energy frame in the last 2 s; add 250 ms overlap from the tail to the next chunk.
+  - `flush()` finalizes trailing speech/partial chunk; drops pure-silence.
+  - max session 10 min safety cap.
+- `TranscriptMerger.merge`:
+  - trims, strips duplicate boundary words between adjacent chunks (case/punctuation-insensitive longest suffix/prefix match, up to 8 words).
+  - joins with exactly one space, preserves existing punctuation; never invents punctuation.
+- `TextNormalizer`: drop empty/hallucination segments using `noSpeechProb`, `avgLogProb` threshold, compression ratio (engine-provided), plus a small blocklist ("Thank you.", "Subtitles by...", etc.) only when confidence is low.
+- Engine `transcribe(chunk)` gets `condition_on_previous_text = false` and a stable language from the first detected chunk; no cross-chunk prompt loops.
+
+### 3.5 Model lifecycle
+
+- Default `base` (multilingual GGML, 16-bit). Catalog includes tiny/base/small/medium/large-v3-turbo, `.en` variants where available, plus custom file. Default backend `auto` (GPU if compiled+available else CPU).
+- Model files live in `context.filesDir/models/<id>.bin`; SHA256 verified after download/import.
+- First run: onboarding explains local-only and offers "download base" (or `adb push` path). App does not silently download.
+- `ModelManager`: ref-counted or single ASR thread; load on first use; `markUsed()` after each transcription/insert; idle watchdog every 15 s; unload at 300 s, `whisper_free` + null reference + `System.gc()` best-effort. Model switch unloads immediately.
+- While unloaded, hold still starts recording and shows "loading model"; once loaded, queued chunks transcribe.
+- GPU: native build with Vulkan (`GGML_VULKAN=1`); runtime exposes backend string. If Vulkan init fails, retry CPU once and remember fallback. If native engine cannot be built, sherpa-onnx NNAPI/CPU is a fallback architecture under an ADR (pending spike).
+
+### 3.6 Android insertion
+
+- `DictationAccessibilityService` tracks `TYPE_VIEW_FOCUSED` / `TYPE_VIEW_TEXT_SELECTION_CHANGED` and `findFocus(FOCUS_INPUT)`.
+- Overlay window uses `FLAG_NOT_FOCUSABLE | FLAG_NOT_TOUCH_MODAL`, so pressing it does not move input focus.
+- Insertion attempt order:
+  1. Read focused node text + selection. Use `ACTION_SET_TEXT` with full new text and selection at end (works in many native fields).
+  2. If unsupported/failed: set clipboard, perform `ACTION_PASTE` on focused editable node.
+  3. If no editable node: copy to clipboard, toast + notification "Copied; paste manually".
+- Do not clear clipb

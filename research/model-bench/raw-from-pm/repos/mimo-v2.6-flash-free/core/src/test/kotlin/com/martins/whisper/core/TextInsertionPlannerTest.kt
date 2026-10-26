@@ -1,0 +1,179 @@
+package com.martins.whisper.core
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class TextInsertionPlannerTest {
+
+    private fun insert(
+        current: String?,
+        start: Int,
+        end: Int,
+        text: String,
+    ): TextInsertionPlanner.Result =
+        TextInsertionPlanner.insert(current, start, end, text)
+
+    @Test
+    fun `null current text inserts into empty buffer`() {
+        val result = insert(null, 0, 0, "hello")
+        assertEquals("hello", result.text)
+        assertEquals(5, result.selectionStart)
+        assertEquals(5, result.selectionEnd)
+    }
+
+    @Test
+    fun `empty current text with negative selection clamps to zero`() {
+        val result = insert("", -3, -1, "hi")
+        assertEquals("hi", result.text)
+        assertEquals(2, result.selectionStart)
+    }
+
+    @Test
+    fun `inserts at start and end`() {
+        val atStart = insert("world", 0, 0, "hello ")
+        assertEquals("hello world", atStart.text)
+        assertEquals(6, atStart.selectionStart)
+
+        val atEnd = insert("hello", 5, 5, " world")
+        assertEquals("hello world", atEnd.text)
+        assertEquals(11, atEnd.selectionStart)
+    }
+
+    @Test
+    fun `replaces a selection`() {
+        val result = insert("hello world", 6, 11, "there")
+        assertEquals("hello there", result.text)
+        assertEquals(11, result.selectionStart)
+        assertEquals(11, result.selectionEnd)
+    }
+
+    @Test
+    fun `replaces entire text`() {
+        val result = insert("abc", 0, 3, "x")
+        assertEquals("x", result.text)
+        assertEquals(1, result.selectionStart)
+    }
+
+    @Test
+    fun `empty insert deletes a selection`() {
+        val result = insert("abc", 1, 2, "")
+        assertEquals("ac", result.text)
+        assertEquals(1, result.selectionStart)
+        assertEquals(1, result.selectionEnd)
+    }
+
+    @Test
+    fun `clamps start beyond length`() {
+        val result = insert("abc", 99, 99, "d")
+        assertEquals("abcd", result.text)
+        assertEquals(4, result.selectionStart)
+    }
+
+    @Test
+    fun `clamps end beyond length`() {
+        val result = insert("abc", 1, 99, "X")
+        assertEquals("aX", result.text)
+        assertEquals(2, result.selectionStart)
+    }
+
+    @Test
+    fun `clamps negative bounds`() {
+        val result = insert("abc", -5, -2, "X")
+        assertEquals("Xabc", result.text)
+        assertEquals(1, result.selectionStart)
+    }
+
+    @Test
+    fun `inverted selection collapses at start`() {
+        val result = insert("abcdef", 4, 1, "X")
+        assertEquals("abcdXef", result.text)
+        assertEquals(5, result.selectionStart)
+    }
+
+    @Test
+    fun `caret inside surrogate pair expands to cover whole emoji`() {
+        val source = "a\uD83D\uDE00b"
+        val result = insert(source, 2, 2, "X")
+        assertEquals("aXb", result.text)
+        assertEquals(2, result.selectionStart)
+    }
+
+    @Test
+    fun `selection of high surrogate alone does not split emoji`() {
+        val source = "a\uD83D\uDE00b"
+        val result = insert(source, 1, 2, "X")
+        assertEquals("aXb", result.text)
+        assertEquals(2, result.selectionStart)
+    }
+
+    @Test
+    fun `selection of low surrogate alone does not split emoji`() {
+        val source = "a\uD83D\uDE00b"
+        val result = insert(source, 2, 3, "X")
+        assertEquals("aXb", result.text)
+        assertEquals(2, result.selectionStart)
+    }
+
+    @Test
+    fun `inserting emoji uses UTF-16 caret length`() {
+        val result = insert("x", 1, 1, "\uD83D\uDE00")
+        assertEquals("x\uD83D\uDE00", result.text)
+        assertEquals(3, result.selectionStart)
+    }
+
+    @Test
+    fun `empty insert at caret inside emoji removes whole emoji`() {
+        val source = "a\uD83D\uDE00b"
+        val result = insert(source, 2, 2, "")
+        assertEquals("ab", result.text)
+        assertEquals(1, result.selectionStart)
+    }
+
+    @Test
+    fun `replacing full UTF-16 range works`() {
+        val result = insert("a\uD83D\uDE00b", 0, 4, "Z")
+        assertEquals("Z", result.text)
+        assertEquals(1, result.selectionStart)
+    }
+
+    @Test
+    fun `selection ending inside first of two emoji expands that pair only`() {
+        val source = "\uD83D\uDE00\uD83D\uDE01"
+        val result = insert(source, 0, 1, "X")
+        assertEquals("X\uD83D\uDE01", result.text)
+        assertEquals(1, result.selectionStart)
+    }
+
+    @Test
+    fun `selection spanning surrogate boundaries replaces whole emoji`() {
+        val source = "\uD83D\uDE00\uD83D\uDE01"
+        val result = insert(source, 1, 3, "X")
+        assertEquals("X", result.text)
+        assertEquals(1, result.selectionStart)
+    }
+
+    @Test
+    fun `normal selection boundaries are untouched`() {
+        val source = "\uD83D\uDE00abc"
+        val result = insert(source, 2, 2, "-")
+        assertEquals("\uD83D\uDE00-abc", result.text)
+        assertEquals(3, result.selectionStart)
+    }
+
+    @Test
+    fun `caret always within resulting text`() {
+        val cases = listOf(
+            Triple<String?, Pair<Int, Int>, String>(null, 0 to 0, "a"),
+            Triple("abc", -9 to 9, "ZZ"),
+            Triple("\uD83D\uDE00", 1 to 1, ""),
+            Triple("hello", 5 to 5, "!"),
+            Triple("hello", 2 to 2, "\uD83D\uDE00"),
+        )
+        for ((current, selection, insertText) in cases) {
+            val result = insert(current, selection.first, selection.second, insertText)
+            assertTrue(result.selectionStart in 0..result.text.length)
+            assertEquals(result.selectionStart, result.selectionEnd)
+        }
+    }
+}

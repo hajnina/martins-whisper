@@ -1,0 +1,40 @@
+, HF weights), each with what was taken and where it landed; refreshed technical notes.
+- `handoffs/R1-research/HANDOFF.md` (this file) and `SUMMARY.txt`.
+
+Repos cloned read-only under `/work/references/repos-android/` (not committed):
+`futo-voice-input d6e1eb2`, `whisper.cpp 231638a`, `sherpa-onnx af2d8d8`, `phone-whisper e6518cd`, `whisperclient-android e25e063`, `flo fd5f102`, `ramblr 10b3834`.
+
+## How to run/validate
+
+There is no build or test suite in R1. The report is self-contained; run these checks when reviewing:
+
+```bash
+cd /work/martins-whisper-worktrees/r1-research
+git diff --check
+git show --stat a44964f
+grep -n "Option A\|ADR-004\|ACTION_SET_TEXT\|300 s\|Vulkan" research/ANDROID_PRIOR_ART.md | head
+```
+
+To reproduce the evidence (network required):
+
+```bash
+curl -sL 'https://huggingface.co/api/models/ggerganov/whisper.cpp?blobs=true' -o /tmp/hf.json
+jq -r '.siblings[] | select(.rfilename|test("^ggml-(tiny|base|small)(\\.en)?\\.bin$")) | [.rfilename,.size,.lfs.sha256] | @tsv' /tmp/hf.json
+
+curl -sL 'https://api.github.com/repos/k2-fsa/sherpa-onnx/releases/latest' -o /tmp/sherpa.json
+jq -r '.tag_name, (.assets[] | select(.name|test("android|\\.aar$")) | [.name,.size] | @tsv)' /tmp/sherpa.json
+
+curl -sL -o /tmp/sherpa.aar 'https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.0/sherpa-onnx-2.0.0.aar'
+unzip -l /tmp/sherpa.aar | grep -E '\\.so|classes.jar'
+```
+
+Expected key results (captured): `ggml-base.bin` = 147,951,465 B, SHA-256 `60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe`; `sherpa-onnx-2.0.0.aar` = 49.2 MB with arm64 `libonnxruntime.so` 22,249,560 B + `libsherpa-onnx-jni.so` 4,555,952 B; latest sherpa release `v2.0.0` at research time (`v2.0.1` AAR URL returned 404).
+
+## Interfaces / invariants / contract notes
+
+- **ADR-004 recommendation (not yet accepted):** Option A = whisper.cpp Vulkan+CPU in one arm64 library, `auto` backend with CPU fallback; keep `SpeechEngine` seam; do not implement Option B in v1.
+- **Backend contract:** `SpeechEngine.backend` should report `whisper.cpp/vulkan (<device>)` or `whisper.cpp/cpu`; persist a CPU fallback reason and expose it in doctor/settings.
+- **Insertion contract (matches ADR-003):** direct `ACTION_SET_TEXT` with composed full text -> read-back verification -> custom labelled paste action -> `ACTION_PASTE` -> clipboard + notification/toast. `ACTION_SET_TEXT` returning true is not proof; refresh/read back. Never write password/PIN fields; discard the result. Do not auto-clear clipboard.
+- **ModelManager invariants:** single ASR dispatcher; lease/refcount around inference; lazy load; unload after 300 s idle only when no lease; unload off-main; model switch waits for in-flight work; no use-after-close.
+- **Proposed contract change (needs PM):** SPEC R4 says “custom GGML/ONNX model file”. Option A natively supports GGML; ONNX import needs a second engine. Recommend v1 GGML-only and document ONNX as follow-up. No files were edited to make this change.
+- **Boot/FGS caveat:** start the microphone FGS from a visible Activity and keep it alive. Android 14+ restricts microphone FGS from `BOOT_COMPLETED`; Android 15 requires SAW + a currently visible overlay for the SA

@@ -1,0 +1,77 @@
+tus(it) }
+        }
+    }
+
+    private fun updateServiceStatus(state: DictationState) {
+        val label = when (state) {
+            is DictationState.Idle -> "idle"
+            is DictationState.Loading -> state.label
+            is DictationState.Recording -> "recording ${state.elapsedMs / 1000}s"
+            is DictationState.Processing -> state.label
+            is DictationState.Success -> state.message
+            is DictationState.Error -> state.message
+        }
+        serviceView.text = getString(R.string.service_state, label)
+    }
+
+    private fun currentSnapshot(): PermissionSnapshot = PermissionSnapshot(
+        microphone = checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED,
+        overlay = Settings.canDrawOverlays(this),
+        accessibility = isAccessibilityEnabled(),
+        notifications = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED,
+    )
+
+    private fun isAccessibilityEnabled(): Boolean {
+        val manager = getSystemService(ACCESSIBILITY_SERVICE) as AccessibilityManager
+        return manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+            .any { it.resolveInfo.serviceInfo.packageName == packageName }
+    }
+
+    private fun requestMic() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_MIC)
+        }
+    }
+
+    private fun requestNotifications() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
+        }
+    }
+
+    private fun openOverlaySettings() {
+        val intent = Intent(
+            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            Uri.parse("package:$packageName"),
+        )
+        runCatching { startActivity(intent) }
+            .onFailure { Toast.makeText(this, R.string.error_overlay, Toast.LENGTH_LONG).show() }
+    }
+
+    private fun openAccessibilitySettings() {
+        runCatching { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+    }
+
+    private fun grantedText(granted: Boolean): String =
+        if (granted) getString(R.string.status_granted) else getString(R.string.status_denied)
+
+    private data class PermissionRow(val row: LinearLayout, val status: TextView)
+
+    private fun permissionRow(title: String, onClick: () -> Unit): PermissionRow {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(6), 0, dp(6))
+        }
+        val titleView = body(title).apply {
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        row.addView(titleView)
+        val status = body(getString(R.string.status_unknown)).apply {
+            setPadding(dp(8), 0, dp(8), 0)
+            setTextColor(Color.rgb(100, 100, 100))
+        }
+        row.addView(status)
+        row.addView(Button(this).a

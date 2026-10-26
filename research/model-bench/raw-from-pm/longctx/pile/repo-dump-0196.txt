@@ -1,0 +1,41 @@
+TS/LLM. Network is used only for explicit model downloads. Audio is never persisted (unless a debug recording flag is explicitly enabled). Transcripts are not logged by default.
+R4. **Default model = Whisper base, configurable.** Settings offers at least tiny/base/small/medium/large-v3-turbo (multilingual and/or English), plus import of a custom GGML model file. ONNX/custom-engine import is a documented v1 non-goal (ADR-004). Model choice persists.
+R5. **GPU by default, CPU fallback.** Prefer a Vulkan/NNAPI GPU path. Detect availability, fall back to CPU, and surface the active backend in settings/doctor UI.
+R6. **Idle unload after 300 s.** Free the model from RAM/VRAM after 5 minutes without use. Reload lazily on the next hold. A new hold may start recording while the model is loading; transcription waits for load.
+R7. **Chunking.** Long holds are split at silences using a VAD, with a max chunk length (~25 s) and overlapping forced splits. Chunks are transcribed incrementally while the user is still holding; final text is merged without duplicated boundary words. Tap < 400 ms cancels (Wispr Flow-like).
+R8. **Robust failure modes.** Mic denied, overlay denied, accessibility off, model missing, OOM, engine crash, insertion failure. Always keep the transcript recoverable (clipboard + notification + optional local history off by default).
+R9. **Tidy + testable.** Pure-Kotlin core logic (VAD/chunker/merge/model state) runs in JVM unit tests. Android shell has Robolectric/instrumented tests. Build and device validation instructions included.
+R10. **Mega simple first.** No accounts, no sync, no cloud, no LLM cleanup in v1. Minimal screens: onboarding/permissions + settings + overlay.
+
+## 2. Non-goals (v1)
+
+- Play Store distribution / accessibility-policy review.
+- iOS, desktop, web.
+- Multi-language UI.
+- Punctuation/rewrite LLM post-processing.
+- Speaker diarization.
+- Syncing/history across devices.
+- Hands-free mode (hold-only is the requirement).
+
+## 3. Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ ForegroundService (microphone type)                         │
+│  ├─ OverlayController (WindowManager TYPE_APPLICATION_OVERLAY)
+│  │    └─ MicBubbleView (custom Canvas view, non-focusable)
+│  ├─ AudioCapture (AudioRecord 16 kHz mono PCM16)            │
+│  ├─ DictationPipeline                                       │
+│  │    ├─ ring buffer + pre-roll                              │
+│  │    ├─ EnergyVad -> AudioChunker (core, pure Kotlin)       │
+│  │    ├─ TranscriptMerger (core, pure Kotlin)               │
+│  │    └─ SpeechEngine (whisper.cpp Vulkan/CPU, GGML)         │
+│  ├─ ModelManager (lazy load, idle unload 300 s, model swap)  │
+│  └─ SessionStateMachine                                     │
+├─────────────────────────────────────────────────────────────┤
+│ AccessibilityService (separate system-bound service)        │
+│  ├─ tracks focused editable node + selection                 │
+│  ├─ TextInsertionPlanner (pure logic)                        │
+│  └─ ACTION_SET_TEXT -> clipboard/ACTION_PASTE -> toast       │
+├─────────────────────────────────────────────────────────────┤
+│ Activity: onboarding/permissions + se

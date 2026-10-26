@@ -1,0 +1,53 @@
+ranscribe delays.
+- `app/src/main/java/com/martins/whisper/service/EngineFactory.kt` - single E1 replacement seam.
+- `app/src/main/java/com/martins/whisper/service/TextInserter.kt` - `TextInserter` + clipboard implementation; I1 replacement seam.
+- `app/src/main/java/com/martins/whisper/audio/AudioSource.kt`, `audio/AudioRecordSource.kt` - 16 kHz mono PCM16, 20 ms (320 sample) frames, RMS helper, permission/release handling.
+- `app/src/main/java/com/martins/whisper/overlay/MicBubbleView.kt` - custom Canvas bubble/pill, states, timer/level bars, mic/check/cross/spinner, gear/stop hit targets, haptics, drag gestures.
+- `app/src/main/java/com/martins/whisper/overlay/OverlayController.kt` - `TYPE_APPLICATION_OVERLAY`, `FLAG_NOT_FOCUSABLE | FLAG_NOT_TOUCH_MODAL | FLAG_LAYOUT_IN_SCREEN`, bottom-end default, drag clamp and persisted x/y.
+- `app/src/main/java/com/martins/whisper/overlay/OverlayGeometry.kt`, `BubbleFormat.kt` - pure clamping/default-position/timer formatting.
+- `app/src/main/java/com/martins/whisper/data/SettingsStore.kt` - SharedPreferences persistence and defensive backend parsing.
+- `app/src/main/java/com/martins/whisper/ui/ModelOptions.kt` - local model catalog stub (base default, tiny/small/medium/large-v3-turbo).
+- `app/src/main/java/com/martins/whisper/ui/PermissionGate.kt` - pure permission readiness/summary logic.
+- `app/src/main/res/values/strings.xml`, `values/themes.xml`, `drawable/ic_mic_notification.xml`.
+- Tests: `app/src/test/java/com/martins/whisper/{data,overlay,service,ui}/*.kt` (6 test classes, 18 tests).
+
+## Build / test evidence
+
+Environment (shared toolchain, no Nix installs):
+
+```sh
+export JAVA_HOME=/work/android-toolchain/jdk
+export ANDROID_HOME=/work/android-toolchain/sdk
+export ANDROID_SDK_ROOT=/work/android-toolchain/sdk
+export GRADLE_USER_HOME=/work/android-toolchain/gradle-home
+printf 'sdk.dir=/work/android-toolchain/sdk\n' > local.properties
+```
+
+```sh
+/home/node/.local/bin/gradle -p /work/martins-whisper-worktrees/u1-overlay \
+  :app:assembleDebug :app:testDebugUnitTest --no-daemon --offline
+```
+
+Result (2026-10-26):
+
+```
+BUILD SUCCESSFUL in 7s
+43 actionable tasks: 8 executed, 35 up-to-date
+```
+
+- APK: `app/build/outputs/apk/debug/app-debug.apk`, 8.4 MB.
+- Tests: 18 passed / 0 failed:
+  - `SettingsDefaultsTest` 5
+  - `BubbleFormatTest` 1
+  - `OverlayGeometryTest` 3
+  - `DictationStateTest` 4
+  - `ServiceContractTest` 2
+  - `PermissionGateTest` 3
+- Robolectric was attempted first for `SettingsStore`/`MicBubbleView` and failed before any test body on this linux-aarch64 host:
+  `UnsatisfiedLinkError: no conscrypt_openjdk_jni-linux-aarch_64` from `AndroidTestEnvironment.setUpApplicationState`. The Groovy-uber jar in the cache only contains `linux-x86_64`. Those tests were replaced with pure helper tests, per the U1 fallback instruction. The Robolectric dependency is left in `app/build.gradle.kts` for T1/x86 runners.
+- No lint/typecheck task was run beyond Kotlin compilation; compilation completed with only deprecation warnings.
+
+## Interfaces exposed
+
+- Service actions: `com.martins.whisper.action.START`, `.STOP`, `.SETTINGS`, `.TRANSCRIPT`.
+- Companion: `DictationService.start(context)`, `.stop(context)`, 

@@ -1,0 +1,19 @@
+a856493d334349b405782ddcaf0028d4b5df4088345fba2efe`; `sherpa-onnx-2.0.0.aar` = 49.2 MB with arm64 `libonnxruntime.so` 22,249,560 B + `libsherpa-onnx-jni.so` 4,555,952 B; latest sherpa release `v2.0.0` at research time (`v2.0.1` AAR URL returned 404).
+
+## Interfaces / invariants / contract notes
+
+- **ADR-004 recommendation (not yet accepted):** Option A = whisper.cpp Vulkan+CPU in one arm64 library, `auto` backend with CPU fallback; keep `SpeechEngine` seam; do not implement Option B in v1.
+- **Backend contract:** `SpeechEngine.backend` should report `whisper.cpp/vulkan (<device>)` or `whisper.cpp/cpu`; persist a CPU fallback reason and expose it in doctor/settings.
+- **Insertion contract (matches ADR-003):** direct `ACTION_SET_TEXT` with composed full text -> read-back verification -> custom labelled paste action -> `ACTION_PASTE` -> clipboard + notification/toast. `ACTION_SET_TEXT` returning true is not proof; refresh/read back. Never write password/PIN fields; discard the result. Do not auto-clear clipboard.
+- **ModelManager invariants:** single ASR dispatcher; lease/refcount around inference; lazy load; unload after 300 s idle only when no lease; unload off-main; model switch waits for in-flight work; no use-after-close.
+- **Proposed contract change (needs PM):** SPEC R4 says “custom GGML/ONNX model file”. Option A natively supports GGML; ONNX import needs a second engine. Recommend v1 GGML-only and document ONNX as follow-up. No files were edited to make this change.
+- **Boot/FGS caveat:** start the microphone FGS from a visible Activity and keep it alive. Android 14+ restricts microphone FGS from `BOOT_COMPLETED`; Android 15 requires SAW + a currently visible overlay for the SAW background-start exemption. Prefer a “tap to re-arm” notification after reboot unless U1 verifies the overlay-first flow on device.
+
+## Evidence
+
+- whisper.cpp Android example is CPU-only (`GGML_USE_CPU`); `GGML_VULKAN` exists in `ggml/CMakeLists.txt:224` and the Vulkan CMake requires host `glslc` + SPIRV-Headers. Community Android recipe and caveats: issue #2370.
+- GPU data points: issue #2370 Pixel 8 30 s audio CPU 73 s vs Vulkan 67 s; issue #2706 Adreno 640 “does not support 16-bit storage” -> `Unsupported device`; discussion #3943 Adreno 840 + Turnip 120 s small model 27.8 s vs 120.8 s (~4.3x), stock driver cm2 pipeline failures.
+- `ggml_backend_vk_reg()` catches Vulkan init exceptions and returns null, so unsupported backends can be skipped; a driver SIGSEGV is still fatal (motivates crash counter/CPU fallback).
+- sherpa AAR is 49.2 MB, includes all four ABIs; `provider.h` has no Vulkan provider; NNAPI is API 27+ and deprecated in Android 15 (official docs recommend CPU or TF Lite GPU for performance).
+- Futo closes the model after every inference (`AudioRecognizer.kt:523`, `:538`) and uses a patched `partial_text_callback`; upstream whisper.cpp only exposes `new_segment_callback` (`include/whisper.h:463`). Futo also uses `audio_ctx = min(1500, ceil(samples/320)+32)` for short holds.
+- Ramble implements exactly `TRANSCRIBER_IDLE_UNLOAD_MS = 5 * 60 * 1000L` (`DictationRuntime.kt:231`) with generation-guarded release (`:602`), VAD max segment 15 s (`SherpaVadH

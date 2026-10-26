@@ -1,0 +1,24 @@
+500, ceil(samples/320)+32)` for short holds.
+- Ramble implements exactly `TRANSCRIBER_IDLE_UNLOAD_MS = 5 * 60 * 1000L` (`DictationRuntime.kt:231`) with generation-guarded release (`:602`), VAD max segment 15 s (`SherpaVadHandle.kt:36`), direct-before-paste/read-back insertion (`TextDestination.kt:232`), and password guard (`PasswordFieldGuard.kt:37`). GPLv3: design only.
+- Android docs: untrusted touch on Android 12 (TYPE_APPLICATION_OVERLAY not trusted; accessibility/IME trusted; 0.8 opacity), FGS microphone/while-in-use restrictions, Play accessibility declaration.
+- Model sizes/SHA-256 for tiny/base/small/medium/large-v3-turbo are in report §3.5. Quantized base q5_1/q8_0 are 59.7/81.8 MB.
+- Nix feasibility checked, not built: `nix eval nixpkgs#androidndk` -> 27.0.12077973; `nixpkgs#shaderc` -> 2026.1; `nixpkgs#vulkan-headers` -> 1.4.363.0.
+
+## Known limitations / blockers
+
+- No Android SDK/NDK build, no APK, no emulator, no device, no GPU, no mic/audio in this sandbox. Vulkan feasibility is from upstream/community evidence, not a local build.
+- Vulkan speed is device/driver dependent; stock Adreno/Mali behavior may differ from the Turnip benchmark. H1/H2 must measure.
+- Accessibility field matrix is untested on device; WebView/Compose/Terminal behavior is based on source reading, not live tests.
+- Boot-time microphone FGS behavior needs Android 14/15 device validation; the report gives a safe notification-based fallback.
+- Licenses: Futo (non-commercial), Ramble (GPLv3), Whisperclient and Flo (no license) are design references only. Do not copy their code. whisper.cpp (MIT), sherpa-onnx/phone-whisper (Apache-2.0) are reusable with notices.
+- `sherpa-onnx` README references `v2.0.1` while the latest published release was `v2.0.0` on 2026-10-26; re-check before pinning.
+- The report does not modify `DECISIONS.md`; ADR-004 remains open until PM accepts it.
+
+## What the next agent should do
+
+- **PM:** accept/reject ADR-004 Option A; decide GGML-only vs GGML+ONNX for v1; decide reboot behavior (notification vs overlay-first FGS); provide a target device/SoC for H1/H2.
+- **E1:** vendor whisper.cpp at the pinned commit; get CPU build green first; then add Vulkan using issue #2370/PR #2914 as a starting point, host `glslc` from nix `shaderc`, minSdk 29, `COOPMAT2=OFF`, whole-archive Vulkan objects. Implement `WhisperCppEngine` with mmap load, `audio_ctx` proportional to chunk length, CPU fallback + backend persistence, and `ModelManager` leases/idle unload. Add JVM tests for lifecycle; device GPU validation is H2.
+- **I1:** implement the insertion state machine with pure `composeOneShotInjection`, read-back, custom paste action, password guard, candidate scoring, and clipboard/notification recovery. Write Robolectric tests for event reduction and pure tests for composition.
+- **U1:** implement `TYPE_APPLICATION_OVERLAY` + `FLAG_NOT_FOCUSABLE | FLAG_NOT_TOUCH_MODAL | FLAG_LAYOUT_NO_LIMITS`, microphone FGS from visible Activity, notification, drag/persist, and the boot “tap to re-arm” fallback. Do not set `FLAG_NOT_TOUCHABLE` on the bubble.
+- **C1:** implement SPEC’s energy VAD/chunker/merger exactly; keep it swappable for Silero later.
+- **B1:** pr

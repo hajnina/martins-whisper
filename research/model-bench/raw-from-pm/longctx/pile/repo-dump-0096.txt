@@ -1,0 +1,95 @@
+E_VIEW_TEXT_SELECTION_CHANGED,
+            -> {
+                val source = event.source ?: return
+                try {
+                    if (source.isEditable && source.isEnabled && source.isVisibleToUser) {
+                        lastFocused = source.toSnapshot()
+                    } else if (event.eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED) {
+                        lastFocused = null
+                    }
+                } finally {
+                    source.recycle()
+                }
+            }
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> lastFocused = null
+        }
+    }
+
+    override fun onInterrupt() {
+        lastFocused = null
+    }
+
+    override fun onUnbind(intent: Intent?): Boolean {
+        AccessibilityInserter.detach(this)
+        lastFocused = null
+        return super.onUnbind(intent)
+    }
+
+    override fun onDestroy() {
+        AccessibilityInserter.detach(this)
+        lastFocused = null
+        super.onDestroy()
+    }
+
+    override fun insert(text: String): InsertResult {
+        if (text.isEmpty()) return InsertResult.Failed("empty text")
+        val node = obtainTarget() ?: return copyFallback(text, "no focused editable field")
+        try {
+            val snapshot = node.toSnapshot()
+            return when (val route = InsertionPolicy.route(snapshot, packageName, text)) {
+                InsertionRoute.SetText -> setText(node, snapshot, text)
+                InsertionRoute.Paste -> paste(node, text)
+                is InsertionRoute.ClipboardOnly -> copyFallback(text, route.reason)
+                is InsertionRoute.Reject -> InsertResult.Failed(route.reason)
+            }
+        } finally {
+            node.recycle()
+        }
+    }
+
+    fun lastFocusedSnapshot(): NodeSnapshot? = lastFocused
+
+    private fun obtainTarget(): AccessibilityNodeInfo? {
+        var node = findFocusedEditable()
+        if (node != null && !node.refresh()) {
+            node.recycle()
+            node = findFocusedEditable()
+        }
+        return node
+    }
+
+    private fun findFocusedEditable(): AccessibilityNodeInfo? {
+        findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.let { focused ->
+            if (focused.isEditable) return focused
+            focused.recycle()
+        }
+        rootInActiveWindow?.let { root ->
+            focusedIn(root)?.let { return it }
+        }
+        val windows = windows.orEmpty()
+        try {
+            val ordered = windows.sortedByDescending {
+                (if (it.isFocused) 2 else 0) + (if (it.isActive) 1 else 0)
+            }
+            for (window in ordered) {
+                val root = window.root ?: continue
+                focusedIn(root)?.let { return it }
+            }
+        } finally {
+            windows.forEach { it.recycle() }
+        }
+        return null
+    }
+
+    private fun focusedIn(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        val focused = try {
+            root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+        } catch (t: Throwable) {
+            runCatching { root.recycle() }
+            throw t
+        }
+        if (focused == null) {
+            root.recycle()
+            return null
+        }
+        if (focuse

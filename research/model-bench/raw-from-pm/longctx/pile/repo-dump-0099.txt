@@ -1,0 +1,87 @@
+args)) {
+            InsertResult.Inserted
+        } else {
+            paste(node, insert)
+        }
+    }
+
+    private fun paste(node: AccessibilityNodeInfo, text: String): InsertResult {
+        if (!copyToClipboard(text)) return InsertResult.Failed("clipboard unavailable")
+        node.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+        return if (node.performAction(AccessibilityNodeInfo.ACTION_PASTE)) {
+            InsertResult.Inserted
+        } else {
+            copyFallback(text, "paste unsupported")
+        }
+    }
+
+    private fun copyFallback(text: String, reason: String): InsertResult {
+        if (!copyToClipboard(text)) return InsertResult.Failed("clipboard unavailable")
+        Toast.makeText(this, R.string.insertion_copied_toast, Toast.LENGTH_SHORT).show()
+        notifyCopied()
+        return InsertResult.Copied(reason)
+    }
+
+    private fun copyToClipboard(text: String): Boolean {
+        val manager = getSystemService(ClipboardManager::class.java) ?: return false
+        return runCatching {
+            manager.setPrimaryClip(ClipData.newPlainText(getString(R.string.app_name), text))
+            true
+        }.getOrDefault(false)
+    }
+
+    private fun notifyCopied() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        val manager = getSystemService(NotificationManager::class.java) ?: return
+        manager.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_ID,
+                getString(R.string.insertion_channel_name),
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ),
+        )
+        val notification = Notification.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_edit)
+            .setContentTitle(getString(R.string.insertion_copied_title))
+            .setContentText(getString(R.string.insertion_copied_text))
+            .setStyle(
+                Notification.BigTextStyle().bigText(getString(R.string.insertion_copied_text)),
+            )
+            .setAutoCancel(true)
+            .build()
+        runCatching { manager.notify(NOTIFICATION_ID, notification) }
+    }
+
+    private fun AccessibilityNodeInfo.toSnapshot(): NodeSnapshot {
+        val password = isPassword
+        return NodeSnapshot(
+            packageName = packageName?.toString(),
+            isEditable = isEditable,
+            isEnabled = isEnabled,
+            isVisible = isVisibleToUser,
+            isPassword = password,
+            hasReadableText = !password && text != null,
+            selectionStart = textSelectionStart,
+            selectionEnd = textSelectionEnd,
+        )
+    }
+
+    companion object {
+        const val CHANNEL_ID = "martins_whisper_insertion"
+        const val NOTIFICATION_ID = 2001
+    }
+}
+
+object AccessibilityInserter {
+    private val _connected = MutableStateFlow(false)
+    val connected: StateFlow<Boolean> = _connected.asStateFlow()
+
+    @Volatile
+    private var service: DictationAccessibilityService? = null
+
+    internal fun attach(service: DictationAccessibilityService)

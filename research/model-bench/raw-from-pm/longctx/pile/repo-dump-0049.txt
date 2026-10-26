@@ -1,0 +1,33 @@
+ection; `ACTION_SET_TEXT` with `ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE` and selection args; verify success if possible.
+     b) fallback: clipboard set (ClipboardManager), `ACTION_PASTE` on focused editable; do not read clipboard back unnecessarily (Android restrictions).
+     c) no editable / both fail: copy to clipboard; toast + notification with "Copied — paste manually"; return typed result.
+   - expose a process-wide singleton/binder API for DictationService (e.g. `AccessibilityInserter` object with StateFlow `connected` + `suspend fun insert`) without leaking context.
+   - handle service enable/disable, node recycling, stale nodes, multi-window, WebView/Compose limitations.
+3. Manifest/config snippet and onboarding deep-link helper. I1 may edit app manifest, but note that U1 is editing it concurrently; provide a patch/snippet in handoff if merging is likely to conflict.
+4. Tests:
+   - pure planner tests (JVM).
+   - Robolectric/AccessibilityNodeInfo tests if feasible (shadow support is limited); otherwise unit-test decision parsing and document on-device test matrix (EditText, Compose, WebView, Chrome, WhatsApp/Gmail if possible).
+   - Try build/test using B1 toolchain or `nix shell nixpkgs#jdk17 nixpkgs#gradle -c ...`; do not fake.
+5. Handoff `handoffs/I1-input/HANDOFF.md` + SUMMARY.txt; commit. Include exact insertion sequence, failure matrix, permissions onboarding text, and what must be tested on a real device.
+
+Rules: no root/IME hacks; accessibility only. Do not change shared contract signatures. Keep privacy: no transcript logging. Final message = executive summary + confidence/limits.
+
+You are R1-research, a background research subagent for the Martins Whisper Android project.
+
+WORKTREE (work only here): /work/martins-whisper-worktrees/r1-research
+Read first: ../SPEC.md, ../KANBAN.md, ../DECISIONS.md, ../AGENTS.md (paths inside your worktree: SPEC.md etc.).
+Do not edit the main checkout /work/martins-whisper. Do not merge. Commit your work on branch agent/r1-research.
+
+CONTEXT
+The target changed to Android/Kotlin. We are building a local-only, hold-to-talk Wispr Flow clone: always-on floating overlay, on-device Whisper, text inserted into the focused text field via AccessibilityService, GPU preferred (Vulkan or NNAPI), model unloaded after 5 min idle, VAD chunking for long holds, configurable models, default whisper base. Environment is aarch64 Linux Docker, no KVM, no Android SDK/GPU/audio, network available.
+
+YOUR JOB: find analogous Android projects and extract concrete, reusable design/code. This is the main research task the user asked for. Do not write production app code.
+
+1. Search GitHub/web thoroughly for:
+   - Android offline Whisper dictation apps/services with floating overlay and accessibility insertion.
+   - futo-org/voice-input (offline whisper.cpp Android; long-form chunking; model management).
+   - ggml-org/whisper.cpp Android example/JNI/Vulkan build.
+   - k2-fsa/sherpa-onnx Android AAR/Kotlin API, NNAPI/Whisper.
+   - Android accessibility overlays, non-focusable TYPE_APPLICATION_OVERLAY, ACTION_SET_TEXT vs clipboard/ACTION_PASTE.
+   - Any actual "Wispr Flow Android clone" or "voice typing overlay" repos.
+   - I

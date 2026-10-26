@@ -1,0 +1,5 @@
+B1 delivered the build setup on branch `agent/b1-build` at commit `592fb7d`.
+Running `gradle :core:test :app:assembleDebug --offline` produced BUILD SUCCESSFUL with 74 tests and 0 failures.
+The generated `app-debug.apk` is 8,800,646 bytes.
+Changed files: `gradlew`, `Dockerfile.build`, `.github/workflows/build.yml`, and `scripts/env.sh`.
+The only reported blocker is that no physical Android device is available.

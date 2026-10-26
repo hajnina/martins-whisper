@@ -1,0 +1,5 @@
+Work ID B1 on branch `agent/b1-build` at commit `592fb7d`.
+Ran `gradle :core:test :app:assembleDebug --offline`.
+Result: BUILD SUCCESSFUL; 74 tests, 0 failures; `app-debug.apk` 8,800,646 bytes.
+Changed files: `gradlew`, `Dockerfile.build`, `.github/workflows/build.yml`, `scripts/env.sh`.
+Blocker: no physical Android device.

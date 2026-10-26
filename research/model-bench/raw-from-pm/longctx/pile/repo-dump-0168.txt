@@ -1,0 +1,47 @@
+ssion="android.permission.BIND_ACCESSIBILITY_SERVICE"
+    android:exported="false">
+    <intent-filter>
+        <action android:name="android.accessibilityservice.AccessibilityService" />
+    </intent-filter>
+    <meta-data
+        android:name="android.accessibilityservice"
+        android:resource="@xml/accessibility_service_config" />
+</service>
+```
+
+If I1 uses a manifest receiver for transcripts instead of replacing `inserterFactory`:
+
+```xml
+<receiver
+    android:name=".accessibility.TranscriptReceiver"
+    android:exported="false">
+    <intent-filter>
+        <action android:name="com.martins.whisper.action.TRANSCRIPT" />
+    </intent-filter>
+</receiver>
+```
+
+## Known limitations / blockers
+
+- Runtime validation is blocked: no Android device, no KVM emulator, no microphone, no display/GPU. Overlay drag/render, FGS microphone start, boot restore and clipboard behavior are unverified on hardware.
+- Fake engine only. No native model, no real transcription, no chunker/VAD/merger use yet; each hold produces one `AudioChunk` with `ChunkReason.FLUSH`. C1/E1 should feed `AudioChunker` output and merge transcripts.
+- Insertion currently always copies to clipboard (`InsertResult.Copied`). Accessibility insertion is not wired; `ACTION_TRANSCRIPT` is the handoff hook.
+- Android 14+ restricts microphone FGS starts from the background. Boot restore deliberately starts with foreground type 0; a later press calls `startForeground` with microphone type and may require the app/overlay to be in a user-visible foreground state or an OEM exemption. Documented as a device bring-up item.
+- Overlay expansion clamps to the right edge, so the collapsed bubble can appear shifted left after an expansion near the screen edge. Cosmetic; position is still persisted.
+- `STATE` is process-global, not per-service-instance; fine for a single app process but not multi-process safe.
+- Model/language/backend/idle settings are persisted but only the fake engine consumes language; model/backend/idle unload are staged for E1.
+- Notification Settings/Stop actions use icon `0` and depend on notification permission on Android 13+; the FGS still runs without it.
+- Robolectric/JVM Android tests cannot run on this aarch64 host due to missing Conscrypt native; use an x86_64 runner or device tests.
+
+## Next steps
+
+1. I1: add the accessibility service, wire it via `inserterFactory` or the transcript broadcast, verify focus retention (overlay flags are already non-focusable).
+2. E1: implement `EngineFactory` with whisper.cpp and replace `ModelOptions` with `core.ModelCatalog`; feed real chunks and honor `idleUnloadSeconds`.
+3. C1/PM: replace single-chunk finalize with `AudioChunker`/`Vad`/`TranscriptMerger` on the ASR dispatcher.
+4. T1/PM: run Robolectric and instrumented tests on x86_64/device; device-validate overlay drag, FGS mic start, boot restore, clipboard, accessibility fallback.
+5. G1: merge, then run `:app:lintDebug`, `:app:testDebugUnitTest`, `:app:assembleDebug` together.
+
+## References
+
+- `SPEC.md` sections 3.3, 3.7, 3.8; `DECISIONS.md` ADR-002/003/006; `KANBAN.md` U1.
+- Android platform APIs used directly: `Service`, `NotificationCompat`, `WindowManager` overlay flags, `Au

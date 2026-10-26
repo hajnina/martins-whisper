@@ -1,0 +1,93 @@
+dMs / 1000L).coerceAtLeast(0L)
+        val minutes = totalSeconds / 60
+        val seconds = totalSeconds % 60
+        return "%d:%02d".format(minutes, seconds)
+    }
+}
+
+package com.martins.whisper.overlay
+
+import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
+import android.os.SystemClock
+import android.text.TextPaint
+import android.text.TextUtils
+import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewConfiguration
+import android.view.animation.AnimationUtils
+import com.martins.whisper.service.DictationState
+import kotlin.math.abs
+import kotlin.math.min
+
+class MicBubbleView(context: Context) : View(context) {
+
+    interface Listener {
+        fun onPress()
+        fun onRelease()
+        fun onCancel()
+        fun onDrag(dx: Float, dy: Float)
+        fun onDragEnd()
+        fun onSettingsTap()
+        fun onStopTap()
+    }
+
+    var listener: Listener? = null
+
+    var state: DictationState = DictationState.Idle
+        set(value) {
+            val previous = field
+            field = value
+            if (value is DictationState.Loading || value is DictationState.Processing) {
+                startSpinner()
+            } else {
+                stopSpinner()
+            }
+            if (previous::class != value::class) {
+                when (value) {
+                    is DictationState.Success -> performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                    is DictationState.Error -> performHapticFeedback(HapticFeedbackConstants.REJECT)
+                    else -> Unit
+                }
+            }
+            contentDescription = when (value) {
+                is DictationState.Idle -> "Hold to dictate"
+                is DictationState.Loading -> value.label
+                is DictationState.Recording -> "Recording"
+                is DictationState.Processing -> value.label
+                is DictationState.Success -> value.message
+                is DictationState.Error -> value.message
+            }
+            invalidate()
+        }
+
+    private val density = resources.displayMetrics.density
+    private val bubbleSizePx = dp(56f)
+    val expandedWidthPx = dp(240f).toInt()
+    val expandedHeightPx = dp(64f).toInt()
+
+    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
+    private val maxTextWidth = dp(240f) - dp(124f)
+
+    private val surfacePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val timerPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = sp(15f)
+        isFakeBoldText = true
+    }
+    private val labelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = sp(12f)
+        alpha = 220
+    }
+
+    private var spinnerAngle = 0f
+  

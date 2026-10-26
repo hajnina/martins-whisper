@@ -1,0 +1,67 @@
+ Model download fails/large (base 142 MB) | First-run blocked | Medium | adb push, resumable download, SHA verify, clear UI | E1/D1 |
+| R-07 | Idle unload doesn't free memory (native refs) | Battery/RAM waste | Medium | explicit whisper_free + null + test on device; status evidence | E1/H2 |
+| R-08 | Long-hold latency/queue grows | Bad UX on slow devices | Medium | base default, GPU, chunk during hold, show queue; tiny fallback | C1/E1 |
+| R-09 | Accessibility overlay policy / Play Store rejection | Distribution | High for Play | Sideload-first; document policy; not v1 | PM |
+| R-10 | No emulator/KVM | No e2e in sandbox | High | Robolectric + device later; CI instrumentation on x86_64 runner | B1/T1 |
+| R-11 | Privacy: transcript in clipboard/notification | Leak to clipboard managers | Low-medium | leave clipboard only when insertion fails; clear action; no logs/history | I1/U1 |
+| R-12 | Floating overlay battery/GPU cost | Battery drain | Low-medium | no rendering when idle; idle unload; stop service action | U1/E1 |
+
+# Domain Docs
+
+How the engineering skills consume this repo's domain documentation.
+
+## Before exploring, read these
+
+- `GLOSSARY.md` at the repo root, or `GLOSSARY-MAP.md` if it exists.
+- `docs/adr/` for architecture decisions. This repo also keeps accepted decisions in `DECISIONS.md` at the root.
+
+If these files don't exist, proceed silently.
+
+## File structure
+
+Single-context repo:
+
+```
+/
+├── GLOSSARY.md
+├── DECISIONS.md
+├── docs/adr/
+└── core/, app/
+```
+
+## Use the glossary's vocabulary
+
+When output names a domain concept (issue title, refactor proposal, hypothesis, test name), use the term as defined in `GLOSSARY.md`. Note gaps for `/domain-modeling` instead of inventing synonyms.
+
+## Flag ADR conflicts
+
+If output contradicts an existing ADR in `DECISIONS.md` or `docs/adr/`, surface it explicitly:
+
+> _Contradicts ADR-004 (GGML-only v1), but worth reopening because…_
+
+# Issue tracker: Local Markdown
+
+Issues and specs for this repo live as markdown files in `.scratch/`. We have no GitHub credentials inside the PM container; the owner mirrors to GitHub later.
+
+## Conventions
+
+- One feature per directory: `.scratch/<feature-slug>/`
+- The spec is `.scratch/<feature-slug>/spec.md`
+- Implementation issues are one file per ticket at `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01`, never a single combined tickets file
+- Triage state is recorded as a `Status:` line near the top of each issue file (see `triage-labels.md` for the role strings)
+- Comments and conversation history append to the bottom of the file under a `## Comments` heading
+
+## When a skill says "publish to the issue tracker"
+
+Create a new file under `.scratch/<feature-slug>/` (creating the directory if needed).
+
+## When a skill says "fetch the relevant ticket"
+
+Read the file at the referenced path. The user will normally pass the path or the issue number directly.
+
+## Wayfinding operations
+
+Used by `/wayfinder`. The **map** is a file with one **child** file per ticket.
+
+- **Map**: `.scratch/<effort>/map.md` (the Notes / Decisions-so-far / Fog body).
+- **Child ticket**: `.scratch/<effort>/issues/NN-<slug>.md`, numbered from `01`, with the question 

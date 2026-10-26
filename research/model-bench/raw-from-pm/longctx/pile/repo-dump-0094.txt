@@ -1,0 +1,86 @@
+phone: Boolean,
+    val overlay: Boolean,
+    val accessibility: Boolean,
+    val notifications: Boolean,
+)
+
+enum class PermissionItem { MICROPHONE, OVERLAY, ACCESSIBILITY, NOTIFICATIONS }
+
+object PermissionGate {
+
+    fun missing(snapshot: PermissionSnapshot): List<PermissionItem> = buildList {
+        if (!snapshot.microphone) add(PermissionItem.MICROPHONE)
+        if (!snapshot.overlay) add(PermissionItem.OVERLAY)
+        if (!snapshot.accessibility) add(PermissionItem.ACCESSIBILITY)
+        if (!snapshot.notifications) add(PermissionItem.NOTIFICATIONS)
+    }
+
+    fun canRecord(snapshot: PermissionSnapshot): Boolean = snapshot.microphone
+
+    fun canShowOverlay(snapshot: PermissionSnapshot): Boolean = snapshot.overlay
+
+    fun readyForDictation(snapshot: PermissionSnapshot): Boolean =
+        snapshot.microphone && snapshot.overlay
+
+    fun summary(snapshot: PermissionSnapshot): String =
+        if (missing(snapshot).isEmpty()) "All required permissions granted" else {
+            "Missing: " + missing(snapshot).joinToString { it.name.lowercase().replace('_', ' ') }
+        }
+}
+
+package com.martins.whisper.accessibility
+
+import android.Manifest
+import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Bundle
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
+import android.widget.Toast
+import com.martins.whisper.R
+import com.martins.whisper.core.TextInsertionPlanner
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
+
+class DictationAccessibilityService : AccessibilityService(), TextInserter {
+
+    @Volatile
+    private var lastFocused: NodeSnapshot? = null
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        serviceInfo = serviceInfo?.apply {
+            flags = flags or
+                AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
+                AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
+        }
+        AccessibilityInserter.attach(this)
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event == null) return
+        if (event.packageName?.toString() == packageName) {
+            lastFocused = null
+            return
+        }
+        when (event.eventType) {
+            AccessibilityEvent.TYPE_VIEW_FOCUSED,
+            AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED,
+            -> {
+                val source = event.source ?: return
+                try {
+                    if (source.isEditable && source.isEnabled && source.isVisibleToUser) {
+         

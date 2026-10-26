@@ -1,0 +1,37 @@
+ata
+        android:name="android.accessibilityservice"
+        android:resource="@xml/accessibility_service_config" />
+</service>
+```
+
+- `accessibility_service_config.xml` points `android:settingsActivity` at `com.martins.whisper.ui.MainActivity`; create that class in U1 or update the string.
+- Callers should observe `AccessibilityInserter.connected` to show "enable accessibility" onboarding. If the service is not connected, `insert` returns `Failed("accessibility service not connected")`; the caller must do its own clipboard fallback (the bridge intentionally has no Application context).
+- `InsertResult.Copied` means text is on the clipboard; `Failed` means nothing was inserted/copied.
+- Do not clear the clipboard automatically (per SPEC 3.6).
+
+## Known limitations / blockers
+- No Android device/emulator: no real end-to-end insertion evidence. All behavior is code-reviewed + JVM-tested only.
+- Robolectric smoke tests were attempted and removed: on this aarch64 host Robolectric 4.14.1 loads `libconscrypt_openjdk_jni-linux-aarch_64.so`, which is absent from `conscrypt-openjdk-uber-2.5.2` (x86_64 only). Unblock by running on x86_64 or supplying an aarch64 conscrypt native build; the pure decision tests already cover routing.
+- `ACTION_SET_TEXT` may return `true` but ignore the selection bundle in some editors; caret placement is not verifiable without a device.
+- Compose/WebView fields often expose editable nodes without readable text; these intentionally use paste. Some WebViews reject both `ACTION_SET_TEXT` and `ACTION_PASTE` and end at clipboard fallback.
+- `ACTION_PASTE` needs the target field to retain input focus; the overlay must stay `FLAG_NOT_FOCUSABLE` (U1).
+- Notification fallback is skipped when `POST_NOTIFICATIONS` is denied (Android 13+); the toast and clipboard still work.
+- Reading `node.text` for non-password fields is required for `SET_TEXT`; spans are flattened to plain text.
+
+## On-device test matrix (unverified in sandbox)
+| Target | Expected route | Checks |
+|---|---|---|
+| AOSP Contacts/Messages `EditText` | SET_TEXT | text at cursor, replace selection, emoji, undo |
+| WhatsApp / Signal / Telegram composer | SET_TEXT, else PASTE | cursor mid-text, selection replace, multiline |
+| Chrome/WebView contenteditable | PASTE (no readable text) | paste at caret, no duplicate, no crash |
+| Compose `BasicTextField` apps | PASTE or clipboard | focus retained while overlay used |
+| Search fields / disabled fields | clipboard fallback | toast + notification; no focus theft |
+| Password fields | clipboard fallback | no text leak into field |
+| Split-screen / freeform multi-window | SET_TEXT in active window | active-window pick, stale-node retry |
+| Own app text field | reject/ignore | nothing inserted; no self-paste loop |
+| Accessibility turned off / revoked | `Failed(not connected)` | U1 shows clipboard fallback and onboarding |
+| Emoji/surrogate text | SET_TEXT | full emoji preserved, caret after emoji |
+| Notification permission denied (33+) | clipboard + toast | no crash, notification skipped |
+
+## References used
+- https://developer.android.com/reference/android/accessibilityservice/AccessibilityService - service lifecycle/focu

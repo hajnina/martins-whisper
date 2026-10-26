@@ -1,0 +1,106 @@
+thanks for watching",
+        "please subscribe.",
+        "please subscribe",
+        "[blank_audio]",
+        "[ blank_audio ]",
+        "[blank audio]",
+        "[ blank audio ]",
+        "[silence]",
+        "[ silence ]",
+        "(silence)",
+        "*silence*",
+        "[music]",
+        "[ music ]",
+        "[applause]",
+        "[laughter]",
+        "(upbeat music)",
+        "...",
+        "you",
+    )
+
+    private val whitespace = Regex("\\s+")
+    private val spaceBeforePunctuation = Regex("\\s+([,.;:!?])")
+
+    fun normalize(text: String): String {
+        var value = text.replace(whitespace, " ").trim()
+        value = spaceBeforePunctuation.replace(value, "$1")
+        if (value.isBlank()) return ""
+        if (hallucinations.contains(value.lowercase())) return ""
+        return value
+    }
+}
+
+package com.martins.whisper.core
+
+import com.martins.whisper.core.audio.AudioChunker
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
+
+class AudioChunkerTest {
+    private fun frame(amplitude: Int): ShortArray = ShortArray(320) { amplitude.toShort() }
+
+    private fun feed(
+        chunker: AudioChunker,
+        durationMs: Int,
+        amplitude: Int,
+        startMs: Long,
+        output: MutableList<AudioChunk> = mutableListOf(),
+    ): Long {
+        var time = startMs
+        repeat(durationMs / AudioChunker.FRAME_MS) {
+            output += chunker.push(frame(amplitude), time)
+            time += AudioChunker.FRAME_MS
+        }
+        return time
+    }
+
+    @Test
+    fun `first word includes pre roll before onset`() {
+        val chunker = AudioChunker()
+        val chunks = mutableListOf<AudioChunk>()
+        var time = feed(chunker, 300, 0, 0, chunks)
+        time = feed(chunker, 300, 2_000, time, chunks)
+        feed(chunker, 600, 0, time, chunks)
+
+        assertEquals(1, chunks.size)
+        val chunk = chunks.single()
+        assertEquals(0, chunk.startMs)
+        assertEquals(ChunkReason.SILENCE, chunk.reason)
+        assertTrue(chunk.endMs > 600)
+        assertEquals(0, chunk.index)
+    }
+
+    @Test
+    fun `short blips are ignored`() {
+        val chunker = AudioChunker()
+        val chunks = mutableListOf<AudioChunk>()
+        var time = feed(chunker, 100, 2_000, 0, chunks)
+        feed(chunker, 900, 0, time, chunks)
+
+        assertTrue(chunks.isEmpty())
+    }
+
+    @Test
+    fun `silence finalizes speech chunk`() {
+        val chunker = AudioChunker()
+        val chunks = mutableListOf<AudioChunk>()
+        var time = feed(chunker, 300, 2_000, 0, chunks)
+        feed(chunker, 600, 0, time, chunks)
+
+        assertEquals(1, chunks.size)
+        assertEquals(ChunkReason.SILENCE, chunks[0].reason)
+        assertTrue(chunks[0].endMs - chunks[0].startMs >= 800)
+        assertTrue(chunker.speechMs >= 300)
+    }
+
+    @Test
+    fun `maximum length split has 250ms overlap`() {
+        val chunker = AudioChunker()
+        val chunks = mutableListOf<AudioChunk>()
+        var time = feed(chunker, 26_000, 2_000, 0, chunks)
+        feed(chunker, 600, 0, time, chunks)
+
+        assertTrue(chunks.size >= 2)
+        val first = chunks.first { it.reason == ChunkReason.MAX_LE

@@ -1,0 +1,44 @@
+*
+Context: R1 prior-art review (`research/ANDROID_PRIOR_ART.md`) found whisper.cpp is the only option with GGML + Vulkan + per-call control; sherpa-onnx's GPU path is NNAPI, which Android deprecated in 15. Vulkan speedups are device-dependent (Pixel 8 ~9%; Adreno 640 init failure; Adreno 840+Turnip ~4.3x), so GPU must not block v1.
+Decision:
+- Vendor MIT whisper.cpp, build one arm64-v8a library with Vulkan + CPU, default `auto`, fall back to CPU once, persist/report the active backend and fallback reason.
+- v1 accepts **GGML models only**; ONNX import is a documented follow-up, not v1. Keep the `SpeechEngine` seam.
+- sherpa-onnx AAR is the emergency fallback only if the native build cannot be made green; do not implement it in v1.
+- CPU-first APK is acceptable if Vulkan is not green by integration; GPU validation happens on a device (H2).
+Consequences: One model format/catalog; custom model import is GGML-only in v1. Native NDK/Vulkan build remains a risk on the aarch64 host; CI/Docker x86_64 build is the fallback. Device-specific GPU performance and crashes must be measured, with a persisted GPU-crash counter defaulting to CPU.
+
+## ADR-007: Reboot behavior - tap-to-re-arm, no boot-time microphone start (2026-10-26)
+
+Status: Accepted.
+Context: Android 14+ restricts microphone foreground services started from `BOOT_COMPLETED`; Android 15 while-in-use rules also require a visible overlay/SAW exemption. Starting a hidden mic recorder at boot is unsafe and likely rejected.
+Decision: On boot, show a "Tap to re-arm dictation" notification that starts the microphone FGS from a visible Activity. Do not auto-start mic capture from `BOOT_COMPLETED` in v1.
+Consequences: One user tap after reboot; no policy/OS restriction fight. An overlay-first SAW flow can be tested later on Android 15 devices.
+
+## ADR-005: VAD chunking with overlap + token-boundary dedupe (2026-10-26)
+
+Status: Accepted.
+Decision: 20 ms frames, adaptive energy VAD, 500 ms silence finalize, 25 s max chunk, 250 ms overlap on forced splits, merge by suffix/prefix token dedupe.
+Consequences: No external VAD dependency in v1; may need Silero/WebRTC for noisy environments later.
+
+## ADR-006: Non-focusable overlay + no direct text injection (2026-10-26)
+
+Status: Accepted.
+Decision: Never use an invisible IME or root; rely on accessibility. If accessibility is off, the app degrades to clipboard + notification.
+Consequences: No root required; limited to accessibility-exposed fields.
+
+# Kanban - Martins Whisper (Android)
+
+Updated: 2026-10-26T16:45Z
+Columns: Backlog | Ready | In Progress | Review | Blocked | Done
+WIP limit: 6 background agents.
+
+## Wayfinder map (source of truth for the road to sign-off)
+
+Destination: a signed-off APK that dictates into any app on a real Android phone.
+Map: `.scratch/device-ready-apk/map.md` (10 decision tickets; local markdown). KANBAN rows below are the execution view of that map.
+
+## In Progress (background agents)
+
+| ID | Deliverable | Owner / branch | Depends on | Handoff |
+|---|---|---|---|---|
+| B1 | Android build harness: JDK 17, Gradle, SDK 35, aarch64 host workarounds, native NDK feasibility, emulator feasibility, reproducible Docker/CI. Produce build r

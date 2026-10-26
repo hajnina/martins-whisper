@@ -1,0 +1,57 @@
+ted on the JVM: idle unload at 300 s, model swap, download verification/SHA256, failure/retry, fake engine path?
+- Is the native whisper.cpp JNI library required at merge time, or can the engine seam ship with a clearly failing/stubbed native load until G1/device? What does ADR-004 require?
+- Does the catalog match the model facts from ticket 01, and how are licenses/attribution surfaced?
+- What evidence goes in the E1 handoff, and what is the exact PM verification command?
+
+Output: merge checklist, accepted limitations, and follow-ups.
+
+# 05 — Which test layers can T1 deliver without KVM, and what waits for device?
+
+Type: grilling
+Status: open
+Blocked by: 03, 04
+
+## Question
+
+The sandbox has no `/dev/kvm` and is aarch64. Decide what T1 actually delivers:
+
+- Layer 1: existing JVM/Robolectric suites as the merge gate — what must be added (fake audio source, fake `SpeechEngine`, end-to-end chunk→VAD→merge→insertion-plan test)?
+- Layer 2: instrumentation tests that compile and are documented but cannot run here — which flows (overlay, accessibility, permissions, service lifecycle) and how are they kept green-on-device later?
+- Layer 3: attempted emulator/Docker path — is a software-emulated x86_64 runner worth one timeboxed try, or explicitly out of scope until hardware?
+- What is the pass/fail command list for G1, and what is documented as device-only?
+
+Output: T1 scope, test inventory, exact commands, device-only checklist.
+
+# 06 — Which operators, devices and permissions does D1 document for v1?
+
+Type: grilling
+Status: open
+Blocked by: 01
+
+## Question
+
+Decide the D1 documentation set and its audience:
+
+- Who installs v1: a technical sideloader (Martin/dev) or a non-technical user? What does that imply for the permission checklist and troubleshooting?
+- Which minimum device profile is v1 supported on (Android version, RAM, arm64, Vulkan presence)? What is best-effort vs unsupported?
+- Which docs are required: build, install/sideload, adb model push, permission wizard, privacy/data-flow, known OEM quirks, uninstall/cleanup?
+- How are model download/import, accessibility enablement, and overlay/mic permissions explained without assuming Android expertise?
+- What is the "doctor" output that should be pasted into a bug report (backend, model, permissions, device, version), with no secrets?
+
+Output: doc outline with owners and acceptance ("a new user can install and dictate from this alone").
+
+# 07 — How is the v1 APK signed and distributed?
+
+Type: grilling
+Status: open
+Blocked by: none
+
+## Question
+
+Decide before G1 so the artifact is reproducible and upgrades work:
+
+- Is v1 a debug-signed APK for Martin's device only, or a release-signed APK with a keystore? If release: who generates and holds the keystore, where does it live (never in the repo), and how is it backed up?
+- What is the versionCode/versionName policy for the first push and subsequent builds?
+- Where is the APK published for the device test: local path, GitHub release asset by the owner, or private file share? What checksum is published?
+- What must never be committed (keystore, passwords, `local.properties`, model files), and how do we verify before the owner pushes?
+- What is the 

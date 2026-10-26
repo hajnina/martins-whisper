@@ -1,0 +1,96 @@
+center)
+            lineTo(center - dp(2.5f), center + dp(7f))
+            lineTo(center + dp(10f), center - dp(7f))
+        }
+        canvas.drawPath(path, iconPaint)
+    }
+
+    private fun drawCross(canvas: Canvas, center: Float) {
+        iconPaint.color = Color.WHITE
+        iconPaint.strokeWidth = dp(2.6f)
+        iconPaint.strokeCap = Paint.Cap.ROUND
+        canvas.drawLine(center - dp(7f), center - dp(7f), center + dp(7f), center + dp(7f), iconPaint)
+        canvas.drawLine(center + dp(7f), center - dp(7f), center - dp(7f), center + dp(7f), iconPaint)
+    }
+
+    private fun drawGear(canvas: Canvas, cx: Float, cy: Float) {
+        iconPaint.color = Color.argb(225, 255, 255, 255)
+        iconPaint.strokeWidth = dp(1.6f)
+        iconPaint.strokeCap = Paint.Cap.ROUND
+        val inner = dp(3.4f)
+        val outer = dp(8f)
+        canvas.drawCircle(cx, cy, inner, iconPaint)
+        for (index in 0 until 8) {
+            val angle = Math.toRadians((index * 45).toDouble())
+            val cos = kotlin.math.cos(angle).toFloat()
+            val sin = kotlin.math.sin(angle).toFloat()
+            canvas.drawLine(
+                cx + cos * (inner + dp(1.4f)),
+                cy + sin * (inner + dp(1.4f)),
+                cx + cos * outer,
+                cy + sin * outer,
+                iconPaint,
+            )
+        }
+    }
+
+    private fun drawStop(canvas: Canvas, cx: Float, cy: Float) {
+        fillPaint.color = Color.argb(225, 255, 255, 255)
+        val half = dp(5.5f)
+        canvas.drawRoundRect(
+            RectF(cx - half, cy - half, cx + half, cy + half),
+            dp(2f),
+            dp(2f),
+            fillPaint,
+        )
+    }
+
+    private fun accentFor(state: DictationState): Int = when (state) {
+        is DictationState.Idle -> Color.rgb(19, 93, 102)
+        is DictationState.Loading -> Color.rgb(178, 106, 0)
+        is DictationState.Recording -> Color.rgb(198, 40, 40)
+        is DictationState.Processing -> Color.rgb(21, 101, 192)
+        is DictationState.Success -> Color.rgb(46, 125, 50)
+        is DictationState.Error -> Color.rgb(176, 0, 32)
+    }
+
+    private fun startSpinner() {
+        if (spinnerRunning) return
+        spinnerRunning = true
+        post(spinnerTick)
+    }
+
+    private fun stopSpinner() {
+        spinnerRunning = false
+        removeCallbacks(spinnerTick)
+    }
+
+    override fun onDetachedFromWindow() {
+        stopSpinner()
+        super.onDetachedFromWindow()
+    }
+
+    fun formatElapsed(elapsedMs: Long): String = BubbleFormat.elapsed(elapsedMs)
+
+    private fun dp(value: Float): Float = value * density
+
+    private fun sp(value: Float): Float = value * resources.displayMetrics.scaledDensity
+
+    @Suppress("unused")
+    private fun unusedAnimation() = AnimationUtils.currentAnimationTimeMillis()
+}
+
+package com.martins.whisper.overlay
+
+import android.content.Context
+import android.graphics.PixelFormat
+import android.os.Build
+import android.provider.Settings
+import android.view.Gravity
+import android.view.WindowManager
+import com.martins.whisper.data.SettingsStore
+import com.martins.whisper.service.DictationState
+
+class OverlayController(context: Context) {
+
+    private val appContext = context.applic

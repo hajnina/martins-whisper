@@ -1,0 +1,23 @@
+hange.
+- **Boot/FGS caveat:** start the microphone FGS from a visible Activity and keep it alive. Android 14+ restricts microphone FGS from `BOOT_COMPLETED`; Android 15 requires SAW + a currently visible overlay for the SAW background-start exemption. Prefer a “tap to re-arm” notification after reboot unless U1 verifies the overlay-first flow on device.
+
+## Evidence
+
+- whisper.cpp Android example is CPU-only (`GGML_USE_CPU`); `GGML_VULKAN` exists in `ggml/CMakeLists.txt:224` and the Vulkan CMake requires host `glslc` + SPIRV-Headers. Community Android recipe and caveats: issue #2370.
+- GPU data points: issue #2370 Pixel 8 30 s audio CPU 73 s vs Vulkan 67 s; issue #2706 Adreno 640 “does not support 16-bit storage” -> `Unsupported device`; discussion #3943 Adreno 840 + Turnip 120 s small model 27.8 s vs 120.8 s (~4.3x), stock driver cm2 pipeline failures.
+- `ggml_backend_vk_reg()` catches Vulkan init exceptions and returns null, so unsupported backends can be skipped; a driver SIGSEGV is still fatal (motivates crash counter/CPU fallback).
+- sherpa AAR is 49.2 MB, includes all four ABIs; `provider.h` has no Vulkan provider; NNAPI is API 27+ and deprecated in Android 15 (official docs recommend CPU or TF Lite GPU for performance).
+- Futo closes the model after every inference (`AudioRecognizer.kt:523`, `:538`) and uses a patched `partial_text_callback`; upstream whisper.cpp only exposes `new_segment_callback` (`include/whisper.h:463`). Futo also uses `audio_ctx = min(1500, ceil(samples/320)+32)` for short holds.
+- Ramble implements exactly `TRANSCRIBER_IDLE_UNLOAD_MS = 5 * 60 * 1000L` (`DictationRuntime.kt:231`) with generation-guarded release (`:602`), VAD max segment 15 s (`SherpaVadHandle.kt:36`), direct-before-paste/read-back insertion (`TextDestination.kt:232`), and password guard (`PasswordFieldGuard.kt:37`). GPLv3: design only.
+- Android docs: untrusted touch on Android 12 (TYPE_APPLICATION_OVERLAY not trusted; accessibility/IME trusted; 0.8 opacity), FGS microphone/while-in-use restrictions, Play accessibility declaration.
+- Model sizes/SHA-256 for tiny/base/small/medium/large-v3-turbo are in report §3.5. Quantized base q5_1/q8_0 are 59.7/81.8 MB.
+- Nix feasibility checked, not built: `nix eval nixpkgs#androidndk` -> 27.0.12077973; `nixpkgs#shaderc` -> 2026.1; `nixpkgs#vulkan-headers` -> 1.4.363.0.
+
+## Known limitations / blockers
+
+- No Android SDK/NDK build, no APK, no emulator, no device, no GPU, no mic/audio in this sandbox. Vulkan feasibility is from upstream/community evidence, not a local build.
+- Vulkan speed is device/driver dependent; stock Adreno/Mali behavior may differ from the Turnip benchmark. H1/H2 must measure.
+- Accessibility field matrix is untested on device; WebView/Compose/Terminal behavior is based on source reading, not live tests.
+- Boot-time microphone FGS behavior needs Android 14/15 device validation; the report gives a safe notification-based fallback.
+- Licenses: Futo (non-commercial), Ramble (GPLv3), Whisperclient and Flo (no license) are design references only. Do not copy their code. whisper.cpp (MIT), sherpa-onnx/phone-whisper (Apache-2.0) are reusable with notices.
+- `sherpa-onnx` README references `v2.0.

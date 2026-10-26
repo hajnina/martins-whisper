@@ -1,0 +1,37 @@
+ rendering, ARM images. Try if plausible, document why blocked otherwise. Do not fake a device.
+6. Deliver in your worktree:
+   - `scripts/bootstrap-build.sh` and `scripts/env.sh` (idempotent, paths configurable).
+   - `Dockerfile.build` (x86_64 Linux recommended) + `docs/BUILD.md` with local aarch64 and CI/Docker paths.
+   - `.github/workflows/android.yml` CI build+unit tests (x86_64 runner), if appropriate.
+   - `TOOLCHAIN.md` at worktree root: installed locations/versions, commands for other agents to use JDK/Gradle/SDK, current status.
+   - `handoffs/B1-build/HANDOFF.md` + `SUMMARY.txt`.
+   - Commit.
+7. Final message: executive summary (<=10 lines), what can/cannot be built here, exact next action.
+
+Rules: verify with real command output; no fabricated success. Keep scripts tidy and non-destructive. If you install shared toolchain under /work/android-toolchain, other agents may read it; write the status file early and update it.
+
+You are C1-core-audio (v2), background implementation subagent. START WRITING CODE IMMEDIATELY. Do not install JDK/Gradle, do not use nix. The shared toolchain is READY.
+
+WORKTREE: /work/martins-whisper-worktrees/c1-core-audio
+Read: SPEC.md (3.4), AGENTS.md, core/.../Contracts.kt. Commit on agent/c1-core-audio. Do not merge.
+
+TOOLCHAIN:
+- JAVA_HOME=/work/android-toolchain/jdk
+- Gradle wrapper: /home/node/.local/bin/gradle
+- Run: JAVA_HOME=/work/android-toolchain/jdk /home/node/.local/bin/gradle -p /work/martins-whisper-worktrees/c1-core-audio :core:test --no-daemon
+
+IMPLEMENT (pure Kotlin, no Android imports):
+1. core/audio/EnergyVad.kt - adaptive noise floor EMA, absolute floor/threshold multiplier, speech hangover, reset; handles zeros/constant noise/loud speech/short blips.
+2. core/audio/AudioChunker.kt implementing AudioChunkerApi - 20ms frames, 300ms pre-roll, min speech 250ms, silence finalize 500ms, max chunk 25s, 250ms overlap on MAX_LENGTH cut near lowest energy in last 2s, 10min cap, timestamps/reason/index/overlapMs/speechMs, flush semantics.
+3. core/audio/RingBuffer.kt + AudioMath (RMS), as needed.
+4. Replace TranscriptMerger stub body in Contracts.kt with token-level suffix/prefix dedupe (case/punctuation-insensitive, <=8 words), preserve punctuation, one space, no invented text; keep signature.
+5. core/text/TextNormalizer.kt - whitespace normalization, low-confidence hallucination blocklist; empty on silence.
+6. JUnit tests under core/src/test: synthetic speech/silence, pre-roll first word, short blips, silence finalize, 25s forced split + overlap, flush, cap, timestamps, merge duplicates/punctuation/case, normalizer.
+7. Run tests with the command above; paste real output. Handoff handoffs/C1-core-audio/HANDOFF.md + SUMMARY.txt, commit. Final message = executive summary + test evidence.
+
+Timebox: 25 minutes of implementation/testing. Do not research further.
+
+You are C1-core-audio (v3). You have 45 minutes. NO RECONNAISSANCE. Do not run ls/find/git log/cat on the repo, do not read SPEC/AGENTS/KANBAN again, do not install anything, do not use nix. The contracts are already known.
+
+WORKTREE: /work/martins-whisper-worktrees/c1-core-audio
+FIRST ACTION MUST BE A FILE WRITE. Write these files now, then te

@@ -1,0 +1,104 @@
+p(5.5f)
+        canvas.drawRoundRect(
+            RectF(cx - half, cy - half, cx + half, cy + half),
+            dp(2f),
+            dp(2f),
+            fillPaint,
+        )
+    }
+
+    private fun accentFor(state: DictationState): Int = when (state) {
+        is DictationState.Idle -> Color.rgb(19, 93, 102)
+        is DictationState.Loading -> Color.rgb(178, 106, 0)
+        is DictationState.Recording -> Color.rgb(198, 40, 40)
+        is DictationState.Processing -> Color.rgb(21, 101, 192)
+        is DictationState.Success -> Color.rgb(46, 125, 50)
+        is DictationState.Error -> Color.rgb(176, 0, 32)
+    }
+
+    private fun startSpinner() {
+        if (spinnerRunning) return
+        spinnerRunning = true
+        post(spinnerTick)
+    }
+
+    private fun stopSpinner() {
+        spinnerRunning = false
+        removeCallbacks(spinnerTick)
+    }
+
+    override fun onDetachedFromWindow() {
+        stopSpinner()
+        super.onDetachedFromWindow()
+    }
+
+    fun formatElapsed(elapsedMs: Long): String = BubbleFormat.elapsed(elapsedMs)
+
+    private fun dp(value: Float): Float = value * density
+
+    private fun sp(value: Float): Float = value * resources.displayMetrics.scaledDensity
+
+    @Suppress("unused")
+    private fun unusedAnimation() = AnimationUtils.currentAnimationTimeMillis()
+}
+
+package com.martins.whisper.overlay
+
+import android.content.Context
+import android.graphics.PixelFormat
+import android.os.Build
+import android.provider.Settings
+import android.view.Gravity
+import android.view.WindowManager
+import com.martins.whisper.data.SettingsStore
+import com.martins.whisper.service.DictationState
+
+class OverlayController(context: Context) {
+
+    private val appContext = context.applicationContext
+    private val windowManager =
+        appContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    private val settings = SettingsStore(appContext)
+
+    private var view: MicBubbleView? = null
+    private var params: WindowManager.LayoutParams? = null
+
+    val isShowing: Boolean
+        get() = view?.isAttachedToWindow == true
+
+    fun show(listener: MicBubbleView.Listener): Boolean {
+        if (isShowing) return true
+        if (!Settings.canDrawOverlays(appContext)) return false
+
+        val bubbleView = MicBubbleView(appContext).apply { this.listener = listener }
+        val (screenWidth, screenHeight) = screenSize()
+        val bubble = dp(56f)
+        val margin = dp(12f)
+        val default = OverlayGeometry.defaultBottomEnd(
+            width = bubble,
+            height = bubble,
+            screenWidth = screenWidth,
+            screenHeight = screenHeight,
+            margin = margin,
+            bottomInset = dp(72f),
+        )
+        val x: Int
+        val y: Int
+        if (settings.hasSavedBubblePosition()) {
+            val clamped = OverlayGeometry.clamp(
+                settings.bubbleX,
+                settings.bubbleY,
+                bubble,
+                bubble,
+                screenWidth,
+                screenHeight,
+                margin,
+            )
+            x = clamped.first
+            y = clamped.second
+        } else {
+            x = default.first
+            y = default.second
+        }
+
+        v

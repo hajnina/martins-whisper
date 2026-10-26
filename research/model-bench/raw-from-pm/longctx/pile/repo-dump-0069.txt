@@ -1,0 +1,99 @@
+atus = body(getString(R.string.status_unknown)).apply {
+            setPadding(dp(8), 0, dp(8), 0)
+            setTextColor(Color.rgb(100, 100, 100))
+        }
+        row.addView(status)
+        row.addView(Button(this).apply {
+            text = getString(R.string.grant)
+            minWidth = 0
+            minimumWidth = 0
+            setOnClickListener { onClick() }
+        })
+        return PermissionRow(row, status)
+    }
+
+    private fun title(text: String): TextView = TextView(this).apply {
+        this.text = text
+        textSize = 28f
+        setTextColor(Color.rgb(19, 93, 102))
+        setTypeface(typeface, Typeface.BOLD)
+    }
+
+    private fun section(text: String): TextView = TextView(this).apply {
+        this.text = text
+        textSize = 17f
+        setTypeface(typeface, Typeface.BOLD)
+        setTextColor(Color.rgb(30, 40, 45))
+        setPadding(0, dp(22), 0, dp(6))
+    }
+
+    private fun label(text: String): TextView = TextView(this).apply {
+        this.text = text
+        textSize = 14f
+        setTextColor(Color.rgb(60, 70, 75))
+        setPadding(0, dp(8), 0, dp(2))
+    }
+
+    private fun body(text: String): TextView = TextView(this).apply {
+        this.text = text
+        textSize = 14f
+        setTextColor(Color.rgb(35, 42, 46))
+    }
+
+    private fun caption(text: String): TextView = TextView(this).apply {
+        this.text = text
+        textSize = 12f
+        setTextColor(Color.rgb(100, 105, 110))
+    }
+
+    private fun matchWidth(): LinearLayout.LayoutParams =
+        LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    private val rootView: View? get() = window.decorView
+
+    companion object {
+        const val EXTRA_OPEN_SETTINGS = "open_settings"
+        private const val REQUEST_MIC = 100
+        private const val REQUEST_NOTIFICATIONS = 101
+    }
+}
+
+package com.martins.whisper.audio
+
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
+import android.os.SystemClock
+import androidx.core.content.ContextCompat
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.sqrt
+
+class AudioRecordSource(
+    private val context: Context,
+    private val frameSamples: Int = 320,
+    private val sampleRate: Int = 16_000,
+) : AudioSource {
+
+    private val running = AtomicBoolean(false)
+    private var record: AudioRecord? = null
+    private var thread: Thread? = null
+
+    override fun start(onFrame: (ShortArray, Long) -> Unit, onError: (Throwable) -> Unit) {
+        if (running.get()) return
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            onError(SecurityException("RECORD_AUDIO not granted"))
+            return
+        }
+        val minBuffer = AudioRecord.getMinBufferSize(
+            sampleRate,
+            AudioFormat.CHANNEL_IN_MONO,
+            AudioFormat.ENCODING_PCM_16BIT,
+        )
+        if (minBuffer <=

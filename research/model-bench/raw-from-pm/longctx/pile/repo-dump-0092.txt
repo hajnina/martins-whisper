@@ -1,0 +1,107 @@
+ntent.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+
+sealed interface InsertResult {
+    data object Inserted : InsertResult
+    data class Copied(val reason: String) : InsertResult
+    data class Failed(val reason: String) : InsertResult
+}
+
+interface TextInserter {
+    fun insert(text: String): InsertResult
+}
+
+/**
+ * Temporary U1 implementation. I1 should replace this with the accessibility-backed
+ * inserter; the service also emits ACTION_TRANSCRIPT for that integration.
+ */
+class ClipboardTextInserter(context: Context) : TextInserter {
+    private val clipboard =
+        context.applicationContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+
+    override fun insert(text: String): InsertResult = try {
+        clipboard.setPrimaryClip(ClipData.newPlainText("Martins Whisper", text))
+        InsertResult.Copied("clipboard")
+    } catch (t: Throwable) {
+        InsertResult.Failed(t.message ?: "clipboard unavailable")
+    }
+}
+
+package com.martins.whisper.ui
+
+import com.martins.whisper.core.ModelSpec
+
+/**
+ * Local catalog stub used until E1 exposes [com.martins.whisper.core.ModelCatalog].
+ * Ids and filenames follow the whisper.cpp GGML naming convention so persistence survives
+ * the later swap to the core catalog.
+ */
+object ModelOptions {
+    val specs: List<ModelSpec> = listOf(
+        ModelSpec(
+            id = "tiny",
+            displayName = "Tiny (multilingual)",
+            fileName = "ggml-tiny.bin",
+            url = null,
+            sha256 = null,
+            sizeBytes = 75L * 1024 * 1024,
+            multilingual = true,
+        ),
+        ModelSpec(
+            id = "base",
+            displayName = "Base (multilingual, default)",
+            fileName = "ggml-base.bin",
+            url = null,
+            sha256 = null,
+            sizeBytes = 142L * 1024 * 1024,
+            multilingual = true,
+        ),
+        ModelSpec(
+            id = "small",
+            displayName = "Small (multilingual)",
+            fileName = "ggml-small.bin",
+            url = null,
+            sha256 = null,
+            sizeBytes = 466L * 1024 * 1024,
+            multilingual = true,
+        ),
+        ModelSpec(
+            id = "medium",
+            displayName = "Medium (multilingual)",
+            fileName = "ggml-medium.bin",
+            url = null,
+            sha256 = null,
+            sizeBytes = 1500L * 1024 * 1024,
+            multilingual = true,
+        ),
+        ModelSpec(
+            id = "large-v3-turbo",
+            displayName = "Large v3 Turbo",
+            fileName = "ggml-large-v3-turbo.bin",
+            url = null,
+            sha256 = null,
+            sizeBytes = 1600L * 1024 * 1024,
+            multilingual = true,
+        ),
+    )
+
+    fun byId(id: String): ModelSpec? = specs.firstOrNull { it.id == id }
+
+    fun displayName(id: String): String = byId(id)?.displayName ?: id
+}
+
+package com.martins.whisper.ui
+
+data class PermissionSnapshot(
+    val microphone: Boolean,
+    val overlay: Boolean,
+    val accessibility: Boolean,
+    val notifications: Boolean,
+)
+
+enum class PermissionItem { MICROPHONE, OVERLAY, ACCESSIBILITY, NOTIFICATIONS }
+
+object PermissionGate {
+
+    fun

@@ -1,0 +1,40 @@
+# 3.5 Model lifecycle
+
+- Default `base` (multilingual GGML, 16-bit). Catalog includes tiny/base/small/medium/large-v3-turbo, `.en` variants where available, plus custom file. Default backend `auto` (GPU if compiled+available else CPU).
+- Model files live in `context.filesDir/models/<id>.bin`; SHA256 verified after download/import.
+- First run: onboarding explains local-only and offers "download base" (or `adb push` path). App does not silently download.
+- `ModelManager`: ref-counted or single ASR thread; load on first use; `markUsed()` after each transcription/insert; idle watchdog every 15 s; unload at 300 s, `whisper_free` + null reference + `System.gc()` best-effort. Model switch unloads immediately.
+- While unloaded, hold still starts recording and shows "loading model"; once loaded, queued chunks transcribe.
+- GPU: native build with Vulkan (`GGML_VULKAN=1`); runtime exposes backend string. If Vulkan init fails, retry CPU once and remember fallback. If native engine cannot be built, sherpa-onnx NNAPI/CPU is a fallback architecture under an ADR (pending spike).
+
+### 3.6 Android insertion
+
+- `DictationAccessibilityService` tracks `TYPE_VIEW_FOCUSED` / `TYPE_VIEW_TEXT_SELECTION_CHANGED` and `findFocus(FOCUS_INPUT)`.
+- Overlay window uses `FLAG_NOT_FOCUSABLE | FLAG_NOT_TOUCH_MODAL`, so pressing it does not move input focus.
+- Insertion attempt order:
+  1. Read focused node text + selection. Use `ACTION_SET_TEXT` with full new text and selection at end (works in many native fields).
+  2. If unsupported/failed: set clipboard, perform `ACTION_PASTE` on focused editable node.
+  3. If no editable node: copy to clipboard, toast + notification "Copied; paste manually".
+- Do not clear clipboard automatically (Android background clipboard read is restricted; leaving text is safer/private enough and useful). Optional future setting.
+- Handle WebView/Compose fields that expose editable nodes but not text: use paste fallback.
+
+### 3.7 Overlay UX
+
+- Idle: 56 dp circular bubble, bottom-end by default, draggable; position persisted. Small gear target inside expanded pill or via notification action.
+- Press: haptic, expand to pill, start recording, show elapsed time + live level bars.
+- Loading: spinner + "Loading base..."
+- Processing: shimmer + "Transcribing"; success: check flash; error: short red message.
+- Release before 400 ms: cancel with subtle "Hold to talk" toast.
+- Non-focusable always; do not show IME; no full-screen overlay.
+- Respect screen-off: stop overlay rendering when display off? Service stays; optional.
+
+### 3.8 Permissions / onboarding
+
+- Microphone (`RECORD_AUDIO`), overlay (`SYSTEM_ALERT_WINDOW`), accessibility service (settings deep link), notifications (`POST_NOTIFICATIONS` on 13+), foreground service microphone (`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MICROPHONE`).
+- Battery optimization exemption prompt (optional, Samsung/Xiaomi especially).
+- Boot start (`RECEIVE_BOOT_COMPLETED`) to restore overlay after reboot; user can disable.
+- Internet permission only for model download; app works with network disabled after download. No analytics.
+
+## 4. Build / test plan
+
+- JDK 17, Gradle 8.x, AGP 8.x, Kotlin 2.x, compileSdk 35, minSdk 2

@@ -1,0 +1,57 @@
+sing, OOM, engine crash, insertion failure. Always keep the transcript recoverable (clipboard + notification + optional local history off by default).
+R9. **Tidy + testable.** Pure-Kotlin core logic (VAD/chunker/merge/model state) runs in JVM unit tests. Android shell has Robolectric/instrumented tests. Build and device validation instructions included.
+R10. **Mega simple first.** No accounts, no sync, no cloud, no LLM cleanup in v1. Minimal screens: onboarding/permissions + settings + overlay.
+
+## 2. Non-goals (v1)
+
+- Play Store distribution / accessibility-policy review.
+- iOS, desktop, web.
+- Multi-language UI.
+- Punctuation/rewrite LLM post-processing.
+- Speaker diarization.
+- Syncing/history across devices.
+- Hands-free mode (hold-only is the requirement).
+
+## 3. Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ ForegroundService (microphone type)                         │
+│  ├─ OverlayController (WindowManager TYPE_APPLICATION_OVERLAY)
+│  │    └─ MicBubbleView (custom Canvas view, non-focusable)
+│  ├─ AudioCapture (AudioRecord 16 kHz mono PCM16)            │
+│  ├─ DictationPipeline                                       │
+│  │    ├─ ring buffer + pre-roll                              │
+│  │    ├─ EnergyVad -> AudioChunker (core, pure Kotlin)       │
+│  │    ├─ TranscriptMerger (core, pure Kotlin)               │
+│  │    └─ SpeechEngine (whisper.cpp Vulkan/CPU, GGML)         │
+│  ├─ ModelManager (lazy load, idle unload 300 s, model swap)  │
+│  └─ SessionStateMachine                                     │
+├─────────────────────────────────────────────────────────────┤
+│ AccessibilityService (separate system-bound service)        │
+│  ├─ tracks focused editable node + selection                 │
+│  ├─ TextInsertionPlanner (pure logic)                        │
+│  └─ ACTION_SET_TEXT -> clipboard/ACTION_PASTE -> toast       │
+├─────────────────────────────────────────────────────────────┤
+│ Activity: onboarding/permissions + settings + model manager  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 3.1 Modules
+
+- `core/` - pure Kotlin/JVM, no Android imports.
+  - `config/` AppSettings data model + validation (persistence in app).
+  - `audio/` `EnergyVad`, `AudioChunker`, `AudioMath`, `RingBuffer`.
+  - `text/` `TranscriptMerger`, `TextNormalizer`, hallucination filter.
+  - `asr/` `SpeechEngine` interface, `Transcript`, `ModelSpec`, `ModelCatalog`, `ModelManager` state machine with injectable clock.
+  - `insert/` `TextInsertionPlanner` (given current text + selection + transcript -> newText + cursor).
+  - Unit tests (JUnit) for all of the above.
+- `app/` - Android.
+  - `service/DictationService` foreground service; owns pipeline + overlay + engine.
+  - `overlay/` window + custom view + drag/position persistence.
+  - `audio/AudioRecordSource`.
+  - `asr/WhisperCppEngine` (JNI), `SherpaOnnxEngine` fallback if chosen, `NativeModelLoader`.
+  - `accessibility/DictationAccessibilityService`, `AccessibilityTextInserter`.
+  - `data/SettingsStore` (SharedPreferences/DataStore), `ModelRepository` (download/import/verify).
+  - `ui/` MainActivity, onboarding, settings, diagnostics.
+  - `BootReceiver`
