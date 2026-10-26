@@ -26,3 +26,5 @@ gradle-home/
 e1-models/
 *.ggml
 *.safetensors
+
+.scratch/**/bench/
