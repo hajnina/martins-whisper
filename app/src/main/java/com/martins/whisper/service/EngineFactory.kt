@@ -70,15 +70,25 @@ object EngineFactory {
 
         val engine = try {
             engineLoader(plan)
-        } catch (e: SpeechEngineUnavailableException) {
-            onState(previousState.failed(e.reason, e.message))
-            throw e
-        } catch (t: Throwable) {
-            onState(previousState.failed(EngineState.ENGINE_ERROR, t.message))
-            throw t
+        } catch (failure: Throwable) {
+            if (plan.backend == ComputeBackend.CPU) {
+                onState(previousState.failed(reasonOf(failure), failure.message))
+                throw failure
+            }
+            val cpuEngine = try {
+                engineLoader(plan.copy(backend = ComputeBackend.CPU))
+            } catch (cpuFailure: Throwable) {
+                onState(previousState.failed(EngineState.ENGINE_ERROR, cpuFailure.message ?: failure.message))
+                throw cpuFailure
+            }
+            onState(previousState.loaded(cpuEngine.backend, plan.backend))
+            return cpuEngine
         }
 
         onState(previousState.loaded(engine.backend, plan.backend))
         return engine
     }
+
+    private fun reasonOf(failure: Throwable): String =
+        (failure as? SpeechEngineUnavailableException)?.reason ?: EngineState.ENGINE_ERROR
 }
