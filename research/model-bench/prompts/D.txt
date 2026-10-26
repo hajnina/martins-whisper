@@ -1,0 +1,7 @@
+There is a pile of ~150k tokens of repository-like text files in /home/node/bench/longctx/pile. Do not modify any file there.
+
+Find the unique line containing BENCH-CANARY-7F3A. Report:
+(a) the exact full line,
+(b) the file path relative to /home/node/bench/longctx/pile.
+
+There are decoy canaries with different suffixes; only 7F3A is correct. End with "FINAL: <relative-path> | <exact line>".

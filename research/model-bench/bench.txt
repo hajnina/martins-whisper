@@ -1,0 +1,16 @@
+BENCH START 2026-10-26T16:58:09Z
+deepseek-v4.1-flash-free A exit=0 wall=31s
+A verify deepseek-v4.1-flash-free exit=0
+deepseek-v4.1-flash-free D exit=0 wall=9s
+deepseek-v4.1-flash-free C exit=0 wall=22s
+glm-5.3-flash-free D exit=0 wall=8s
+glm-5.3-flash-free C exit=0 wall=47s
+glm-5.3-flash-free B exit=0 wall=105s
+mimo-v2.6-flash-free D exit=0 wall=8s
+mimo-v2.6-flash-free C exit=0 wall=64s
+deepseek-v4.1-flash-free B exit=0 wall=129s
+big-pickle D exit=0 wall=7s
+big-pickle C exit=0 wall=31s
+big-pickle B exit=0 wall=70s
+mimo-v2.6-flash-free B exit=0 wall=198s
+flint-40b-free C exit=1 wall=137s
