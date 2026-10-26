@@ -6,6 +6,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD 11)
 
+# Android 15+ devices can use 16 KB pages. NDK r28+ aligns by default, but CI pins
+# NDK r27, so request it explicitly for every target before add_subdirectory().
+# 16 KB-aligned libraries still load on 4 KB-page devices.
+add_link_options(-Wl,-z,max-page-size=16384)
+
 set(WHISPER_CPP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/whisper.cpp" CACHE PATH "Pinned whisper.cpp checkout")
 if (NOT EXISTS "${WHISPER_CPP_DIR}/CMakeLists.txt")
     message(FATAL_ERROR

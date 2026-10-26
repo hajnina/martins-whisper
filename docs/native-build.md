@@ -77,7 +77,8 @@ shared libraries produced by the external native build.
 3. Caches Gradle (`gradle/actions/setup-gradle@v4`) and the pinned whisper.cpp checkout.
 4. Runs `scripts/native-jni-check.sh` (Kotlin `external fun` vs JNI exports vs `loadLibrary`),
    then `:core:test :app:testDebugUnitTest :app:assembleDebug`.
-5. Runs `scripts/native-apk-check.sh` and uploads the APK plus `build/native-apk-report.txt`.
+5. Runs `scripts/native-apk-check.sh` (see [Artifact proof](#artifact-proof-no-device)) and
+   uploads the APK plus `build/native-apk-report.txt`.
 
 Trigger it from any branch with:
 
@@ -87,6 +88,45 @@ gh run download <run-id> --repo hajnina/martins-whisper
 ```
 
 Vulkan is never built by default; dispatch the workflow with `vulkan: true` to try it.
+
+## Artifact proof (no device)
+
+`scripts/native-apk-check.sh [APK]` proves as much as possible without a phone. It fails the build
+if any of these is false:
+
+- only `arm64-v8a` is present and the manifest says `native-code: 'arm64-v8a'`;
+- `libmartins_whisper.so`, `libwhisper.so`, `libggml{,-base,-cpu}.so` are inside the APK;
+- every bundled `.so` is an **AArch64 ELF64 shared object**, stripped (no `.debug_info`);
+- every **LOAD segment is aligned to at least 0x4000 (16 KB)**, and the zip stores the
+  uncompressed `.so` entries 16 KB-aligned (`zipalign -c -P 16`). This is required on Android 15+
+  devices running a 16 KB page-size kernel. `CMakeLists.txt` requests
+  `-Wl,-z,max-page-size=16384` for every target because CI pins NDK r27, which still defaults to
+  4 KB; NDK r28+ would set it implicitly;
+- every `DT_NEEDED` is either bundled in the APK or a known Android system library. In particular a
+  missing `libc++_shared.so` fails here instead of at app startup;
+- **all 14 Kotlin `external fun` declarations** in `WhisperCppEngine.kt` are exported by
+  `libmartins_whisper.so` (renaming one side only cannot slip through);
+- no `.ggml/.gguf/.bin` model is bundled, and the APK is under the 20 MiB budget.
+
+This is the load-time contract the Android dynamic linker checks; a green report plus the
+instrumented smoke test below is the strongest proof available without hardware.
+
+## Model path and format contract
+
+The Kotlin side and whisper.cpp agree on exactly one layout:
+
+| Item | Value |
+|---|---|
+| App-private root | `Context.filesDir` (`/data/user/0/com.martins.whisper/files`) |
+| Models directory | `<filesDir>/models` |
+| File name | `<model id>.bin`, e.g. `models/base.bin`, `models/tiny.bin` |
+| Format | whisper.cpp **GGML** (`ggml`, `ggmf`, `ggjt` or `ggla` magic), not GGUF |
+| Download integrity | catalog size + SHA-256 verified before `ModelStorage` promotes the file |
+| JNI hand-off | `nativeInit(modelPath, useGpu, gpuDevice)` receives the absolute path and calls `whisper_init_from_file_with_params` |
+
+`scripts/push-model.sh` writes exactly that path through `run-as` on a debuggable APK and verifies
+the catalog SHA-256. `scripts/device-smoke.sh` additionally checks the GGML magic, the on-device
+byte count, and passes the resolved absolute path to the smoke test.
 
 ## Local aarch64 sandbox (this host)
 
@@ -163,7 +203,9 @@ bytes in the APK). The model is not bundled: it is downloaded/imported on device
 - **Size budget:** 20 MiB (20,971,520 bytes) for the debug APK; currently 12.9 MB. The check is
   `MAX_APK_BYTES` in `scripts/native-apk-check.sh`.
 - **Stripping:** AGP's `stripDebugDebugSymbols` runs for debug native builds; the check asserts
-  `libmartins_whisper.so` has no `.debug_info` and still exports the JNI symbols.
+  every bundled `.so` has no `.debug_info` and still exports the JNI symbols.
+- **Page size:** all LOAD segments and uncompressed zip entries are 16 KB-aligned so the APK runs
+  on Android 15+ devices with 16 KB pages and still runs on 4 KB devices.
 - **Models:** never bundled. They are downloaded from the catalog or imported by the user.
 - Do not add `x86_64` "for the emulator": the sandbox has no KVM/emulator and v1 targets phones.
 
@@ -181,24 +223,42 @@ bytes in the APK). The model is not bundled: it is downloaded/imported on device
 
 ## Device smoke test (H1)
 
-`app/src/androidTest/kotlin/com/martins/whisper/harness/NativeWhisperSmokeTest.kt` is the
-instrumented smoke test. It skips cleanly on a non-native APK and when no model is installed.
+One command builds the native APK, verifies it, installs both APKs, pushes a GGML model into the
+app-private contract path, and runs `NativeWhisperSmokeTest`:
 
 ```bash
-# install the native APK, then make a model visible to the app
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb push ggml-tiny.bin /data/local/tmp/ggml-tiny.bin
-adb shell run-as com.martins.whisper mkdir -p files/models
-adb shell run-as com.martins.whisper cp /data/local/tmp/ggml-tiny.bin files/models/tiny.bin
+# USB device (downloads ggml-tiny.bin on first run, SHA-verified on push)
+scripts/device-smoke.sh
 
-# version/backend test + load/transcribe silence
+# wireless adb: enable Wireless debugging, then
+scripts/device-smoke.sh --wireless 192.168.1.7:5555
+
+# already-built APK + local model
+scripts/device-smoke.sh --no-build --model /path/to/ggml-tiny.bin
+
+# non-default NDK/CMake on the build host
+MARTINS_NDK_VERSION=27.3.13750724 MARTINS_CMAKE_VERSION=3.31.5 scripts/device-smoke.sh
+```
+
+The script fails fast if there is no arm64 device, if `native-apk-check.sh` is not green, if the
+model is not GGML, or if the pushed byte count does not match. On success it prints
+`PASS: native whisper.cpp loads on the device...` and the next manual MFVP step.
+
+`NativeWhisperSmokeTest.kt` asserts `whisper.cpp` version/system info are non-empty, loads the
+smallest installed model with `ComputeBackend.CPU`, transcribes 1 s of silence at 16 kHz and
+closes the engine. It skips cleanly on a non-native APK and when no model is installed.
+
+Manual equivalent:
+
+```bash
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+scripts/push-model.sh ggml-tiny.bin          # -> files/models/tiny.bin
+
 adb shell am instrument -w \
   -e class com.martins.whisper.harness.NativeWhisperSmokeTest \
   com.martins.whisper.test/androidx.test.runner.AndroidJUnitRunner
 ```
-
-The test asserts `whisper.cpp` version/system info are non-empty, loads the smallest installed
-model with `ComputeBackend.CPU`, transcribes 1 s of silence at 16 kHz and closes the engine.
 
 ## Historical host blocker note
 
