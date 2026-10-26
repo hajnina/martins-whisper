@@ -7,6 +7,7 @@ import android.os.Looper
 import com.martins.whisper.audio.AudioSource
 import com.martins.whisper.core.SpeechEngine
 import com.martins.whisper.core.Transcript
+import com.martins.whisper.core.TranscriptGate
 import com.martins.whisper.core.asr.FakeSpeechEngine
 import com.martins.whisper.data.SettingsStore
 import com.martins.whisper.service.DictationService
@@ -30,6 +31,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.ConscryptMode
+import org.robolectric.shadows.ShadowSystemClock
 
 /**
  * Service-layer Robolectric coverage for the G2 path: capture starts while the engine is still
@@ -267,6 +269,63 @@ class DictationServiceLifecycleRobolectricTest {
             assertEquals(2, engines.size)
             assertEquals(1, engines[0].received.size)
             assertEquals(1, engines[1].received.size)
+        } finally {
+            controller.destroy()
+        }
+    }
+
+    @Test
+    fun `hallucinated transcript on real audio is rejected without insertion`() {
+        val engine = FakeSpeechEngine(
+            respond = { _, _ -> Transcript("Thank you.") },
+        )
+        EngineFactory.factory = { _, _ -> engine }
+        val controller = Robolectric.buildService(DictationService::class.java).create()
+        val service = controller.get()
+        try {
+            invoke(service, "onPress")
+            await("recording starts") {
+                DictationService.state.value is DictationState.Recording
+            }
+            audio.emit(frames = 10, firstSample = 1_000, step = 0)
+            invoke(service, "onRelease")
+            await("hallucination is rejected") {
+                DictationService.state.value is DictationState.Error
+            }
+
+            val state = DictationService.state.value as DictationState.Error
+            assertEquals(TranscriptGate.EMPTY_MESSAGE, state.message)
+            assertTrue("nothing may be inserted", inserted.isEmpty())
+            assertEquals(1, engine.received.size)
+        } finally {
+            controller.destroy()
+        }
+    }
+
+    @Test
+    fun `digital silence is a microphone error and never reaches the engine or the field`() {
+        val engine = FakeSpeechEngine(
+            respond = { _, _ -> Transcript("Thank you.") },
+        )
+        EngineFactory.factory = { _, _ -> engine }
+        val controller = Robolectric.buildService(DictationService::class.java).create()
+        val service = controller.get()
+        try {
+            invoke(service, "onPress")
+            await("recording starts") {
+                DictationService.state.value is DictationState.Recording
+            }
+            audio.emit(frames = 10, firstSample = 0, step = 0)
+            ShadowSystemClock.advanceBy(500, TimeUnit.MILLISECONDS)
+            invoke(service, "onRelease")
+            await("silent microphone is reported") {
+                DictationService.state.value is DictationState.Error
+            }
+
+            val state = DictationService.state.value as DictationState.Error
+            assertEquals(TranscriptGate.SILENT_MIC_MESSAGE, state.message)
+            assertTrue("nothing may be inserted", inserted.isEmpty())
+            assertTrue("all-zero audio must not reach the engine", engine.received.isEmpty())
         } finally {
             controller.destroy()
         }

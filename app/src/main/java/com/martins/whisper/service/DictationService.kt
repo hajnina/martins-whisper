@@ -15,6 +15,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -24,6 +25,8 @@ import com.martins.whisper.R
 import com.martins.whisper.accessibility.AccessibilityTextInserter
 import com.martins.whisper.audio.AudioRecordSource
 import com.martins.whisper.audio.AudioSource
+import com.martins.whisper.core.AudioEnergy
+import com.martins.whisper.core.TranscriptGate
 import com.martins.whisper.core.asr.ModelManager
 import com.martins.whisper.data.SettingsStore
 import com.martins.whisper.overlay.MicBubbleView
@@ -258,18 +261,31 @@ class DictationService : Service() {
         }
         val samples = captured.toFloatArray()
         val durationMs = captured.durationMs()
+        val energy = AudioEnergy.of(samples)
+        Log.d(
+            TAG,
+            "captured ${samples.size} samples (${durationMs} ms) peak=${energy.peak} rms=${energy.rms}",
+        )
         publishState(DictationState.Processing())
+        if (energy.isDigitalSilence) {
+            publishState(DictationState.Error(TranscriptGate.SILENT_MIC_MESSAGE))
+            scheduleReset()
+            return
+        }
+        val speech = speechDetected
         val language = settings.effectiveLanguage()
         scope.launch {
             try {
                 val transcript = withContext(Dispatchers.Default) {
                     engineHost.transcribe(samples, durationMs, language)
                 }
-                val text = transcript.text.trim()
-                if (text.isEmpty()) {
-                    publishState(DictationState.Error("No speech detected"))
-                    scheduleReset()
-                    return@launch
+                val text = when (val decision = TranscriptGate.evaluate(transcript.text, speech, energy.peak)) {
+                    is TranscriptGate.Decision.Reject -> {
+                        publishState(DictationState.Error(decision.message))
+                        scheduleReset()
+                        return@launch
+                    }
+                    is TranscriptGate.Decision.Speak -> decision.text
                 }
                 emitTranscript(text)
                 val result = inserterFactory(this@DictationService).insert(text)
@@ -495,6 +511,7 @@ class DictationService : Service() {
         const val EXTRA_TRANSCRIPT = "transcript"
         const val EXTRA_NO_MIC = "no_mic_type"
 
+        const val TAG = "MartinsWhisper"
         const val CHANNEL_ID = "dictation"
         const val NOTIFICATION_ID = 4201
         private const val REQUEST_CONTENT = 10
