@@ -355,7 +355,9 @@ class MainActivity : ComponentActivity() {
             modelTransferView.visibility = View.GONE
             return
         }
-        val displayName = specById(transfer.modelId)?.displayName ?: transfer.modelId
+        val displayName = modelBrowser.state.row(transfer.modelId)?.spec?.displayName
+            ?: specById(transfer.modelId)?.displayName
+            ?: transfer.modelId
         val fraction = when (transfer) {
             is ModelTransfer.Download -> transfer.fraction
             is ModelTransfer.Import -> transfer.fraction
@@ -462,6 +464,7 @@ class MainActivity : ComponentActivity() {
         if (!modelBrowser.begin(id, ModelAction.DELETE)) return
         renderModels()
         lifecycleScope.launch {
+            var failed = false
             try {
                 val deleted = withContext(Dispatchers.IO) { repository.delete(spec) }
                 if (deleted) {
@@ -470,9 +473,10 @@ class MainActivity : ComponentActivity() {
                     modelBrowser.fail("Model file was already absent")
                 }
             } catch (t: Throwable) {
+                failed = true
                 modelBrowser.fail(t.message ?: t.javaClass.simpleName)
             }
-            forgetCustomModel(id)
+            if (!failed) forgetCustomModel(id)
             renderModels()
             updateDiagnostics()
         }
