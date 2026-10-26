@@ -51,6 +51,7 @@ class DictationServiceLifecycleRobolectricTest {
     private lateinit var originalFactory: (Context, SettingsStore) -> SpeechEngine
     private lateinit var originalInserterFactory: (Context) -> TextInserter
     private lateinit var originalAudioSourceFactory: (Context) -> AudioSource
+    private lateinit var originalTargetCapture: () -> Unit
 
     @Before
     fun setUp() {
@@ -67,6 +68,8 @@ class DictationServiceLifecycleRobolectricTest {
         originalFactory = EngineFactory.factory
         originalInserterFactory = DictationService.inserterFactory
         originalAudioSourceFactory = DictationService.audioSourceFactory
+        originalTargetCapture = DictationService.targetCapture
+        DictationService.targetCapture = {}
 
         EngineFactory.factory = { _, _ ->
             FakeSpeechEngine(respond = { _, language -> Transcript("hello from fake", language) })
@@ -87,6 +90,7 @@ class DictationServiceLifecycleRobolectricTest {
         EngineFactory.factory = originalFactory
         DictationService.inserterFactory = originalInserterFactory
         DictationService.audioSourceFactory = originalAudioSourceFactory
+        DictationService.targetCapture = originalTargetCapture
     }
 
     @Test
@@ -269,6 +273,24 @@ class DictationServiceLifecycleRobolectricTest {
             assertEquals(2, engines.size)
             assertEquals(1, engines[0].received.size)
             assertEquals(1, engines[1].received.size)
+        } finally {
+            controller.destroy()
+        }
+    }
+
+    @Test
+    fun `start tap captures the focused target before any audio is captured`() {
+        var captures = 0
+        DictationService.targetCapture = { captures++ }
+        val controller = Robolectric.buildService(DictationService::class.java).create()
+        val service = controller.get()
+        try {
+            invoke(service, "onPress")
+            await("recording starts") {
+                DictationService.state.value is DictationState.Recording
+            }
+            assertEquals(1, captures)
+            invoke(service, "cancelSession")
         } finally {
             controller.destroy()
         }

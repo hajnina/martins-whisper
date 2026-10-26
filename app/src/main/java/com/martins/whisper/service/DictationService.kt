@@ -22,6 +22,7 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.martins.whisper.MainActivity
 import com.martins.whisper.R
+import com.martins.whisper.accessibility.AccessibilityInserter
 import com.martins.whisper.accessibility.AccessibilityTextInserter
 import com.martins.whisper.audio.AudioRecordSource
 import com.martins.whisper.audio.AudioSource
@@ -130,6 +131,7 @@ class DictationService : Service() {
     private fun onPress() {
         if (pressed) return
         if (state.value.isBusy) return
+        targetCapture()
         pressed = true
         sessionActive = true
         sessionId += 1
@@ -289,13 +291,19 @@ class DictationService : Service() {
                 }
                 emitTranscript(text)
                 val result = inserterFactory(this@DictationService).insert(text)
-                val message = when (result) {
-                    InsertResult.Inserted -> "Inserted"
-                    is InsertResult.Copied -> "Transcript copied to clipboard"
-                    is InsertResult.Failed -> "Copy failed: ${result.reason}"
+                val (message, inserted) = when (result) {
+                    InsertResult.Inserted -> "Inserted" to true
+                    is InsertResult.Copied -> "Transcript copied to clipboard" to true
+                    is InsertResult.Failed -> "Copy failed: ${result.reason}" to false
+                    is InsertResult.Rejected -> "Nothing inserted: ${result.reason}" to false
                 }
-                publishState(DictationState.Success(message))
-                updateNotification(DictationState.Success(message), force = true)
+                publishState(
+                    if (inserted) DictationState.Success(message) else DictationState.Error(message),
+                )
+                updateNotification(
+                    if (inserted) DictationState.Success(message) else DictationState.Error(message),
+                    force = true,
+                )
                 scheduleReset()
             } catch (t: Throwable) {
                 fail(t.message ?: "Transcription failed")
@@ -533,6 +541,10 @@ class DictationService : Service() {
 
         @Volatile
         internal var audioSourceFactory: (Context) -> AudioSource = { AudioRecordSource(it) }
+
+        /** Captures the focused field at the START tap so insertion can verify the target later. */
+        @Volatile
+        internal var targetCapture: () -> Unit = { AccessibilityInserter.captureTargetAtStart() }
 
         fun start(context: Context) {
             val intent = Intent(context, DictationService::class.java).setAction(ACTION_START)

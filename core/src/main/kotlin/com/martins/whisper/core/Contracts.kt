@@ -125,6 +125,34 @@ object TextInsertionPlanner {
      * Insert [insert] into [current] replacing [selectionStart]..[selectionEnd]. Must clamp
      * out-of-range selections and handle null/empty current text. Implemented by I1.
      */
+    /**
+     * Fits spoken text into the text around [selectionStart]: trims whisper's own padding, adds a
+     * leading space only when the previous character is not whitespace, and fixes the first letter's
+     * case (capital at the start of a field/sentence, lowercase mid-sentence).
+     */
+    fun formatForCaret(insert: String, current: String?, selectionStart: Int): String {
+        val text = insert.trim()
+        if (text.isEmpty()) return ""
+        val base = current.orEmpty()
+        val lastLine = if (base.isBlank()) {
+            ""
+        } else {
+            base.substring(0, selectionStart.coerceIn(0, base.length))
+                .substringAfterLast('\n')
+        }
+        if (lastLine.isBlank()) return text.capitalizeFirst()
+        val prefix = if (lastLine.last().isWhitespace()) "" else " "
+        val startsSentence = lastLine.trimEnd().lastOrNull() in setOf('.', '!', '?', '\n')
+        val cased = if (startsSentence) text.capitalizeFirst() else text.lowercaseFirst()
+        return prefix + cased
+    }
+
+    private fun String.capitalizeFirst(): String =
+        replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+
+    private fun String.lowercaseFirst(): String =
+        replaceFirstChar { if (it.isUpperCase()) it.lowercase() else it.toString() }
+
     fun insert(
         current: String?,
         selectionStart: Int,

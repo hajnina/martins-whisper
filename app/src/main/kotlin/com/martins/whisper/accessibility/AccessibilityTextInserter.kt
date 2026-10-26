@@ -19,6 +19,7 @@ class AccessibilityTextInserter(
                     InsertResult.Inserted -> ServiceInsertResult.Inserted
                     is InsertResult.Copied -> ServiceInsertResult.Copied(inserted.reason)
                     is InsertResult.Failed -> ServiceInsertResult.Failed(inserted.reason)
+                    is InsertResult.Rejected -> ServiceInsertResult.Rejected(inserted.reason)
                 }
             } catch (t: Throwable) {
                 ServiceInsertResult.Failed(t.message ?: "accessibility insertion failed")

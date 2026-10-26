@@ -29,6 +29,9 @@ class DictationAccessibilityService : AccessibilityService(), TextInserter {
     @Volatile
     private var lastFocused: NodeSnapshot? = null
 
+    @Volatile
+    private var startTarget: NodeSnapshot? = null
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         serviceInfo = serviceInfo?.apply {
@@ -67,30 +70,55 @@ class DictationAccessibilityService : AccessibilityService(), TextInserter {
 
     override fun onInterrupt() {
         lastFocused = null
+        startTarget = null
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
         AccessibilityInserter.detach(this)
         lastFocused = null
+        startTarget = null
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
         AccessibilityInserter.detach(this)
         lastFocused = null
+        startTarget = null
         super.onDestroy()
+    }
+
+    /** Remembers the field that was focused when the user started dictating. Main thread only. */
+    fun captureTargetAtStart(): Boolean {
+        val captured = try {
+            obtainTarget()?.let { node ->
+                try {
+                    node.toSnapshot()
+                } finally {
+                    node.recycle()
+                }
+            } ?: lastFocused
+        } catch (_: Throwable) {
+            null
+        }
+        startTarget = captured
+        return captured != null
     }
 
     override fun insert(text: String): InsertResult {
         if (text.isEmpty()) return InsertResult.Failed("empty text")
-        val node = obtainTarget() ?: return copyFallback(text, "no focused editable field")
+        val captured = startTarget.also { startTarget = null }
+            ?: return copyFallback(text, "no target field at start")
+        val node = obtainTarget() ?: return InsertResult.Rejected("target field disappeared")
         try {
-            val snapshot = node.toSnapshot()
-            return when (val route = InsertionPolicy.route(snapshot, packageName, text)) {
-                InsertionRoute.SetText -> setText(node, snapshot, text)
-                InsertionRoute.Paste -> paste(node, text)
+            val live = node.toSnapshot()
+            if (!TargetGuard.stillSameTarget(captured, live)) {
+                return InsertResult.Rejected("target changed")
+            }
+            return when (val route = InsertionPolicy.route(live, packageName, text)) {
+                InsertionRoute.SetText -> setText(node, live, text)
+                InsertionRoute.Paste -> paste(node, live, text)
                 is InsertionRoute.ClipboardOnly -> copyFallback(text, route.reason)
-                is InsertionRoute.Reject -> InsertResult.Failed(route.reason)
+                is InsertionRoute.Reject -> InsertResult.Rejected(route.reason)
             }
         } finally {
             node.recycle()
@@ -161,12 +189,13 @@ class DictationAccessibilityService : AccessibilityService(), TextInserter {
         snapshot: NodeSnapshot,
         insert: String,
     ): InsertResult {
-        val current = node.text?.toString()
+        val current = node.text?.toString().takeUnless { snapshot.isShowingHintText }
+        val formatted = TextInsertionPlanner.formatForCaret(insert, current, snapshot.selectionStart)
         val plan = TextInsertionPlanner.insert(
             current = current,
             selectionStart = snapshot.selectionStart,
             selectionEnd = snapshot.selectionEnd,
-            insert = insert,
+            insert = formatted,
         )
         val args = Bundle().apply {
             putCharSequence(
@@ -185,17 +214,19 @@ class DictationAccessibilityService : AccessibilityService(), TextInserter {
         return if (node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) {
             InsertResult.Inserted
         } else {
-            paste(node, insert)
+            paste(node, snapshot, insert)
         }
     }
 
-    private fun paste(node: AccessibilityNodeInfo, text: String): InsertResult {
-        if (!copyToClipboard(text)) return InsertResult.Failed("clipboard unavailable")
+    private fun paste(node: AccessibilityNodeInfo, snapshot: NodeSnapshot, text: String): InsertResult {
+        val current = node.text?.toString().takeUnless { snapshot.isShowingHintText }
+        val formatted = TextInsertionPlanner.formatForCaret(text, current, snapshot.selectionStart)
+        if (!copyToClipboard(formatted)) return InsertResult.Failed("clipboard unavailable")
         node.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
         return if (node.performAction(AccessibilityNodeInfo.ACTION_PASTE)) {
             InsertResult.Inserted
         } else {
-            copyFallback(text, "paste unsupported")
+            copyFallback(formatted, "paste unsupported")
         }
     }
 
@@ -243,15 +274,19 @@ class DictationAccessibilityService : AccessibilityService(), TextInserter {
 
     private fun AccessibilityNodeInfo.toSnapshot(): NodeSnapshot {
         val password = isPassword
+        val hint = isShowingHintText
         return NodeSnapshot(
             packageName = packageName?.toString(),
             isEditable = isEditable,
             isEnabled = isEnabled,
             isVisible = isVisibleToUser,
             isPassword = password,
-            hasReadableText = !password && text != null,
+            hasReadableText = !password && !hint && text != null,
             selectionStart = textSelectionStart,
             selectionEnd = textSelectionEnd,
+            windowId = windowId,
+            viewId = viewIdResourceName,
+            isShowingHintText = hint,
         )
     }
 
@@ -289,4 +324,7 @@ object AccessibilityInserter {
             active.insert(text)
         }
     }
+
+    /** Main thread only: snapshot the focused field when the dictation session starts. */
+    fun captureTargetAtStart(): Boolean = service?.captureTargetAtStart() ?: false
 }

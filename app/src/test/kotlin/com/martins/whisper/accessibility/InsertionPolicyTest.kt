@@ -1,6 +1,8 @@
 package com.martins.whisper.accessibility
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class InsertionPolicyTest {
@@ -16,6 +18,9 @@ class InsertionPolicyTest {
         readableText: Boolean = true,
         selectionStart: Int = 3,
         selectionEnd: Int = 3,
+        windowId: Int = 7,
+        viewId: String? = "com.example.chat:id/input",
+        hint: Boolean = false,
     ) = NodeSnapshot(
         packageName = packageName,
         isEditable = editable,
@@ -25,6 +30,9 @@ class InsertionPolicyTest {
         hasReadableText = readableText,
         selectionStart = selectionStart,
         selectionEnd = selectionEnd,
+        windowId = windowId,
+        viewId = viewId,
+        isShowingHintText = hint,
     )
 
     @Test
@@ -96,6 +104,39 @@ class InsertionPolicyTest {
     @Test
     fun `readable editable field uses set text`() {
         assertEquals(InsertionRoute.SetText, InsertionPolicy.route(node(), own, "hi"))
+    }
+
+    @Test
+    fun `hint text is never treated as field content`() {
+        val hintOnly = node(readableText = false, hint = true)
+        assertEquals(InsertionRoute.SetText, InsertionPolicy.route(hintOnly, own, "hi"))
+    }
+
+    @Test
+    fun `same package window and view id is the same target`() {
+        val captured = node()
+        assertTrue(TargetGuard.stillSameTarget(captured, captured.copy(selectionStart = 9, selectionEnd = 9)))
+    }
+
+    @Test
+    fun `different package or window is a changed target`() {
+        val captured = node()
+        assertFalse(TargetGuard.stillSameTarget(captured, captured.copy(packageName = "com.example.other")))
+        assertFalse(TargetGuard.stillSameTarget(captured, captured.copy(windowId = 8)))
+        assertFalse(TargetGuard.stillSameTarget(captured, captured.copy(viewId = "com.example.chat:id/other")))
+    }
+
+    @Test
+    fun `missing capture or live node is not the same target`() {
+        assertFalse(TargetGuard.stillSameTarget(null, node()))
+        assertFalse(TargetGuard.stillSameTarget(node(), null))
+    }
+
+    @Test
+    fun `unknown window or view ids do not block insertion`() {
+        val captured = node(windowId = -1, viewId = null)
+        val live = captured.copy(windowId = -1, viewId = null)
+        assertTrue(TargetGuard.stillSameTarget(captured, live))
     }
 
     @Test
