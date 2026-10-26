@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ob_get_started">Začít</string>
+    <string name="ob_back">Zpět</string>
+    <string name="ob_welcome_title">Váš hlas zůstává u vás</string>
+    <string name="ob_welcome_body">Klepněte na bublinu v jakékoli aplikaci, mluvte a slova se vloží do pole. Nic neopouští telefon.</string>
+    <string name="ob_welcome_privacy">100% v zařízení · bez účtu · bez analytiky</string>
+</resources>

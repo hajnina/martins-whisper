@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ob_get_started">Get started</string>
+    <string name="ob_back">Back</string>
+    <string name="ob_welcome_title">Your voice, on your device</string>
+    <string name="ob_welcome_body">Tap the bubble in any app, speak, and your words appear in the field. Nothing leaves your phone.</string>
+    <string name="ob_welcome_privacy">100% on-device · no account · no analytics</string>
+</resources>

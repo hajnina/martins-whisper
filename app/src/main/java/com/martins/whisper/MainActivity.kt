@@ -40,6 +40,9 @@ import com.martins.whisper.accessibility.DictationAccessibilityService
 import com.martins.whisper.asr.ModelRepositoryProvider
 import com.martins.whisper.asr.WhisperCppEngine
 import com.martins.whisper.core.ComputeBackend
+import com.martins.whisper.core.Flags
+import com.martins.whisper.onboarding.OnboardingActivity
+import com.martins.whisper.onboarding.OnboardingStore
 import com.martins.whisper.core.ModelSpec
 import com.martins.whisper.core.asr.DownloadProgress
 import com.martins.whisper.core.asr.ModelCatalog
@@ -97,6 +100,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Trunk-based: the new onboarding ships behind a default-OFF flag (or an explicit
+        // `am start ... --ez onboarding true` for owner preview builds).
+        val wantsOnboarding = Flags.onboardingV2 || intent?.getBooleanExtra(EXTRA_ONBOARDING, false) == true
+        if (wantsOnboarding && !OnboardingStore(this).isCompleted()) {
+            startActivity(Intent(this, OnboardingActivity::class.java))
+            finish()
+            return
+        }
         settings = SettingsStore(this)
         setContentView(buildContent())
         observeService()
@@ -857,6 +868,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_OPEN_SETTINGS = "open_settings"
+        const val EXTRA_ONBOARDING = "onboarding"
         private const val REQUEST_MIC = 100
         private const val REQUEST_NOTIFICATIONS = 101
         private const val PROGRESS_UI_INTERVAL_MS = 100L
