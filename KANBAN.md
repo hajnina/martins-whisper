@@ -1,6 +1,6 @@
 # Kanban - Martins Whisper (Android)
 
-Updated: 2026-10-26T17:10Z
+Updated: 2026-10-26T18:30Z
 Columns: Backlog | Ready | In Progress | Review | Blocked | Done
 WIP limit: 6 background agents.
 
@@ -13,7 +13,7 @@ Map: `.scratch/device-ready-apk/map.md` (10 decision tickets; local markdown). K
 
 | ID | Deliverable | Owner / branch | Depends on | Handoff |
 |---|---|---|---|---|
-| (none) | Provider limited; all work paused. | - | - | - |
+| G1 | Integration: B1+E1 merged; wire `EngineFactory` to `WhisperCppEngine` + `ModelRepository`, model download/import UI, then full gate + handoff. | pm/b1-e1 (PM) | B1, E1 | handoffs/PM-2026-10-26-2/HANDOFF.md |
 
 ## Ready / queued (next wave)
 
@@ -36,7 +36,6 @@ Map: `.scratch/device-ready-apk/map.md` (10 decision tickets; local markdown). K
 
 | ID | Reason | Unblock |
 |---|---|---|
-| G1 | blocked: provider since 2026-10-26 18:20:12 (free tier limit). | Wait for provider status ok. |
 | H1/H2 | No physical Android device in sandbox. | User supplies device/ADB access later. |
 | EMU1 | Android emulator requires KVM/x86_64 typically; sandbox is aarch64 with no /dev/kvm. | Provide x86_64 KVM runner or accept JVM/Robolectric only. |
 | GPU1 | No Android GPU available in sandbox. | Real device or GPU-capable emulator. |
