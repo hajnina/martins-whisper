@@ -30,7 +30,7 @@ import com.martins.whisper.core.ComputeBackend
 import com.martins.whisper.data.SettingsStore
 import com.martins.whisper.service.DictationService
 import com.martins.whisper.service.DictationState
-import com.martins.whisper.ui.ModelOptions
+import com.martins.whisper.core.asr.ModelCatalog
 import com.martins.whisper.ui.PermissionGate
 import com.martins.whisper.ui.PermissionSnapshot
 import kotlinx.coroutines.launch
@@ -149,23 +149,23 @@ class MainActivity : ComponentActivity() {
         val modelAdapter = ArrayAdapter(
             this,
             android.R.layout.simple_spinner_dropdown_item,
-            ModelOptions.specs.map { it.displayName },
+            ModelCatalog.specs.map { it.displayName },
         )
         modelSpinner.adapter = modelAdapter
-        val modelIndex = ModelOptions.specs.indexOfFirst { it.id == settings.modelId }.coerceAtLeast(0)
+        val modelIndex = ModelCatalog.specs.indexOfFirst { it.id == settings.modelId }.coerceAtLeast(0)
         suppressSpinnerCallbacks = true
         modelSpinner.setSelection(modelIndex, false)
         suppressSpinnerCallbacks = false
         modelSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 if (suppressSpinnerCallbacks) return
-                settings.modelId = ModelOptions.specs[position].id
+                settings.modelId = ModelCatalog.specs[position].id
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
         }
         root.addView(modelSpinner, matchWidth())
-        root.addView(caption(getString(R.string.model_stub_note)).apply {
+        root.addView(caption(getString(R.string.model_note)).apply {
             setPadding(0, dp(4), 0, dp(10))
         })
 

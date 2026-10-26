@@ -29,7 +29,7 @@ import com.martins.whisper.core.SpeechEngine
 import com.martins.whisper.data.SettingsStore
 import com.martins.whisper.overlay.MicBubbleView
 import com.martins.whisper.overlay.OverlayController
-import com.martins.whisper.ui.ModelOptions
+import com.martins.whisper.core.asr.ModelCatalog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -125,7 +125,8 @@ class DictationService : Service() {
         synchronized(frames) { frames.clear() }
         idleUnloadJob?.cancel()
         stateResetJob?.cancel()
-        publishState(DictationState.Loading("Loading ${ModelOptions.displayName(settings.modelId)}\u2026"))
+        val modelName = ModelCatalog.byId(settings.modelId)?.displayName ?: settings.modelId
+        publishState(DictationState.Loading("Loading $modelName\u2026"))
 
         scope.launch {
             val loaded = try {
