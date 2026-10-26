@@ -19,11 +19,11 @@ class AudioRecordSourceTest {
     }
 
     @Test
-    fun `unprocessed is tried first when the device advertises it`() {
+    fun `unprocessed is the second choice when the device advertises it`() {
         assertEquals(
             listOf(
-                MediaRecorder.AudioSource.UNPROCESSED,
                 MediaRecorder.AudioSource.MIC,
+                MediaRecorder.AudioSource.UNPROCESSED,
                 MediaRecorder.AudioSource.VOICE_RECOGNITION,
             ),
             AudioRecordSource.sourceCandidates(preferred = null, supportsUnprocessed = true),

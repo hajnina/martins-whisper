@@ -36,13 +36,13 @@ Pipeline: `AudioRecordSource` (capture) -> `AudioCaptureBuffer` -> `DictationSer
    `ensureForeground(withMicrophone = true)` before `startAudio`; keep that ordering. If the
    service is ever started from the background, the mic will be silent on HyperOS.
 7. No explicit AGC/NS control exists in the API; `UNPROCESSED` is the only raw option and it is
-   optional (`AudioManager.PROPERTY_SUPPORT_AUDIO_SOURCE_UNPROCESSED`). We prefer it when the
-   device advertises support, then fall back to MIC.
+   optional (`AudioManager.PROPERTY_SUPPORT_AUDIO_SOURCE_UNPROCESSED`). MIC is the
+   default; UNPROCESSED is the second candidate when advertised.
 
 ## FIX on this branch (capture-source/config only)
 
 `app/src/main/java/com/martins/whisper/audio/AudioRecordSource.kt`:
-- Source chain: `UNPROCESSED` (only if advertised) -> **`MIC`** -> `VOICE_RECOGNITION`
+- Source chain: MIC -> UNPROCESSED (only if advertised) -> VOICE_RECOGNITION
   (never start with VOICE_RECOGNITION; MIC is universal).
 - Dead-source probe: after 15 frames (300 ms) with peak <= 8/32768 (~-72 dBFS), stop/release
   and reopen with the next source; logs a warning. Real room noise/quiet speech has higher
@@ -55,7 +55,7 @@ Pipeline: `AudioRecordSource` (capture) -> `AudioCaptureBuffer` -> `DictationSer
   and `capture: <SRC> returned only silence (peak=...)` on fallback. Exposed to code as
   `AudioRecordSource.sourceName` if you want it in the telemetry JSONL.
 - New JVM test `app/src/test/java/com/martins/whisper/audio/AudioRecordSourceTest.kt`
-  (MIC before VOICE_RECOGNITION, UNPROCESSED first when supported, preferred override, names).
+  (MIC before VOICE_RECOGNITION, UNPROCESSED second when supported, preferred override, names).
   Green: `:app:testDebugUnitTest --tests com.martins.whisper.audio.AudioRecordSourceTest`.
 
 I did **not** touch `DictationService`, `TranscriptGate`, `EnergyVad` or WAV dumping (yours).

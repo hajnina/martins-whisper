@@ -8,8 +8,7 @@
   phone mic sits under it. Capture-side: hard-coded `VOICE_RECOGNITION` (optional per OEM,
   silence-prone on HyperOS), 80 ms buffer (4 frames), `read()==0` ignored. Full details in
   `handoffs/NORA-CAPTURE/HANDOFF.md`.
-- **Fix (capture-source/config only)**: `AudioRecordSource` chain UNPROCESSED(if advertised) ->
-  MIC -> VOICE_RECOGNITION; 4x minBuffer (>=8 frames); 300 ms dead-source probe + reopen next
+- **Fix (capture-source/config only)**: `AudioRecordSource` chain MIC -> UNPROCESSED (if advertised) -> VOICE_RECOGNITION; 4x minBuffer (>=8 frames); 300 ms dead-source probe + reopen next
   source; read()==0 detection (~2 s) instead of a spin; logcat source/config; `sourceName`
   exposed for telemetry. New test `AudioRecordSourceTest` (4 tests) green.
 - Branch `agent/capture1`, worktree `/work/martins-whisper-worktrees/capture1`,

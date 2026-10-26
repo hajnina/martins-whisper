@@ -1,0 +1,19 @@
+NORA / capture1: audit + fix of the "no speech" capture path, plus a fast flash loop.
+
+AUDIT (for MARA): the direct cause is likely the absolute per-frame gate
+SPEECH_RMS_THRESHOLD=0.015f (-36.5 dBFS, DictationService.kt:535/190): a quiet phone mic
+fails it and TranscriptGate rejects a valid transcript as "no speech energy". Capture-side
+contributors: hard-coded VOICE_RECOGNITION (optional per OEM, silence-prone on HyperOS),
+an 80 ms buffer, and ignored read()==0.
+
+FIX (this branch, capture only): source chain MIC -> UNPROCESSED (if advertised) -> VOICE_RECOGNITION;
+4x minBuffer (>=8 frames); 300 ms dead-source probe reopens the next source; read()==0 fails
+after ~2 s instead of spinning; source/config logged under MartinsWhisper. New 4-test
+AudioRecordSourceTest.
+
+CI: scripts/fetch-latest-apk.sh (gh run list/download newest successful native build, verifies
+arm64 libs, prints sha256 + adb command); native-build.yml split into parallel `apk` (upload
+early, target <6 min warm) and `tests` (JVM + host JNI tracer); actionlint clean.
+
+GATE: core 157 + app 114 tests, 0 failures/errors; assembleDebug + assembleDebugAndroidTest green.
+MARA: merge, pair with your relative SpeechEnvelope gate, then flash. CI timing/device are owner-run.

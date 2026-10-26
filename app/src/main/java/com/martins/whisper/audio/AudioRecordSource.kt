@@ -22,9 +22,10 @@ import kotlin.math.sqrt
  * either route it to a DSP that never feeds the app or deliver near-silent samples, while the
  * plain [MediaRecorder.AudioSource.MIC] always works. We therefore prefer the raw sources:
  *
- *   1. [MediaRecorder.AudioSource.UNPROCESSED] when the device advertises support (no AGC/NS)
- *   2. [MediaRecorder.AudioSource.MIC] (universally available)
- *   3. [MediaRecorder.AudioSource.VOICE_RECOGNITION] (last resort)
+ *   1. [MediaRecorder.AudioSource.MIC] (universally available, no special OEM DSP)
+ *   2. [MediaRecorder.AudioSource.UNPROCESSED] when the device advertises support
+ *      (bypasses OEM AGC/NS if MIC is processed into silence)
+ *   3. [MediaRecorder.AudioSource.VOICE_RECOGNITION] (last resort; optional per device)
  *
  * If the chosen source initialises but only produces digital silence for the first ~300 ms, the
  * capture thread transparently reopens the recorder with the next candidate. The probe only
@@ -200,8 +201,8 @@ class AudioRecordSource(
         fun sourceCandidates(preferred: Int?, supportsUnprocessed: Boolean): List<Int> {
             if (preferred != null) return listOf(preferred)
             return buildList {
-                if (supportsUnprocessed) add(MediaRecorder.AudioSource.UNPROCESSED)
                 add(MediaRecorder.AudioSource.MIC)
+                if (supportsUnprocessed) add(MediaRecorder.AudioSource.UNPROCESSED)
                 add(MediaRecorder.AudioSource.VOICE_RECOGNITION)
             }.distinct()
         }
