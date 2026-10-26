@@ -1,112 +1,75 @@
-# ASHA-5 — U2b trim (MFVP 4b) + missing E2E insert link — HANDOFF
+# ASHA-5 — explicit language + bubble drag (owner tickets 1,2)
 
-**Owner:** ASHA · **Branch:** `agent/u2-states` · **Base:** `636b3f9` (master, merged into branch)
+Branch `agent/ui-device2`, worktree `/work/martins-whisper-worktrees/ui-device2`.
+**Stacked on `agent/ui-device1` (`8491c0f`): merge `agent/ui-device1` first, then this branch.**
+Code commit `2757cc9`. No capture/gate/VAD/telemetry changes.
 
-## Executive summary
+## Ticket 1 — explicit language (English default, Czech, auto opt-in)
+- `SettingsStore`: default language is now `en` (`DEFAULT_LANGUAGE = LANGUAGE_ENGLISH`). Supported set is
+  exactly `{auto, en, cs}` (`SUPPORTED_LANGUAGES`); any older/unsupported stored value falls back to
+  English instead of leaking an unexpected code to whisper.
+- Main screen spinner (Recognition section) now offers **Auto detect / English / Čeština**, preselected
+  from settings. Selecting an item persists immediately.
+- Engine path already existed and is now covered by tests: `DictationService` reads
+  `settings.effectiveLanguage()` at finalize time and passes it to
+  `DictationEngineHost.transcribe` → `SpeechEngine.transcribe(language)` → JNI
+  (`params.language = "en"/"cs"`, `detect_language = false`). Auto is the only path that sends `null`
+  (whisper detects; explicitly opt-in, since it flips on 2-5 s clips).
+- Default model is untouched: still `base` and asserted multilingual.
+- Files: `app/src/main/java/com/martins/whisper/data/SettingsStore.kt`,
+  `app/src/main/java/com/martins/whisper/MainActivity.kt`,
+  `app/src/main/res/values/strings.xml`.
 
-- Merged current master into `agent/u2-states`; resolved the known T2/U2b test conflict by
-  deliberately updating `OverlayStateMachineRobolectricTest` to the new state descriptions.
-- MFVP 4b now complete on this branch: start/stop ticks (VIRTUAL_KEY), inserted tick (CONFIRM),
-  **error = distinct double REJECT pulse ~90 ms apart**, state + content description applied
-  synchronously (bubble redraws on the next frame, well under 100 ms), and a test proving the
-  overlay window is `FLAG_NOT_FOCUSABLE | FLAG_NOT_TOUCH_MODAL` so it cannot steal focus.
-- Fixed the biggest missing E2E link: `DictationService` defaulted to a clipboard-only inserter,
-  so transcripts never reached the focused field. The default is now
-  `AccessibilityTextInserter`, which inserts through `DictationAccessibilityService` and falls
-  back to the clipboard when the service is not enabled or rejects the target (e.g. password).
-- Full local gate `:core:test :app:testDebugUnitTest :app:assembleDebug --offline`:
-  **234 tests (137 core + 97 app), 0 failures/errors**; default debug APK 8,982,513 B.
-- README replaced with the one short MFVP install/permissions/use page. APK evidence for the
-  native recipe verified against NORA-1's arm64 artifact (see below).
+## Ticket 2 — bubble drag drift + snap
+- `MicBubbleView` records `rawX/rawY` at ACTION_DOWN and passes **finger travel since DOWN** to the
+  listener; it never uses view-local coordinates for dragging (`onDragStart()` added as a default
+  interface method, so existing listeners still compile).
+- `OverlayController.beginDrag()` snapshots the window origin; `dragBy(dxFromDown,dyFromDown)` uses
+  `OverlayGeometry.draggedPosition` = origin + finger travel (constant touch offset), clamped to the
+  screen every event; `endDrag()` snaps to the nearest left/right edge, updates the window and
+  persists the position.
+- `DictationService` listener wires `onDragStart → beginDrag`, `onDrag → dragBy`, `onDragEnd → endDrag`.
+- Files: `app/src/main/java/com/martins/whisper/overlay/{MicBubbleView,OverlayController,OverlayGeometry}.kt`,
+  `app/src/main/java/com/martins/whisper/service/DictationService.kt`.
 
-## Files changed
+## Tests
+- New `LanguageSettingsTest`: default English, Czech persists across instances, auto → null,
+  unsupported stored value → English, default base model multilingual.
+- New `BubbleDragRobolectricTest` (`@Config(qualifiers = "w1080dp-h1920dp-mdpi")`): synthetic
+  MotionEvents through the real bubble view + real drag bookkeeping; asserts the window follows the
+  finger from the DOWN point within **2 px** at four move points, then release snaps to the nearest
+  edge and persists `bubbleX/bubbleY`.
+- `DictationServiceRobolectricTest`: engine receives `"cs"` when Czech is selected and `null` for Auto.
+- `MainActivityDeviceFixTest`: language spinner has exactly 3 options, defaults to English, selecting
+  Czech persists `cs`.
+- `OverlayGeometryTest`: offset math, clamping, snap choice + y clamp.
 
-- `app/src/main/java/com/martins/whisper/overlay/BubblePresentation.kt`
-  - Loading description uses the state label when present (no duplicated "Loading model… …").
-- `app/src/main/java/com/martins/whisper/overlay/MicBubbleView.kt`
-  - `scheduleHaptic` seam; `ERROR_DOUBLE_TICK_MS = 90L`; error emits REJECT then a second REJECT.
-  - Removed dead `AnimationUtils` import/unused helper.
-- `app/src/main/java/com/martins/whisper/overlay/OverlayController.kt`
-  - `internal val windowFlags` for the focus-safety test.
-- `app/src/main/kotlin/com/martins/whisper/accessibility/DictationAccessibilityService.kt`
-  - Added non-suspending `AccessibilityInserter.insertNow(text)` for main-thread callers.
-- `app/src/main/java/com/martins/whisper/service/AccessibilityTextInserter.kt` (new)
-  - Accessibility insert, clipboard fallback, empty text rejected.
-- `app/src/main/java/com/martins/whisper/service/DictationService.kt`
-  - `inserterFactory` default is now `AccessibilityTextInserter`.
-- Tests:
-  - `app/src/test/java/com/martins/whisper/overlay/MicBubbleViewRobolectricTest.kt`
-    (double tick, synchronous state, existing descriptions)
-  - `app/src/test/java/com/martins/whisper/overlay/BubblePresentationTest.kt`
-  - `app/src/test/java/com/martins/whisper/harness/OverlayControllerRobolectricTest.kt` (focus)
-  - `app/src/test/java/com/martins/whisper/harness/OverlayStateMachineRobolectricTest.kt`
-  - `app/src/test/java/com/martins/whisper/service/AccessibilityTextInserterTest.kt` (new)
+## Evidence (real commands/output)
+Env: `JAVA_HOME=/work/android-toolchain/jdk ANDROID_HOME=/work/android-toolchain/sdk GRADLE_USER_HOME=/home/node/gh-asha-ui`.
 
-## MFVP 4b mapping
-
-| Requirement | Implementation | Test |
-|---|---|---|
-| tick on start-recording | ACTION_DOWN → VIRTUAL_KEY | `press and release emit a virtual key tick` |
-| tick on stop | ACTION_UP (non-drag) → VIRTUAL_KEY | same |
-| tick on text inserted | Success → CONFIRM | `success ticks once and error ticks twice` |
-| error = distinct double tick | Error → REJECT + REJECT after 90 ms | `error double tick schedules…` |
-| visible state within ~100 ms | `state` setter updates contentDescription + invalidates synchronously; service publishes Loading before engine work | `state, content description and haptics apply synchronously` |
-| never steals focus | overlay `FLAG_NOT_FOCUSABLE or FLAG_NOT_TOUCH_MODAL` | `bubble window is not focusable…` |
-
-## E2E flow after this change
-
-tap bubble → `DictationService.onPress` (publishes Loading immediately) → AudioRecord frames →
-`DictationEngineHost` buffer → `finishSession`/`transcribe` on Default → `AccessibilityTextInserter`
-→ focused editable node (`ACTION_SET_TEXT`, else `ACTION_PASTE`) → `Success` state + CONFIRM tick.
-Clipboard remains the fallback and still produces the "Transcript copied to clipboard" message.
-
-## Model + native APK verification
-
-- Default model path reviewed: `SettingsStore.modelId = "base"` → `ModelCatalog.default` →
-  `ModelRepositoryProvider.forContext(filesDir)` → `<filesDir>/models`; download/import use
-  `ResumableModelDownloader` with Range resume + SHA-256 verify + atomic promote. Covered by
-  `ModelDownloaderTest` (7) and `HttpModelDownloaderTest` (4). No gap found.
-- Native APK (NORA-1 artifact, `/work/martins-whisper-worktrees/n1-native/.../app-debug.apk`):
-  `native-code: 'arm64-v8a'`; `lib/arm64-v8a/{libwhisper,libggml,libggml-base,libggml-cpu,
-  libmartins_whisper,libparakeet}.so`; debug-signed; sha256
-  `c90e356f6e65e82722f6a29b35ae2d661244f68b53c806820b3c4d5c751b7476`, 12,902,712 B.
-  The recipe is in `.github/workflows/native-build.yml` (on master, `-Pmartins.native=true`).
-- **This host is aarch64**, so the NDK's `linux-x86_64` clang cannot run locally
-  (`Exec format error`). Local native builds are impossible here; CI (ubuntu x86_64) or an x86
-  host is required. Default `assembleDebug` and all JVM tests still run locally.
-
-## Commands and evidence
-
-```bash
-cd /work/martins-whisper-worktrees/u2-states
-export JAVA_HOME=/work/android-toolchain/jdk
-export ANDROID_HOME=/work/android-toolchain/sdk ANDROID_SDK_ROOT=/work/android-toolchain/sdk
-export GRADLE_USER_HOME=/home/node/gh-asha
-./gradlew :app:testDebugUnitTest --offline
 ```
-
-Full gate:
-
-```bash
+./gradlew :app:testDebugUnitTest \
+  --tests 'com.martins.whisper.data.LanguageSettingsTest' \
+  --tests 'com.martins.whisper.ui.MainActivityDeviceFixTest' \
+  --tests 'com.martins.whisper.harness.DictationServiceRobolectricTest' \
+  --tests 'com.martins.whisper.overlay.OverlayGeometryTest' \
+  --tests 'com.martins.whisper.overlay.BubbleDragRobolectricTest' --offline
+BUILD SUCCESSFUL in 12s
+```
+```
 ./gradlew :core:test :app:testDebugUnitTest :app:assembleDebug --offline
+BUILD SUCCESSFUL in 8s
+core tests 157 skipped 0 failures 0 errors 0   (FROM-CACHE, same tree as master gate)
+app  tests 127 skipped 1 failures 0 errors 0
+APK: app/build/outputs/apk/debug/app-debug.apk  9,012,853 bytes
+SHA-256: ccfaa8190416cf9d07d2bc107571a3e7b6c770bb2d34b9b4e30f3a6bb138f7b0
 ```
+APK is the default non-native debug build (UI/compile evidence only).
 
-Result: `BUILD SUCCESSFUL`; totals parsed from the XML result dirs:
-**core 137 + app 97 = 234 tests, 0 failures/errors** (includes 2 new
-`AccessibilityTextInserterTest`, 7 `MicBubbleViewRobolectricTest`, 3
-`OverlayControllerRobolectricTest`). Default APK: 8,982,513 B.
-
-## Commits
-
-- `fbb94d7` Merge branch 'master' into agent/u2-states
-- `63a3d9d` feat(u2b): distinct error double tick, focus-safe overlay test, sync state visibility
-- `82b1a9e` feat(e2e): insert transcripts into the focused field via accessibility with clipboard fallback
-- (handoff commit follows)
-
-## Known limitations / next
-
-- No device run: insertion is proven by unit tests + the existing accessibility node code; H1 on
-  the phone is still required.
-- Native CI run (Actions) still needs the owner to push; local native build is blocked by the
-  aarch64 host (NDK host tools are x86_64).
-- `:app:assembleDebugAndroidTest` was not rerun this session; no androidTest sources changed.
+## Limitations / notes
+- Branch is stacked; MARA must merge `agent/ui-device1` first (or merge this branch, which contains it).
+- Auto-detect remains available but is opt-in; the default is explicit English as requested.
+- Only English/Czech are offered for now; adding a language is a one-line entry in `SUPPORTED_LANGUAGES`
+  + the spinner list.
+- `:app:assembleDebugAndroidTest` still cannot run offline in this worktree (androidx.test deps absent
+  from the private Gradle cache); no androidTest sources changed.
