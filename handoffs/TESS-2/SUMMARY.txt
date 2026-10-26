@@ -1,0 +1,19 @@
+<<<<<<< HEAD
+W2 / T2-svc — Robolectric service + overlay state-machine tests: DONE
+Branch agent/t2-svc @ bcc409f (tests) + docs commit, base agent/g2-engine @ 5494b79 — merge AFTER G2.
+2 new app-test suites / 6 tests; no production changes, no new dependencies.
+Acceptance: :app:testDebugUnitTest :app:assembleDebug => BUILD SUCCESSFUL.
+App tests: before 15 suites/66 tests/0 failures -> after 17 suites/72 tests/0 failures/0 errors.
+Covers: record-while-loading in order + insert once; 300 s idle unload + lazy new engine; cancel
+while loading (no insert, engine kept reusable); model switch closes previous engine; overlay
+Idle->Loading->Recording->Processing->Success->Error->Idle; single registered bubble.
+Details: handoffs/TESS-2/W2-SVC.md.
+=======
+TESS-2 — T1 re-verification + fail-closed gate: DONE
+Branch agent/t1-harness @ (7211eab + docs). T1 code already merged in 425412c; master verified ba6b160.
+Gate on clean master worktree: 25 suites / 141 tests / 0 failures (core 85, app 56),
+assembleDebug + assembleDebugAndroidTest OK. APK 8,939,909 B sha256 2dd15f24…; androidTest 1,326,409 B sha256 f7e1dedd….
+test-device-ready.sh now fails closed on zero tests/failures/missing harness tests/missing APKs.
+test-device.sh no device -> exit 3. Layer 2 still compile-only (H1/device). Logs: /work/tess-t1/logs/.
+Details: handoffs/TESS-2/HANDOFF.md. Do not merge agent/*; MARA integrates.
+>>>>>>> 667dba3

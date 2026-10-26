@@ -78,6 +78,12 @@ Provider LIMITED since 2026-10-26T19:01:38Z (`/work/.yoloseek/PROVIDER-STATUS.md
 | W2 (MARAWAVE) | Integration wave 2: T1 + DORA-2 merges, full gate. | `handoffs/PM-2026-10-26-5/`; 141 tests, APK `73c0fa1cd...` |
 | G2a | Custom (non-catalog) GGML import: persist/list/select/delete `ModelSpec`. | ASHA-2, merged `01fa735`; handoff `ASHA-2`, 155 tests |
 | G2b | Record while engine loads + lazy load/switch/idle unload (`DictationEngineHost`). | ASHA-2, merged `01fa735`; 155 tests, 0 failures |
+| NORA-1 | CI fix (sdkmanager `--sdk_root`), native build scripts, NDK/CMake overrides, native smoke test. | NORA-1, merged `c3c45bb`; local arm64 APK 12.9 MB verified |
+| G3a | Real-HTTP downloader proof: loopback tests (happy/resume/bad-hash/404). | ASHA-3, merged `5bc822d`; 159 tests |
+| G3b | Backend labels + CPU-retry-once engine fallback persisted in `EngineState`. | ASHA-3, merged `c53b6ef`; 163 tests |
+| DORA-3 | `docs/RELEASE-CHECKLIST.md` (versioning, signing, distribution). | merged `39ca92d`; handoff owed |
+| TESS-2 | +54 tests: 48 core edge suites, 6 service/overlay Robolectric; F1 `AudioChunker` bug flagged. | merged `25ea766`,`ed8d96c`; 217 tests, 0 failures |
+| T1-close | Fail-closed `test-device-ready.sh`, sub-tickets closed. | merged; gate 217/0 (`d6c0a58` handoff PM-2026-10-26-7) |
 | D1-1 | Operator docs: INSTALL/PERMISSIONS/MODELS/PRIVACY/DEVICE-MATRIX/TROUBLESHOOTING/DOCTOR + README. | DORA-1, merged `b33c8c3`; commands run or marked UNVERIFIED |
 | D1-2 | `install-apk.sh`, `push-model.sh` (SHA-256), `doctor.sh` (secret-free). | DORA-1, merged `b33c8c3`; `bash -n` + no-device exits verified |
 | B1 | Build harness: Gradle wrapper 8.9, x86_64 Dockerfile, CI, env scripts, build docs. | merged `caf0d09`; `./gradlew` gate green; `handoffs/PM-2026-10-26-2/` |
