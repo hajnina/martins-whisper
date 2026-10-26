@@ -21,6 +21,7 @@ worktrees/
 *.log
 
 .kotlin/
+recordings/
 android-toolchain/
 gradle-home/
 e1-models/
@@ -28,8 +29,6 @@ e1-models/
 *.safetensors
 
 .scratch/**/bench/
-
-.kotlin/
 
 # Pinned whisper.cpp checkout (run scripts/fetch-whisper-cpp.sh)
 app/src/main/cpp/whisper.cpp/
