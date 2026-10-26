@@ -1,73 +1,45 @@
-# PARK — TESS (2026-10-26, before refill/killall)
+# PARK — TESS (live, 2026-10-26, MFVP shift)
 
-Master at park: `83a65df` (wave 4, gate 217/0). All worktrees clean; nothing uncommitted.
+Master at shift start: `636b3f9` (gate 217/0). Worktree: `/work/martins-whisper-worktrees/f1-chunker`
+(branch `agent/f1-chunker`, based on `636b3f9`). Nothing merged by TESS.
 
-## DONE (SHAs on master)
+## DONE on agent/f1-chunker
 
-- **T1 harness** (merged): harness `bc182f9` + harden `cf92851` (merge `425412c`); fail-closed
-  gate `7211eab` + T1 closes/`handoffs/TESS-2/HANDOFF.md` `667dba3` (merged in wave 4, tip
-  `agent/t1-harness`). Layer 1 = 141 tests at the time; Layer 2 device tests compile via
-  `assembleDebugAndroidTest`; `scripts/test-device-ready.sh` fails closed; `scripts/test-device.sh`
-  exits 3 with no device. Re-verified on master `ba6b160`.
-- **T2 tests** (merged): W1 edge/property `b7f0ae7` (merge `ed8d96c`), W2 Robolectric service +
-  overlay `bcc409f` (merge `25ea766`). Verified independently and integrated: master gate green
-  (core 16/137 + app 17/72 at the time; 209 tests, later 217 with wave 4).
-- Handoffs: `handoffs/TESS-1/`, `handoffs/TESS-2/` (`HANDOFF.md`, `T2-HANDOFF.md`, `W1-EDGE.md`,
-  `W2-SVC.md`).
+- **F1 fix** `cef801a`: `AudioChunker.splitAtMaxLength` no longer duplicates post-cut audio
+  (`tailFrom(fromMs, lastIndex)` stops at the cut frame). Regression in
+  `AudioChunkerEdgeTest` asserts exactly 11_680 samples for the W1 repro; low-energy test now
+  exact; random stream asserts `samples <= duration`. Gate green: core 16/138, app 18/80,
+  0 failures/errors (rerun, offline). Handoff `handoffs/TESS-F1/HANDOFF.md`.
+- Earlier merged work (T1/T2) unchanged: see git log / `handoffs/TESS-1`, `TESS-2`.
 
-## RUNNING at park (note only, do NOT resume — MFVP-stopped scope)
+## RUNNING (this note updated after each step)
 
-- **W1** — branch `agent/t3-lint` (tip `1e7e3fd` `wip: park`), ticket `T3-lint`, model
-  `deepseek-v4.1-flash-free`. State: ticket committed `f766ba5`; lint/ktlint/detekt NOT wired,
-  no baselines. Unmerged.
-- **W2** — branch `agent/t3-repro` (tip `4a2b820`), ticket `T3-repro`, model
-  `deepseek-v4.1-flash-free`. State: ticket only; `scripts/test-clean-checkout.sh` NOT written.
-  Unmerged.
-- Both were in-process Task subagents: they cannot be cancelled from this session; they were told
-  never to merge, so the park commits on their branches are the only residue.
-- Critical-path work was NOT started (owner MFVP steer arrived before any code action).
+- **Priority 2 — MFVP-path service failure tests** (tests only, app/src/test): engine
+  transcribe throws -> Error + no insert + reset; empty transcript -> No speech detected;
+  inserter Copied/Failed result surfacing; missing RECORD_AUDIO -> Error before audio;
+  too-short press -> Idle, no engine call. No production changes. Branch continues
+  `agent/f1-chunker`.
 
 ## NEXT (ordered, MFVP critical path only)
 
-1. **MFVP-1 — real engine in the default APK:** verify NORA-1's native arm64 APK
-   (`/work/martins-whisper-worktrees/n1-native/app/build/outputs/apk/debug/app-debug.apk`,
-   12,902,712 B) contains the whisper JNI/`.so` and that `EngineFactory.createDefault` picks
-   `WhisperCppEngine`; owner pushes `agent/n1-native`/master to run the Actions workflow.
-   Small: one APK byte audit + one JVM assertion.
-2. **MFVP-2 — end-to-end wiring audit:** bubble press → `AudioCaptureBuffer`/VAD/chunk →
-   `DictationEngineHost.transcribe` → `TextInserter` into the focused field. Read
-   `DictationService`/`OverlayController`/`MainActivity`; ASHA fixes gaps as small tickets; TESS
-   keeps only the existing minimal tests (`DictationServiceRobolectricTest`,
-   `DictationServiceLifecycleRobolectricTest`, `FakeAudioPipelineE2ETest`).
-3. **MFVP-3 — one default model:** confirm one-tap download (base/tiny), resume + SHA check via the
-   existing G3a loopback tests; delete extra model UI roads that block the flow.
-4. **MFVP-4 — H1 phone smoke (owner provides phone):** install debug-signed arm64 APK, grant the 3
-   permissions, tap/speak/tap into a real app; fix what breaks. This is the definition of done.
-   TESS writes the one-page run sheet only if asked; no new harness scope.
-5. **MFVP-5 — README:** one short install/permissions/use file.
+1. Finish the failure-path Robolectric tests and run `:app:testDebugUnitTest`.
+2. Handoff `handoffs/TESS-MFVP-TESTS/`, update this note, final message to owner.
+3. Then stop: no new harness/lint/repro scope. H1 phone smoke is ASHA/owner work.
 
-Explicitly NOT to resume: `agent/t3-lint`, `agent/t3-repro`, M1/M2 release+checklist,
-`agent/n2-release`, u2-tile/extra overlay states, benches.
+## FINDINGS for PM/owner (not fixed here)
+
+- **MFVP gap:** `DictationService.inserterFactory` defaults to `ClipboardTextInserter`, so the
+  tap→speak→tap flow copies to the clipboard and does NOT insert into the focused field.
+  `DictationAccessibilityService` + `AccessibilityInserter` exist but nothing wires them into
+  the service (`service.TextInserter` vs `accessibility.TextInserter` are different interfaces).
+  This blocks MFVP item 2 (real insertion) and needs an ASHA ticket.
+- **F1 fixed**; F2 (frame can end past 600 s cap), F3 (merger drops distinct emoji/punct),
+  F4/F5/F6 (from W1-EDGE) remain open, none on the current hot service path.
 
 ## TRAPS (verified)
 
-- **F1 production bug:** `AudioChunker.splitAtMaxLength` duplicates post-cut audio
-  (`tailFrom` over the whole chunk + `afterCut`). Independently reproduced:
-  `expected:<11680> but was:<19360>`. User-audible duplicate speech in the next chunk; needs a
-  small production ticket before/at H1. Test evidence in `handoffs/TESS-2/W1-EDGE.md`.
-- **Handoff-dir collisions:** T1 and T2 both added `handoffs/TESS-2/SUMMARY.txt`; MARA hit
-  merge conflicts (`UU/AA`). New work gets a fresh `handoffs/TESS-<n>/` per branch or unique file
-  names.
-- **Task subagents cannot be cancelled** and may keep writing after a steer/park. Prefer
-  dedicated `opencode run`/yoloseek sessions for cancellable workers; always instruct "never
-  merge", commit `wip: park` sweeps.
-- **Gradle:** never use `/work/android-toolchain/gradle-home`; private `gh-*` copies die with the
-  container on refill (re-copy once). One online fetch is needed for `androidx.test.ext:junit`
-  and espresso before `--offline` works. Never `pkill` gradle/java on this shared host.
-- **Robolectric:** use `@ConscryptMode(OFF)`; overlay `isShowing` is false in Robolectric (assert
-  `ShadowWindowManagerImpl` views); APK sha256 is not stable across rebuilds, sizes/counts are.
-- **Native build:** `-Pmartins.native=true` uses the community NDK override
-  (`-Pmartins.ndkVersion=...`); keep `cmake` 3.22.1 from the SDK. The native APK is arm64-only and
-  contains no model (12.9 MB).
-- **MFVP product gap:** real inference and the tap→speak→insert loop have NEVER run on a device;
-  all current proof is JVM/Robolectric + a locally built APK. H1 is the only way to close it.
+- Never use `/work/android-toolchain/gradle-home`; this shift uses private
+  `/home/node/gh-f1` (`cp -r` from the shared copy). Offline is enough.
+- Robolectric: `@ConscryptMode(OFF)`, `@Config(sdk=[34])`, idle the main looper; overlay
+  `isShowing` false in Robolectric.
+- One branch for both priorities to keep MARA to a single small merge; F1 is its own commit.
