@@ -1,0 +1,7 @@
+TESS-1 — T1 harness: DONE
+Branch agent/t1-harness @ cf92851 (bc182f9 + cf92851), base fcb8299, conflict-free vs master def7b1c.
+Gate: scripts/test-device-ready.sh with GRADLE_USER_HOME=/home/node/gh-tess ->
+PASS 25 suites / 141 tests / 0 failures (core 85, app 56), assembleDebug + assembleDebugAndroidTest OK.
+APK: app-debug 8,939,909 B sha256 65a8a028...94d0; androidTest 1,326,409 B sha256 612b179f...482d.
+Layer 2 compiled only; execute on H1 with scripts/test-device.sh (no KVM/device here).
+Details/evidence: handoffs/TESS-1/HANDOFF.md. Do not merge agent/*; owner/MARA integrates.
