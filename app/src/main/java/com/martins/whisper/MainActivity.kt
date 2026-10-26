@@ -25,15 +25,24 @@ import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
+import com.martins.whisper.asr.ModelRepositoryProvider
+import com.martins.whisper.asr.WhisperCppEngine
 import com.martins.whisper.core.ComputeBackend
+import com.martins.whisper.core.ModelSpec
+import com.martins.whisper.core.asr.DownloadProgress
+import com.martins.whisper.core.asr.ModelCatalog
+import com.martins.whisper.core.asr.ModelRepository
 import com.martins.whisper.data.SettingsStore
 import com.martins.whisper.service.DictationService
 import com.martins.whisper.service.DictationState
-import com.martins.whisper.core.asr.ModelCatalog
 import com.martins.whisper.ui.PermissionGate
 import com.martins.whisper.ui.PermissionSnapshot
+import java.io.File
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
 
@@ -45,8 +54,23 @@ class MainActivity : ComponentActivity() {
     private lateinit var accessibilityStatus: TextView
     private lateinit var notificationsStatus: TextView
     private lateinit var overlayButton: Button
+    private lateinit var modelSpinner: Spinner
+    private lateinit var modelStatus: TextView
+    private lateinit var modelProgress: TextView
+    private lateinit var diagnosticsView: TextView
+    private lateinit var downloadButton: Button
+    private lateinit var importButton: Button
+    private lateinit var deleteButton: Button
     private var bootSwitch: Switch? = null
     private var suppressSpinnerCallbacks = false
+
+    private val repository: ModelRepository by lazy { ModelRepositoryProvider.forContext(this) }
+
+    private var modelBusy = false
+
+    private val importModel = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) importModelFrom(uri)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -145,13 +169,8 @@ class MainActivity : ComponentActivity() {
 
         root.addView(section(getString(R.string.section_model)))
         root.addView(label(getString(R.string.model_label)))
-        val modelSpinner = Spinner(this)
-        val modelAdapter = ArrayAdapter(
-            this,
-            android.R.layout.simple_spinner_dropdown_item,
-            ModelCatalog.specs.map { it.displayName },
-        )
-        modelSpinner.adapter = modelAdapter
+        modelSpinner = Spinner(this)
+        modelSpinner.adapter = spinnerAdapter(ModelCatalog.specs.map { it.displayName })
         val modelIndex = ModelCatalog.specs.indexOfFirst { it.id == settings.modelId }.coerceAtLeast(0)
         suppressSpinnerCallbacks = true
         modelSpinner.setSelection(modelIndex, false)
@@ -160,11 +179,45 @@ class MainActivity : ComponentActivity() {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 if (suppressSpinnerCallbacks) return
                 settings.modelId = ModelCatalog.specs[position].id
+                modelProgress.text = ""
+                refreshModelPanel()
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
         }
         root.addView(modelSpinner, matchWidth())
+
+        modelStatus = body("").apply {
+            setPadding(0, dp(4), 0, dp(4))
+        }
+        root.addView(modelStatus)
+
+        val modelButtons = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        downloadButton = Button(this).apply {
+            text = getString(R.string.model_download)
+            setOnClickListener { downloadSelectedModel() }
+        }
+        importButton = Button(this).apply {
+            text = getString(R.string.model_import)
+            setOnClickListener { importModel.launch(arrayOf("*/*")) }
+        }
+        deleteButton = Button(this).apply {
+            text = getString(R.string.model_delete)
+            setOnClickListener { deleteSelectedModel() }
+        }
+        val buttonParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        modelButtons.addView(downloadButton, buttonParams)
+        modelButtons.addView(importButton, buttonParams)
+        modelButtons.addView(deleteButton, buttonParams)
+        root.addView(modelButtons, matchWidth())
+
+        modelProgress = caption("").apply {
+            setPadding(0, dp(4), 0, dp(4))
+        }
+        root.addView(modelProgress)
         root.addView(caption(getString(R.string.model_note)).apply {
             setPadding(0, dp(4), 0, dp(10))
         })
@@ -227,11 +280,168 @@ class MainActivity : ComponentActivity() {
         root.addView(idleSpinner, matchWidth())
 
         root.addView(section(getString(R.string.section_diagnostics)))
+        diagnosticsView = body("").apply {
+            setTypeface(Typeface.MONOSPACE)
+            setTextColor(Color.rgb(60, 70, 75))
+            setPadding(0, 0, 0, dp(8))
+        }
+        root.addView(diagnosticsView)
         root.addView(caption(getString(R.string.diagnostics_text)).apply {
             setPadding(0, 0, 0, dp(8))
         })
         return scroll
     }
+
+    private fun selectedSpec(): ModelSpec =
+        ModelCatalog.specs[modelSpinner.selectedItemPosition.coerceIn(0, ModelCatalog.specs.lastIndex)]
+
+    private fun refreshModelPanel() {
+        if (!::modelStatus.isInitialized) return
+        val spec = selectedSpec()
+        val installed = repository.isInstalled(spec)
+        val sizeMb = formatMegabytes(spec.sizeBytes)
+        modelStatus.text = if (installed) {
+            getString(R.string.model_installed)
+        } else {
+            getString(R.string.model_not_installed, sizeMb)
+        }
+        modelStatus.setTextColor(
+            if (installed) Color.rgb(19, 120, 70) else Color.rgb(170, 90, 20),
+        )
+        downloadButton.isEnabled = !modelBusy && !installed && spec.url != null
+        importButton.isEnabled = !modelBusy
+        deleteButton.isEnabled = !modelBusy && installed
+        refreshDiagnostics()
+    }
+
+    private fun refreshDiagnostics() {
+        if (!::diagnosticsView.isInitialized) return
+        val spec = selectedSpec()
+        val installed = repository.isInstalled(spec)
+        val nativeAvailable = WhisperCppEngine.isNativeAvailable
+        val lines = buildList {
+            add(
+                getString(
+                    R.string.diag_native,
+                    getString(
+                        if (nativeAvailable) R.string.diag_native_available else R.string.diag_native_missing,
+                    ),
+                ),
+            )
+            if (!nativeAvailable) {
+                WhisperCppEngine.nativeLoadError?.let { add(getString(R.string.diag_native_error, it)) }
+            }
+            add(
+                getString(
+                    R.string.diag_model,
+                    spec.displayName,
+                    getString(if (installed) R.string.diag_installed else R.string.diag_not_installed),
+                ),
+            )
+            add(getString(R.string.diag_backend, settings.lastBackend ?: getString(R.string.diag_backend_unloaded)))
+            settings.lastFallbackReason?.let { add(getString(R.string.diag_fallback, it)) }
+            if (settings.gpuFailureCount > 0) {
+                add(getString(R.string.diag_gpu_failures, settings.gpuFailureCount))
+            }
+            settings.lastEngineError?.let { add(getString(R.string.diag_last_error, it)) }
+            if (settings.lastBackend == null && settings.lastEngineError == null) {
+                add(getString(R.string.diag_idle))
+            }
+        }
+        diagnosticsView.text = lines.joinToString("\n")
+    }
+
+    private fun downloadSelectedModel() {
+        val spec = selectedSpec()
+        val url = spec.url ?: return
+        setModelBusy(true)
+        modelProgress.text = getString(R.string.model_progress, spec.displayName, 0)
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    repository.install(spec = spec) { progress ->
+                        postProgress(spec, progress)
+                    }
+                }
+                modelProgress.text = getString(R.string.model_ready, spec.displayName)
+            } catch (t: Throwable) {
+                modelProgress.text = getString(
+                    R.string.model_failed,
+                    t.message ?: t.javaClass.simpleName,
+                )
+            } finally {
+                setModelBusy(false)
+                refreshModelPanel()
+            }
+        }
+    }
+
+    private fun importModelFrom(uri: Uri) {
+        val spec = selectedSpec()
+        setModelBusy(true)
+        modelProgress.text = getString(R.string.model_progress, spec.displayName, 0)
+        lifecycleScope.launch {
+            var temp: File? = null
+            try {
+                val tempFile = File(cacheDir, "model-import-${System.currentTimeMillis()}.bin")
+                temp = tempFile
+                withContext(Dispatchers.IO) {
+                    val input = contentResolver.openInputStream(uri)
+                        ?: error("Cannot open the selected file")
+                    input.use { source ->
+                        tempFile.outputStream().use { target -> source.copyTo(target) }
+                    }
+                    repository.importFile(spec = spec, source = tempFile) { progress ->
+                        postProgress(spec, progress)
+                    }
+                }
+                modelProgress.text = getString(R.string.model_ready, spec.displayName)
+            } catch (t: Throwable) {
+                modelProgress.text = getString(
+                    R.string.model_failed,
+                    t.message ?: t.javaClass.simpleName,
+                )
+            } finally {
+                temp?.delete()
+                setModelBusy(false)
+                refreshModelPanel()
+            }
+        }
+    }
+
+    private fun deleteSelectedModel() {
+        val spec = selectedSpec()
+        val deleted = runCatching { repository.delete(spec) }.getOrDefault(false)
+        modelProgress.text = getString(
+            if (deleted) R.string.model_deleted else R.string.model_delete_missing,
+            spec.displayName,
+        )
+        refreshModelPanel()
+    }
+
+    private fun setModelBusy(busy: Boolean) {
+        modelBusy = busy
+        modelSpinner.isEnabled = !busy
+        if (busy) {
+            downloadButton.isEnabled = false
+            importButton.isEnabled = false
+            deleteButton.isEnabled = false
+        } else {
+            refreshModelPanel()
+        }
+    }
+
+    private fun postProgress(spec: ModelSpec, progress: DownloadProgress) {
+        val percent = progress.fraction?.let { (it * 100).toInt() } ?: 0
+        runOnUiThread {
+            if (!isFinishing) {
+                modelProgress.text = getString(R.string.model_progress, spec.displayName, percent)
+            }
+        }
+    }
+
+    private fun formatMegabytes(bytes: Long?): String =
+        bytes?.let { "%.0f".format(it / 1_048_576.0) } ?: "?"
 
     private fun languageSpinner(languages: List<Pair<String, String>>): Spinner {
         val spinner = Spinner(this)
@@ -280,6 +490,7 @@ class MainActivity : ComponentActivity() {
             getString(R.string.start_overlay)
         }
         bootSwitch?.isChecked = settings.bootStart
+        if (::modelStatus.isInitialized) refreshModelPanel()
     }
 
     private fun observeService() {
