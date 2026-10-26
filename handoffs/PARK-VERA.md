@@ -1,0 +1,7 @@
+## PARK-VERA (lx: verification engineer)
+DONE:
+- V1 complete (layout scripts/verify/): scan-weak-tests.sh(+.py), scan-mocks.sh(+.py), scan-oracle-copy.sh(+.py), all fail-closed, allowlist file scan-allowlist.txt. Ran against the current 217-test suite: 11 hits, all one weakness class (throw AssertionError + catch(_:) = assertion-free exception checks) in ModelDownloaderTest, ModelCatalogTest, ModelRepositoryTest, WhisperCppEngineTest -> rewritten with assertFailsWith/assertThrows. scan-mocks & scan-oracle-copy: 0 real hits. Negative control: injected tautology+noassert file -> wall FAILed (after fixing a literal-quote gap the first control exposed). Suite re-run green: :core:test 137 + :app:testDebugUnitTest 80 = 217, 0 failures.
+- commit 40fb8e5 on agent/v1-verify (worktree /work/martins-whisper-worktrees/v1-verify).
+RUNNING: V2 mutation runner.
+NEXT: mutation table ~30 mutants -> survivors = test tickets + killing tests; V3 guard-test-diff+ratchet+red-first; V4 tracer bullets (owner mustard: (a) transcript->focused-node (inserter!), (b) silence inserts nothing + hallucination strip, (c) idle-unload vs running transcription race on REAL JNI, (d) host JNI jfk.wav literal-word test).
+TRAPS: gradle needs source /work/android-toolchain/scripts/env.sh + GRADLE_USER_HOME=/work/android-toolchain/gradle-home + -Pandroid.aapt2FromMavenOverride=/work/android-toolchain/sdk/build-tools/35.0.1/aapt2 (x86 maven aapt2 is useless here). --offline fails in a fresh worktree (plugins not cached); plain run works.
