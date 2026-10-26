@@ -1,6 +1,12 @@
 name: Android native build
 
 # Produces the real arm64-v8a APK (bundled whisper.cpp, CPU-first). Vulkan stays opt-in.
+#
+# Two jobs run in parallel:
+#   apk   - assembleDebug + artifact checks + upload. Kept short (<~6 min warm) so the owner can
+#           flash the newest build immediately; scripts/fetch-latest-apk.sh pulls this artifact.
+#   tests - JVM gate + host JNI tracer (whisper.cpp on the runner). A red test run still fails
+#           the workflow, but it never delays the APK upload.
 on:
   workflow_dispatch:
     inputs:
@@ -11,24 +17,23 @@ on:
   push:
     branches: ["**"]
     paths:
-      - "app/src/main/cpp/**"
-      - "app/build.gradle.kts"
-      - "app/src/androidTest/**"
-      - "app/src/test/**"
-      - "app/src/main/kotlin/com/martins/whisper/asr/**"
-      - "scripts/fetch-whisper-cpp.sh"
-      - "scripts/native-*.sh"
-      - "scripts/host-jni-test.sh"
+      - "app/**"
+      - "core/**"
+      - "gradle/**"
+      - "gradle.properties"
+      - "settings.gradle.kts"
+      - "build.gradle.kts"
+      - "scripts/**"
       - ".github/workflows/native-build.yml"
   pull_request:
     paths:
-      - "app/src/main/cpp/**"
-      - "app/build.gradle.kts"
-      - "app/src/test/**"
-      - "app/src/main/kotlin/com/martins/whisper/asr/**"
-      - "scripts/fetch-whisper-cpp.sh"
-      - "scripts/native-*.sh"
-      - "scripts/host-jni-test.sh"
+      - "app/**"
+      - "core/**"
+      - "gradle/**"
+      - "gradle.properties"
+      - "settings.gradle.kts"
+      - "build.gradle.kts"
+      - "scripts/**"
       - ".github/workflows/native-build.yml"
 
 permissions:
@@ -50,10 +55,10 @@ env:
   DEBIAN_FRONTEND: noninteractive
 
 jobs:
-  native:
+  apk:
     name: Native arm64 debug APK
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -68,7 +73,7 @@ jobs:
       - name: Set up Gradle (with cache)
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Configure preinstalled Android SDK + NDK/CMake
+      - name: Configure preinstalled Android SDK + NDK/CMake (fast path)
         shell: bash
         run: |
           set -euo pipefail
@@ -82,19 +87,21 @@ jobs:
             ls -la /usr/local/lib/android 2>/dev/null || true
             exit 1
           fi
-          dirname "$SDKMANAGER" >> "$GITHUB_PATH"
-          yes | "$SDKMANAGER" --sdk_root="$SDK" --licenses >/dev/null 2>&1 || true
 
-          # Fast path: the runner image already has the pinned NDK and CMake.
+          # Only install what the runner image does not already have: sdkmanager --install is
+          # the slowest part of the old setup even when the packages are preinstalled.
           need=()
           [ -d "$SDK/ndk/$NDK_VERSION" ] || need+=("ndk;$NDK_VERSION")
           [ -x "$SDK/cmake/$CMAKE_VERSION/bin/cmake" ] || need+=("cmake;$CMAKE_VERSION")
-          for pkg in "platforms;android-35" "build-tools;35.0.1" "platform-tools"; do
-            need+=("$pkg")
-          done
-          "$SDKMANAGER" --sdk_root="$SDK" --install "${need[@]}" >/dev/null
+          [ -d "$SDK/platforms/android-35" ] || need+=("platforms;android-35")
+          [ -d "$SDK/build-tools/35.0.1" ] || need+=("build-tools;35.0.1")
+          [ -d "$SDK/platform-tools" ] || need+=("platform-tools")
+          if ((${#need[@]})); then
+            yes | "$SDKMANAGER" --sdk_root="$SDK" --licenses >/dev/null 2>&1 || true
+            "$SDKMANAGER" --sdk_root="$SDK" --install "${need[@]}" >/dev/null
+          fi
           echo "ANDROID_NDK_HOME=$SDK/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
-          "$SDK/cmake/$CMAKE_VERSION/bin/cmake" --version
+          "$SDK/cmake/$CMAKE_VERSION/bin/cmake" --version | head -1
           "$SDK/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" --version | head -1
 
       - name: Cache pinned whisper.cpp checkout
@@ -116,25 +123,24 @@ jobs:
       - name: Check Kotlin/JNI signatures
         run: scripts/native-jni-check.sh
 
-      - name: Unit tests + native debug APK
+      - name: Cache the NDK build of whisper.cpp
+        uses: actions/cache@v4
+        with:
+          path: app/.cxx
+          key: whisper-ndk-${{ runner.os }}-${{ env.WHISPER_CPP_REF }}-${{ hashFiles('app/src/main/cpp/CMakeLists.txt','app/src/main/cpp/whisper_jni.cpp','app/build.gradle.kts') }}
+          restore-keys: |
+            whisper-ndk-${{ runner.os }}-${{ env.WHISPER_CPP_REF }}-
+
+      - name: Assemble native debug APK
         shell: bash
         run: |
           set -euo pipefail
-          ./gradlew --no-daemon --stacktrace \
+          ./gradlew --no-daemon --stacktrace --build-cache \
             -Pmartins.native=true \
             -Pmartins.vulkan=${{ inputs.vulkan || 'false' }} \
             -Pmartins.ndkVersion="$NDK_VERSION" \
             -Pmartins.cmakeVersion="$CMAKE_VERSION" \
-            :core:test :app:testDebugUnitTest :app:assembleDebug
-
-      - name: Cache host JNI tiny model
-        uses: actions/cache@v4
-        with:
-          path: build/host-native/models
-          key: whisper-host-tiny-${{ runner.os }}-${{ env.WHISPER_TINY_SHA256 }}
-
-      - name: Host JNI tracer (whisper.cpp + JNI on the build host)
-        run: scripts/host-jni-test.sh
+            :app:assembleDebug
 
       - name: Verify native APK (ABI, libs, size, no bundled model)
         run: scripts/native-apk-check.sh app/build/outputs/apk/debug/app-debug.apk
@@ -149,3 +155,75 @@ jobs:
             app/build/outputs/apk/debug/app-debug.apk
             app/build/outputs/apk/debug/output-metadata.json
             build/native-apk-report.txt
+
+  tests:
+    name: JVM gate + host JNI tracer
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle (with cache)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Configure preinstalled Android SDK (fast path)
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="$ANDROID_HOME"
+          SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            SDKMANAGER="$(find "$SDK/cmdline-tools" -maxdepth 3 -path '*/bin/sdkmanager' 2>/dev/null | sort -V | tail -1)"
+          fi
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            echo "::error::No preinstalled Android sdkmanager under $SDK"
+            exit 1
+          fi
+          need=()
+          [ -d "$SDK/platforms/android-35" ] || need+=("platforms;android-35")
+          [ -d "$SDK/build-tools/35.0.1" ] || need+=("build-tools;35.0.1")
+          [ -d "$SDK/platform-tools" ] || need+=("platform-tools")
+          if ((${#need[@]})); then
+            yes | "$SDKMANAGER" --sdk_root="$SDK" --licenses >/dev/null 2>&1 || true
+            "$SDKMANAGER" --sdk_root="$SDK" --install "${need[@]}" >/dev/null
+          fi
+
+      - name: Cache pinned whisper.cpp checkout
+        uses: actions/cache@v4
+        with:
+          path: app/src/main/cpp/whisper.cpp
+          key: whisper-cpp-${{ runner.os }}-${{ env.WHISPER_CPP_REF }}
+
+      - name: Fetch pinned whisper.cpp
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            scripts/fetch-whisper-cpp.sh && break
+            echo "fetch attempt $attempt failed; retrying" >&2
+            sleep $((attempt * 5))
+          done
+          test -f app/src/main/cpp/whisper.cpp/CMakeLists.txt
+
+      - name: Unit tests (core + app JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew --no-daemon --stacktrace --build-cache \
+            :core:test :app:testDebugUnitTest
+
+      - name: Cache host JNI tiny model
+        uses: actions/cache@v4
+        with:
+          path: build/host-native/models
+          key: whisper-host-tiny-${{ runner.os }}-${{ env.WHISPER_TINY_SHA256 }}
+
+      - name: Host JNI tracer (whisper.cpp + JNI on the build host)
+        run: scripts/host-jni-test.sh

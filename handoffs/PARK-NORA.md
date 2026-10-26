@@ -1,58 +1,46 @@
-# PARK — NORA (native build / CI), 2026-10-26 (N3 session)
+# PARK - NORA (live note, capture1 shift 2026-10-26)
+
+## DONE (this session)
+- Read SHIFT / DEVICE-REPORT / MFVP / HTP / briefs.
+- **Capture audit** ("no speech" on POCO F8 Pro / HyperOS). Top finding for MARA: the absolute
+  per-frame gate (`SPEECH_RMS_THRESHOLD = 0.015f` = -36.5 dBFS RMS, `DictationService.kt:535`
+  used at :190) rejects with "no speech energy" even when whisper transcribed correctly; a quiet
+  phone mic sits under it. Capture-side: hard-coded `VOICE_RECOGNITION` (optional per OEM,
+  silence-prone on HyperOS), 80 ms buffer (4 frames), `read()==0` ignored. Full details in
+  `handoffs/NORA-CAPTURE/HANDOFF.md`.
+- **Fix (capture-source/config only)**: `AudioRecordSource` chain MIC -> UNPROCESSED (if advertised) -> VOICE_RECOGNITION; 4x minBuffer (>=8 frames); 300 ms dead-source probe + reopen next
+  source; read()==0 detection (~2 s) instead of a spin; logcat source/config; `sourceName`
+  exposed for telemetry. New test `AudioRecordSourceTest` (4 tests) green.
+- Branch `agent/capture1`, worktree `/work/martins-whisper-worktrees/capture1`,
+  private `GRADLE_USER_HOME=/home/node/gh-nora` (copy of the shared home).
+- `scripts/fetch-latest-apk.sh` (new): gh run list/download newest successful native build,
+  arm64/JNI sanity, sha256 + adb hint; `--branch master` default (any-branch / run-id /
+  allow-failed flags).
+- `native-build.yml`: split `apk` (fast assemble + upload, target <6 min) from `tests` (JVM +
+  host JNI tracer) so the artifact lands early; broadened push paths to app/core; NDK/CMake
+  sdkmanager fast path only installs what is missing.
 
 ## DONE
+- Full local gate on `agent/capture1` (GATE.md): BUILD SUCCESSFUL, core 157 + app 114 = 271 tests, 0 failures/errors; assembleDebug + assembleDebugAndroidTest green; actionlint clean; fetch script fake-gh E2E green.
 
-### N1 (previous session, merged)
-- Native CI workflow fixed and merged (`b37577d`, `8938610`, `0bd7e8d`); CI green on
-  master `636b3f9` (runs 40380372902 native / 40380372979 CI, both success).
-- Real arm64 APK built locally, sha256 `c90e356f…b7476`, 12.9 MB, JNI exports present.
+## NEXT
+1. MARA: merge `agent/capture1`; pair it with the relative gate/telemetry fix before the next
+   device flash (both are needed for "no speech").
+2. Owner: `scripts/fetch-latest-apk.sh` after pushing master; check the Actions run duration of
+   job `apk` (<~6 min) on the first green run; report the timing back if >6 min.
+3. Device: next session should show `peak/RMS dBFS + gate + capture source=MIC` in logcat.
 
-### N3 this session (branch `agent/n3-native`, worktree `/work/martins-whisper-worktrees/n3-native`)
-- **N3-1 16 KB pages:** `app/src/main/cpp/CMakeLists.txt` now passes
-  `-Wl,-z,max-page-size=16384` via `add_link_options()` for *every* target. CI pins NDK r27,
-  which still defaults to 4 KB; r28+ would do it implicitly.
-- **N3-2 artifact proof:** `scripts/native-apk-check.sh` rewritten to verify, without a device:
-  AArch64 ELF64 shared objects; stripped; every LOAD segment align >= 0x4000; every `DT_NEEDED`
-  resolved inside the APK or by an Android system lib (missing `libc++_shared.so` fails); all 14
-  Kotlin `external fun`s exported by `libmartins_whisper.so`; zip `.so` entries 16 KB zipaligned;
-  ABI/size/no-model as before. Verified against the existing N1 APK: PASS, 14/14 JNI, 16 KB.
-- **N3-3 model contract:** documented in `docs/native-build.md` (filesDir/models/<id>.bin, GGML
-  magic, sha256, nativeInit absolute path). `device-smoke.sh` enforces GGML magic + device byte
-  count + resolved absolute path.
-- **N3-4 one-command device smoke:** `scripts/device-smoke.sh` = build native APK -> apk check ->
-  install app+test APK -> push model (catalog SHA) -> verify contract -> run
-  `NativeWhisperSmokeTest`. Supports `--wireless ADDR`, `--serial`, `--model`, `--no-build`.
-  Mock-adb dry run PASS (two tests).
+## TRAPS
+- No `gh` here and no device: CI timing and on-phone verification are owner-run.
+- Keep `GRADLE_USER_HOME=/home/node/gh-nora`; never the shared home.
+- `MIC` before `VOICE_RECOGNITION` deliberately; do not reorder without a device measurement.
+- Don't touch gate/service (MARA owns); this branch is capture-only.
 
-## RUNNING
+## BRANCH TIP
+- Substantive commits: `b379cb2` (capture), `e62732a` (fetch+CI), `c2910ac` (gate evidence),
+  `9cab45b` (MIC first); docs commit on top. Gate green after `9cab45b`.
 
-- Local full gate + native rebuild in worktree `n3-native` with the new CMake flag
-  (`/tmp/n3-build.log`): to be reported in `handoffs/NORA-3/HANDOFF.md`.
-
-## NEXT (after this session)
-
-1. Owner: download the CI native artifact once a green run exists for the N3 merge and run
-   `scripts/device-smoke.sh --no-build --apk <artifact> --model ggml-tiny.bin` on the phone.
-2. On a 16 KB-page device, confirm `getconf PAGE_SIZE` = 16384 and the smoke still passes.
-3. Then the real MFVP flow (bubble -> speak -> text inserted); fix only what the phone exposes.
-
-## TRAPS LEARNED
-
-- CI NDK r27 does **not** default to 16 KB ELF alignment; the explicit link flag is required.
-  `zipalign -c -P 16 4` checks the zip side (AGP already aligns).
-- `readelf -l` wraps long lines; use `-W`, otherwise the LOAD alignment column is on the next
-  line and parsing $NF silently reads 0.
-- GGML magic is a little-endian uint32: `ggml` appears as bytes `6c6d6767` ("lmgg"), not
-  `67676d6c`.
-- Local aarch64 NDK r30 needs `LD_LIBRARY_PATH=<ndk>/toolchains/llvm/prebuilt/linux-aarch64/lib`
-  because the patched `ld.lld` needs `libxml2.so.2` (it is in the NDK lib dir).
-- `gh` is not installed/authenticated here; artifact download must be done by the owner.
-- Do not push/merge/release: owner holds credentials; MARA merges.
-
-## FILES / BRANCHES
-
-- Branch `agent/n3-native`, worktree `/work/martins-whisper-worktrees/n3-native`.
-- Changed: `app/src/main/cpp/CMakeLists.txt`, `scripts/native-apk-check.sh`,
-  `scripts/device-smoke.sh` (new), `docs/native-build.md`, this file, `handoffs/NORA-3/*`.
-- Previous: `agent/n1-native` @ `0bd7e8d` (merged). `agent/n2-release` @ `c3939d1` (parked,
-  not needed for MFVP).
+## NOTE FOR MARA
+- Base `c62f533`; your master moved to `cbb17d5` (SpeechEnvelope) after I branched. No file
+  overlap: this branch only has `AudioRecordSource.kt` + test, scripts, workflow, handoffs.
+- Your relative gate fixes my #1 finding; merge both before the next device flash.
