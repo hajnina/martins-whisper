@@ -87,10 +87,20 @@ object TextInsertionPlanner {
         insert: String,
     ): Result {
         val base = current.orEmpty()
-        val start = selectionStart.coerceIn(0, base.length)
-        val end = selectionEnd.coerceIn(start, base.length)
-        val text = base.substring(0, start) + insert + base.substring(end)
+        val rawStart = selectionStart.coerceIn(0, base.length)
+        val rawEnd = selectionEnd.coerceIn(rawStart, base.length)
+
+        val start = if (base.splitsSurrogatePair(rawStart)) rawStart - 1 else rawStart
+        val end = if (base.splitsSurrogatePair(rawEnd)) (rawEnd + 1).coerceAtMost(base.length) else rawEnd
+        val boundedEnd = end.coerceAtLeast(start)
+
+        val text = base.substring(0, start) + insert + base.substring(boundedEnd)
         val caret = start + insert.length
         return Result(text, caret, caret)
     }
+
+    private fun String.splitsSurrogatePair(index: Int): Boolean =
+        index in 1 until length &&
+            this[index - 1].isHighSurrogate() &&
+            this[index].isLowSurrogate()
 }
