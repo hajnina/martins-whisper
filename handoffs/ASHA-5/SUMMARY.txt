@@ -1,5 +1,5 @@
 ASHA-5: explicit language + bubble drag. Branch agent/ui-device2 (stacked on agent/ui-device1).
-1) Default language now English ("en"), Czech ("cs") offered, Auto only as opt-in; settings persisted and passed to whisper as params.language (auto -> null). Spinner on main screen shows Auto/English/Ceština. Base model unchanged (multilingual).
+1) Default language now English ("en"), Czech ("cs") offered, Auto only as opt-in; settings persisted and passed to whisper as params.language (auto -> null). Spinner on main screen shows Auto/English/Čeština. Base model unchanged (multilingual).
 2) Bubble drag uses ACTION_DOWN raw touch position + finger travel (constant offset), clamps every event, snaps to nearest edge on release and persists. Robolectric synthetic MotionEvents assert follow within 2 px.
 Gate: :core:test :app:testDebugUnitTest :app:assembleDebug --offline -> SUCCESS (core 157, app 127, 0 failures).
 Handoff: handoffs/ASHA-5/HANDOFF.md.
