@@ -191,6 +191,14 @@ main() {
     echo "warning: newest run $run_id concluded '$conclusion' (only use --allow-failed when you know why)" >&2
   fi
 
+  if git rev-parse --git-dir >/dev/null 2>&1; then
+    local head_sha
+    head_sha="$(git rev-parse HEAD 2>/dev/null || true)"
+    if [[ -n "$head_sha" && "$head_sha" != "$sha" ]]; then
+      echo "note: local HEAD ${head_sha:0:12} differs from the fetched run ${sha:0:12} (unpushed commits or an older run)" >&2
+    fi
+  fi
+
   local tmp
   tmp="$(mktemp -d "${TMPDIR:-/tmp}/mw-fetch-apk.XXXXXX")"
   # shellcheck disable=SC2064

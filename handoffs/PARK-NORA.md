@@ -21,8 +21,8 @@
   host JNI tracer) so the artifact lands early; broadened push paths to app/core; NDK/CMake
   sdkmanager fast path only installs what is missing.
 
-## RUNNING
-- Full local gate on `agent/capture1` (see GATE.log), then wip commits + actionlint.
+## DONE
+- Full local gate on `agent/capture1` (GATE.md): BUILD SUCCESSFUL, core 157 + app 114 = 271 tests, 0 failures/errors; assembleDebug + assembleDebugAndroidTest green; actionlint clean; fetch script fake-gh E2E green.
 
 ## NEXT
 1. MARA: merge `agent/capture1`; pair it with the relative gate/telemetry fix before the next
@@ -36,3 +36,8 @@
 - Keep `GRADLE_USER_HOME=/home/node/gh-nora`; never the shared home.
 - `MIC` before `VOICE_RECOGNITION` deliberately; do not reorder without a device measurement.
 - Don't touch gate/service (MARA owns); this branch is capture-only.
+
+## NOTE FOR MARA
+- Base `c62f533`; your master moved to `cbb17d5` (SpeechEnvelope) after I branched. No file
+  overlap: this branch only has `AudioRecordSource.kt` + test, scripts, workflow, handoffs.
+- Your relative gate fixes my #1 finding; merge both before the next device flash.

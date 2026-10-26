@@ -96,7 +96,7 @@ I did **not** touch `DictationService`, `TranscriptGate`, `EnergyVad` or WAV dum
   - no successful run: exits 4 with the `--allow-failed` / `--any-branch` hint.
   - `--run-id 999`: resolves metadata via `gh run view` and downloads.
   - `bash -n` clean. Real gh/CI execution is owner-only (this container has no gh auth/device).
-- `native-build.yml`: `actionlint` (nix actionlint) => exit 0. Jobs:
+- `native-build.yml`: `actionlint` (nix actionlint) => exit 0. Also caches `app/.cxx` (keyed on the pinned whisper ref + CMakeLists/JNI/build.gradle) so a Kotlin-only change does not recompile whisper.cpp. Jobs:
   - `apk`: SDK fast path (only missing packages), cached whisper.cpp, JNI check,
     `:app:assembleDebug -Pmartins.native=true`, `native-apk-check.sh`, upload => target <6 min
     warm. Unit tests were removed from this job so the artifact is not gated on them.

@@ -123,6 +123,14 @@ jobs:
       - name: Check Kotlin/JNI signatures
         run: scripts/native-jni-check.sh
 
+      - name: Cache the NDK build of whisper.cpp
+        uses: actions/cache@v4
+        with:
+          path: app/.cxx
+          key: whisper-ndk-${{ runner.os }}-${{ env.WHISPER_CPP_REF }}-${{ hashFiles('app/src/main/cpp/CMakeLists.txt','app/src/main/cpp/whisper_jni.cpp','app/build.gradle.kts') }}
+          restore-keys: |
+            whisper-ndk-${{ runner.os }}-${{ env.WHISPER_CPP_REF }}-
+
       - name: Assemble native debug APK
         shell: bash
         run: |
