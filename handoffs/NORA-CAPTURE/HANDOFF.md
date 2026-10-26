@@ -106,3 +106,15 @@ I did **not** touch `DictationService`, `TranscriptGate`, `EnergyVad` or WAV dum
 - ACTION NEEDED after the first green owner push: report the `apk` job wall time; if >6 min,
   the remaining cost is the whisper.cpp NDK compile and would need a `.cxx` cache keyed on the
   pinned whisper ref + CMakeLists/JNI hashes (do not add without measuring).
+
+## COMMITS (agent/capture1, base c62f533)
+
+- `b379cb2` fix(capture): MIC/UNPROCESSED source chain, larger buffer, dead-source probe, read()==0
+- `e62732a` feat(ci): fetch-latest-apk.sh + split native build (early APK upload)
+- `c2910ac` docs(handoff): audit + gate evidence; cache `app/.cxx`
+- `9cab45b` fix(capture): MIC first, UNPROCESSED second, VOICE_RECOGNITION last
+- handoff/docs commit on top (this file + GATE.md + SUMMARY.txt)
+
+Final gate after `9cab45b`: `:core:test :app:testDebugUnitTest :app:assembleDebug
+:app:assembleDebugAndroidTest` => BUILD SUCCESSFUL, core 157 + app 114, 0 failures/errors,
+`AudioRecordSourceTest` 4/4.

@@ -14,7 +14,8 @@ ANDROID_HOME=/work/android-toolchain/sdk \
   :core:test :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest
 ```
 
-Result: **BUILD SUCCESSFUL** (`73 actionable tasks: 73 executed`).
+Result: **BUILD SUCCESSFUL** (`73 actionable tasks: 73 executed`). Re-run after the final
+MIC-first reorder (`9cab45b`): BUILD SUCCESSFUL in 17s, same counts.
 
 | module | suites | tests | failures | errors |
 |---|---|---|---|---|

@@ -36,6 +36,10 @@
 - `MIC` before `VOICE_RECOGNITION` deliberately; do not reorder without a device measurement.
 - Don't touch gate/service (MARA owns); this branch is capture-only.
 
+## BRANCH TIP
+- Substantive commits: `b379cb2` (capture), `e62732a` (fetch+CI), `c2910ac` (gate evidence),
+  `9cab45b` (MIC first); docs commit on top. Gate green after `9cab45b`.
+
 ## NOTE FOR MARA
 - Base `c62f533`; your master moved to `cbb17d5` (SpeechEnvelope) after I branched. No file
   overlap: this branch only has `AudioRecordSource.kt` + test, scripts, workflow, handoffs.
