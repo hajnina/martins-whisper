@@ -2,6 +2,10 @@ package com.martins.whisper.service
 
 import java.io.File
 import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import org.json.JSONObject
 
 /** Debug-only dump of a captured dictation buffer for host replay (owner/HUMAN-TEST-PROTOCOL.md). */
 object DebugWavDump {
@@ -10,12 +14,17 @@ object DebugWavDump {
 
     fun dir(contextFilesDir: File): File = File(contextFilesDir, "debug-audio")
 
+    /** File name stamp: yyyyMMdd-HHmmss-SSS, unique per dictation. */
+    fun stamp(ts: Long): String =
+        SimpleDateFormat("yyyyMMdd-HHmmss-SSS", Locale.US).format(Date(ts))
+
     /**
-     * Writes a 16 kHz mono PCM16 WAV plus the transcript sidecar (.txt). Returns the WAV file.
+     * Writes a 16 kHz mono PCM16 WAV named <stamp>.wav (plus the transcript sidecar later,
+     * see [writeSidecar]). Returns the WAV file.
      */
-    fun dump(contextFilesDir: File, timestampMs: Long, samples: FloatArray, transcript: String): File {
+    fun dump(contextFilesDir: File, stampName: String, samples: FloatArray): File {
         val dir = dir(contextFilesDir).apply { mkdirs() }
-        val wav = File(dir, "$timestampMs.wav")
+        val wav = File(dir, "$stampName.wav")
         val pcm = ByteArray(samples.size * 2)
         for (i in samples.indices) {
             val value = samples[i].coerceIn(-1f, 1f)
@@ -25,13 +34,13 @@ object DebugWavDump {
         }
         FileOutputStream(wav).use { out ->
             val dataLen = pcm.size
-            out.write(byteArrayOf(0x52, 0x49, 0x46, 0x46)) // RIFF
+                        out.write(byteArrayOf(0x52, 0x49, 0x46, 0x46)) // RIFF
             out.writeLe32(36 + dataLen)
             out.write(byteArrayOf(0x57, 0x41, 0x56, 0x45)) // WAVE
-            out.write(byteArrayOf(0x66, 0x6D, 0x74, 0x20)) // fmt
+            out.write(byteArrayOf(0x66, 0x6D, 0x74, 0x20)) // "fmt "
             out.writeLe32(16)
-            out.writeLe16(1)
-            out.writeLe16(1)
+            out.writeLe16(1) // PCM
+            out.writeLe16(1) // mono
             out.writeLe32(SAMPLE_RATE)
             out.writeLe32(SAMPLE_RATE * 2)
             out.writeLe16(2)
@@ -40,8 +49,13 @@ object DebugWavDump {
             out.writeLe32(dataLen)
             out.write(pcm)
         }
-        File(dir, "$timestampMs.txt").writeText(transcript)
         return wav
+    }
+
+    /** Same stamp as the WAV: <stamp>.json with the verdict/levels/transcript facts. */
+    fun writeSidecar(wav: File, sidecar: JSONObject) {
+        val json = File(wav.parentFile, "${wav.nameWithoutExtension}.json")
+        json.writeText(sidecar.toString())
     }
 }
 

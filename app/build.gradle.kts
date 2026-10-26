@@ -22,6 +22,18 @@ android {
     namespace = "com.martins.whisper"
     compileSdk = 35
 
+    // One committed debug key so every build (CI included) has the same signature:
+    // `adb install -r` across builds never fails with INSTALL_FAILED_UPDATE_INCOMPATIBLE
+    // (which would also wipe the downloaded model). Well-known Android debug pattern.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildFeatures {
         buildConfig = true
     }

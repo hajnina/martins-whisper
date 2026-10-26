@@ -16,6 +16,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import java.io.File
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -293,12 +294,34 @@ class DictationService : Service() {
         telemetry?.rmsDbfs = SpeechEnvelope.toDbfs(energy.rms)
         telemetry?.noiseFloorDbfs = envelope.floorDb
         telemetry?.gateThresholdDb = SpeechEnvelope.GATE_MARGIN_DB
-        if (BuildConfig.DEBUG) {
-            val dumpPath = DebugWavDump.dump(filesDir, System.currentTimeMillis(), samples, "")
-            Log.d(TAG, "debug WAV dump: $dumpPath")
+val audioDump: File? by lazy {
+            if (wavDumpEnabled()) {
+                val dump = DebugWavDump.dump(filesDir, timestampedName(), samples)
+                Log.d(TAG, "debug WAV dump: $dump")
+                dump
+            } else null
         }
+        fun dumpSidecar(verdict: String, reason: String?, transcript: String, insertedText: String?) {
+            val dump = audioDump ?: return
+            val sidecar = org.json.JSONObject()
+                .put("verdict", verdict)
+                .put("peak_dBFS", envelope.peakDb)
+                .put("rms_dBFS", telemetry?.rmsDbfs ?: 0f)
+                .put("threshold", SpeechEnvelope.GATE_MARGIN_DB)
+                .put("language", settings.effectiveLanguage() ?: "auto")
+                .put("model", settings.modelId)
+                .put("transcript", transcript)
+                .put("inserted_text", insertedText ?: "")
+                .put("target_package", AccessibilityInserter.lastTargetPackage ?: org.json.JSONObject.NULL)
+                .put("engine_ms", telemetry?.engineInferMs ?: 0L)
+                .put("ts", System.currentTimeMillis())
+            if (!reason.isNullOrBlank()) sidecar.put("error", reason)
+            DebugWavDump.writeSidecar(dump, sidecar)
+        }
+
         if (energy.isDigitalSilence) {
             telemetry?.gateVerdict = "silent-mic"
+            dumpSidecar("silent-mic", TranscriptGate.SILENT_MIC_MESSAGE, "", null)
             telemetry?.publishTelemetry(result = "error", error = TranscriptGate.SILENT_MIC_MESSAGE)
             publishState(DictationState.Error(TranscriptGate.SILENT_MIC_MESSAGE))
             scheduleReset()
@@ -308,6 +331,7 @@ class DictationService : Service() {
         if (!speech) {
             telemetry?.gateVerdict = "no-speech"
             val message = envelope.gateMessage()
+            dumpSidecar("no-speech", message, "", null)
             telemetry?.publishTelemetry(result = "error", error = message)
             publishState(DictationState.Error(message))
             scheduleReset()
@@ -325,6 +349,7 @@ class DictationService : Service() {
                 telemetry?.engineInferMs = SystemClock.elapsedRealtime() - inferStart
                 val text = when (val decision = TranscriptGate.evaluate(transcript.text, speech, energy.peak)) {
                     is TranscriptGate.Decision.Reject -> {
+                        dumpSidecar("reject-transcript", decision.reason, "", "")
                         telemetry?.publishTelemetry(result = "rejected", error = decision.reason)
                         publishState(DictationState.Error(decision.message))
                         scheduleReset()
@@ -342,6 +367,7 @@ class DictationService : Service() {
                     is InsertResult.Failed -> "Copy failed: ${result.reason}" to false
                     is InsertResult.Rejected -> "Nothing inserted: ${result.reason}" to false
                 }
+                dumpSidecar("transcribed", null, text, insertedText = if (inserted) text else null)
                 telemetry?.insertMethod = when (result) {
                     is InsertResult.Copied -> "clipboard"
                     else -> "accessibility"
@@ -384,6 +410,11 @@ class DictationService : Service() {
         engineHost.cancelSession()
         publishState(DictationState.Idle)
     }
+
+    private fun wavDumpEnabled(): Boolean =
+        DictationService.wavDumpEnabled && BuildConfig.DEBUG
+
+    private fun timestampedName(): String = DebugWavDump.stamp(System.currentTimeMillis())
 
     private fun fail(message: String) {
         pressed = false
@@ -605,6 +636,10 @@ class DictationService : Service() {
         /** Captures the focused field at the START tap so insertion can verify the target later. */
         @Volatile
         internal var targetCapture: () -> Unit = { AccessibilityInserter.captureTargetAtStart() }
+
+        /** Release guard for the debug WAV dump; tests override it. */
+        @Volatile
+        internal var wavDumpEnabled: Boolean = BuildConfig.DEBUG
 
         /** Per-session telemetry builder; null on release builds. */
         @Volatile

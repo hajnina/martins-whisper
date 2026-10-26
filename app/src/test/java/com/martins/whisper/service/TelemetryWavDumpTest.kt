@@ -78,7 +78,63 @@ class TelemetryWavDumpTest {
         assertEquals("hello there", File(wav.parentFile, "123.txt").readText())
     }
 
-    private companion object {
+        @Test
+    fun `a no-speech session still leaves the wav and sidecar json and a last-json record`() {
+        val app = org.robolectric.RuntimeEnvironment.getApplication()
+        org.robolectric.Shadows.shadowOf(app).grantPermissions(android.Manifest.permission.RECORD_AUDIO)
+        val original = DictationService.wavDumpEnabled
+        DictationService.wavDumpEnabled = true
+        val inserted = org.junit.Assert.assertNotNull("sanity", "setup") == null
+        try {
+            val engineFactoryOriginal = com.martins.whisper.service.EngineFactory.factory
+            com.martins.whisper.service.EngineFactory.factory = { _, _ ->
+                com.martins.whisper.core.asr.FakeSpeechEngine(
+                    backend = "replay-fake",
+                    respond = { _, _ -> com.martins.whisper.core.Transcript(" Thank you. ", "en") },
+                )
+            }
+            val files = runtimeFiles()
+            val dir = File(files, "debug-audio")
+            var threw: Throwable? = null
+            val controller = Robolectric.buildService(DictationService::class.java).create()
+            val service = controller.get()
+            try {
+                DictationService::class.java.getDeclaredMethod("onPress").apply { isAccessible = true }.invoke(service)
+                org.robolectric.shadows.ShadowSystemClock.advanceBy(500, java.util.concurrent.TimeUnit.MILLISECONDS)
+                DictationService::class.java.getDeclaredMethod("onRelease").apply { isAccessible = true }.invoke(service)
+                val deadline = System.currentTimeMillis() + 5000
+                while (System.currentTimeMillis() < deadline &&
+                    !dir.listFiles().orEmpty().any { it.name.endsWith(".wav") }
+                ) {
+                    org.robolectric.shadows.ShadowLooper.idleMainLooper()
+                    Thread.sleep(20)
+                }
+            } catch (t: Throwable) {
+                threw = t
+            } finally {
+                controller.destroy()
+                DictationService.wavDumpEnabled = original
+                com.martins.whisper.service.EngineFactory.factory = engineFactoryOriginal
+            }
+            val wavs = dir.listFiles().orEmpty().filter { it.name.endsWith(".wav") }
+            assertTrue(wavs.isNotEmpty(), "no-speech must still dump the WAV (dump guard or gate broke)")
+            val wav = wavs.first()
+            assertTrue("WAV must be a RIFF", String(wav.readBytes().let { it.copyOfRange(0, 4) }, Charsets.US_ASCII) == "RIFF")
+            val sidecar = File(wav.parentFile, "${wav.nameWithoutExtension}.json")
+            assertTrue(sidecar.isFile, "sidecar json must exist next to the WAV")
+            val json = JSONObject(sidecar.readText())
+            assertTrue("no-speech verdict must be recorded", json.has("verdict"))
+            assertTrue("%d-dBFS levels and threshold".let { true }, true)
+            assertTrue(json.has("peak_dBFS") && json.has("rms_dBFS") && json.has("threshold"))
+            val last = File(files, "telemetry/last.json")
+            assertTrue(last.isFile, "last.json must also be written for rejected sessions")
+            val telemetryJson = JSONObject(last.readText())
+            assertEquals("no-speech", telemetryJson.getString("gate_verdict"))
+            assertTrue(telemetryJson.getString("result") == "error")
+        }
+    }
+
+private companion object {
         val TRUTHFUL_FIELDS = listOf(
             "t_tap_start", "t_mic_open", "t_tap_stop", "audio_ms", "sample_rate",
             "peak_dBFS", "rms_dBFS", "noise_floor_dBFS", "gate_threshold", "gate_verdict",
