@@ -1,23 +1,36 @@
-# BUILD-READY (MARA, 2026-10-26)
+# BUILD-READY #2 (MARA, 2026-10-26 ~21:40)
 
-**SHA: `4fd07e6`** (master tip, clean tree, all work committed) — push master and dispatch `native-build.yml`.
+**Code SHA: `06b7db6`** (master, all work committed; this file is a docs-only tip on top of it).
+Push master and dispatch `native-build.yml`.
 
-## Full offline gate evidence
+## Why this build exists (DEVICE-REPORT #2)
+1. **Tap-to-toggle** (the actual bug): the 12 ms AudioRecord session in the report was the
+   ACTION_DOWN/UP of an `adb input tap`; the bubble was push-to-talk. Now the first tap starts and
+   latches capture, the next tap stops it (MFVP: tap, speak, tap again). Drag still cancels.
+2. **Bubble never moves on tap**: it used to expand 56 -> 240 dp and clamp sideways (x 952 -> ~460),
+   so the second tap missed it. State changes no longer resize or move the window; state shows in
+   the fixed circle (colour, icon, content description).
+3. **`MartinsWhisperState` logcat tag** at every transition: tap-start/stop, capture start/stop,
+   model load start/end, gate verdict, transcribe start/end, insert, cancel, fail, state class.
+4. **All audio saved**: every session, including too-short/cancelled/error, writes
+   `files/debug-audio/<stamp>.wav` + `<stamp>.json` sidecar; telemetry `last.json` is written for
+   aborts too.
+5. **Stable debug signature**: `app/debug.keystore` is committed and used by the debug build, so
+   CI builds install over each other (`adb install -r`) and the downloaded model survives.
+
+## Gate evidence (fresh, offline)
 - `source /work/android-toolchain/scripts/env.sh; GRADLE_USER_HOME=/home/node/gh-mara`
-- `gradle :core:test :app:testDebugUnitTest :app:assembleDebug --offline -Pandroid.aapt2FromMavenOverride=/work/android-toolchain/sdk/build-tools/35.0.1/aapt2`
-- result: **BUILD SUCCESSFUL; 49 suites, 300 tests, 0 failures, 0 errors, 2 env-skips** (`HostWhisperJniTest`, `WavReplayRobolectricTest.jfk` — they need the host native build/`replay-wav.sh` or CI).
-- verify walls: `scan-weak-tests PASS`, `scan-mocks PASS`, `scan-oracle-copy PASS`.
-- Zero-trust: mutation controls ran this shift: flip `marginDb >=` → `<=` kills 4 SpeechEnvelope tests; `|| true` mutation of the relative-verdict `isSpeech` kills 4 tests (`*WavReplay*` + `*SpeechEnvelope*`).
+- `/work/owner/tools/gradle-slot.sh :core:test :app:testDebugUnitTest :app:assembleDebug --offline`
+- **BUILD SUCCESSFUL**: core 165 tests + app 139 tests, **0 failures, 0 errors**, 2 env-skips
+  (host-native JNI + jfk replay, need the host native build/CI).
+- APK `app/build/outputs/apk/debug/app-debug.apk` 9,054,349 B, signed by the committed key
+  (SHA-256 `0aae920be5363081f479c65fd9165ecd9c523ac4bab53c55212885259275dfac`).
 
-## What changed in this build (top 6)
-1. **Relative speech gate** (core `SpeechEnvelope`): noise floor = 10th-percentile 100 ms-window RMS in dBFS; verdict = margin ≥ +10 dB above floor OR uniformly-loud (floor ≥ −45 dBFS); digital silence still a distinct mic error. UI error on no-speech now shows measured levels: "Didn't catch that (peak X dBFS, floor Y dBFS, gate floor+10 dB)".
-2. **Telemetry per dictation** (debug-only, local files/telemetry/): `records.jsonl` (one JSONL line: t_tap_start, t_mic_open, t_tap_stop, audio_ms, sample_rate, peak/rms/noise_floor dBFS, gate_threshold, gate_verdict, model, language, threads, engine_load_ms, engine_infer_ms, text_len, target_package, target_changed, t_inserted, insert_method, result, error) + `last.json` mirror. Pull with adb.
-3. **Debug WAV dump**: every captured buffer written to `files/debug-audio/<ts>.wav` (+ `.txt` sidecar) on debug builds; replay a pulled file on the host with `scripts/replay-wav.sh <wav>` (real engine + real gate path).
-4. **Capture fixes (NORA)**: source chain MIC → UNPROCESSED(if advertised) → VOICE_RECOGNITION with a dead-source probe (300 ms silence → reopen next source); larger buffer (4×minBuffer, ≥8 frames); `read()==0` now errors after ~2 s; capture config logged (tag MartinsWhisper).
-5. **UI device fixes (ASHA)**: Android-16 edge-to-edge insets on main screen; live accessibility/status re-check on window focus; download progress % + bytes; raw-delta bubble drag + edge snap persisted; explicit language (English default, Czech; auto opt-in). `recordings/`, `dist/` gitignored.
-6. **Host replay (TESS)**: any pulled WAV replays through the REAL service path; sweep adapted to the relative gate (steady ≤ −45 dBFS rejects with measured message; bursty −60 dBFS floor with −30 dBFS bursts inserts — the exact case the old −36.5 dBFS absolute gate lost).
-
-## Owner actions
-1. Push master (`git push` from this machine) → dispatch `native-build.yml` → CI builds the arm64 APK (also uploads `latest-apk` artifact; `scripts/fetch-latest-apk.sh`).
-2. Flash + run `owner/device/dictate-test.sh`; expected: no more false "No speech detected" on real speech; every attempt leaves a JSONL line + WAV; report → `/work/.yoloseek/DEVICE-REPORT.md`.
-3. If a run still fails, attach the WAV: I replay it on the host and turn the failure into a failing replay test FIRST.
+## Device expectations (build #2)
+- Tap 1: logcat `MartinsWhisperState: tap-start ...` then `capture-start ...`; bubble turns red.
+- Speak, tap 2: `tap-stop` -> `gate=speak` -> `transcribe-start/end` -> `insert ...`; text in field.
+- Pull evidence after a run:
+  `adb pull /sdcard/Android/data/com.martins.whisper/files/debug-audio` (or via run-as on debug)
+  and `.../files/telemetry/last.json`.
+- HyperOS: `appops set ... SYSTEM_ALERT_WINDOW allow` still has to be re-applied after a fresh
+  install until the first launch.

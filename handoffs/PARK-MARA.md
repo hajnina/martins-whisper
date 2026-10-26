@@ -60,3 +60,30 @@ NEXT (ordered, small tickets):
 TRAPS: same as above plus: `find -newermt -15 minutes` fails here (use `-mmin`); no python3 exists (node works); awk quoting with double quotes throws runaway-string - avoid.
 
 # MARA live (owner steer 20:30): merged capture1+ui-device1+ui-device2+replay1 + own telemetry/envelope/wavdump; gate 49 suites 300 tests 0 fail 2 env-skips; walls PASS; BUILD-READY written (SHA 4fd07e6). Mutations recorded. Next: device report loop, replay pulled WAVs.
+
+# MARA shift 5 (2026-10-26 ~21:35, BUILD-READY #2)
+DONE (commit `06b7db6`, master clean):
+- DEVICE-REPORT #2 root cause (also independently confirmed by NORA-3): the 12 ms AudioRecord
+  session was ACTION_DOWN/UP of an `adb input tap`; bubble was push-to-talk. NORA-3 handoff added
+  under `handoffs/NORA-3/`.
+- Tap-to-toggle: first tap starts + latches capture, next tap stops (MicBubbleView); drag/cancel
+  unchanged. Tests: synthetic DOWN/UP, sub-slop jitter = tap, second tap = stop.
+- Bubble no longer expands/clamps sideways on state change (x 952 -> ~460 was the "move"); the
+  overlay window size+position are fixed and state shows in the 56 dp circle. Test asserts
+  position+size unchanged across all states.
+- Logcat tag `MartinsWhisperState`: tap-start/stop, capture start/stop, model load start/end,
+  gate verdict, transcribe start/end, insert, cancel, fail, plus every state class change.
+- Every session (including too-short/cancelled/error) saves `files/debug-audio/<stamp>.wav` +
+  `<stamp>.json` sidecar and a telemetry `last.json` line.
+- Stable committed debug keystore `app/debug.keystore`; APK now signed by it
+  (SHA-256 0aae92...5dfac), so CI builds `adb install -r` over each other and keep the model.
+GATE (fresh, offline, gradle-slot): core 165 tests + app 139 tests, 0 failures, 0 errors,
+2 env-skips; `:app:assembleDebug` green; APK 9,054,349 B signed with the committed key.
+NEXT (on owner push + device run):
+1. Owner pushes master, CI native-build.yml -> flash; expect logcat on tap 1
+   `MartinsWhisperState tap-start` + `capture-start`, on tap 2 `tap-stop` -> gate -> transcribe.
+2. If capture still stops early, pull `files/debug-audio/*` and `files/telemetry/last.json`.
+3. Unmerged (not mine to finish): agent/jni2 (probe fail-open + JNI UTF-8, wip dirty),
+   agent/lena-ux (shaped bubble, wip), agent/harry-e2e, agent/replay2 (telemetry contract).
+TRAPS: gradle needs own GRADLE_USER_HOME (re-copied /work/android-toolchain/gradle-home ->
+/home/node/gh-mara this shift); always gradle-slot.sh; no python3.
