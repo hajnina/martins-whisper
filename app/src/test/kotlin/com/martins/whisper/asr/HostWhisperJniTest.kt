@@ -31,7 +31,7 @@ class HostWhisperJniTest {
         )
         assertTrue("whisper.cpp version/system info is empty", WhisperCppEngine.systemInfo().isNotBlank())
 
-        val samples = readWav16kMono(wav!!)
+        val samples = HostWav.read16kMono(wav!!)
         assertTrue("jfk.wav looks empty (${samples.size} samples)", samples.size > 16_000)
 
         val engine = WhisperCppEngine.create(model!!.absolutePath, ComputeBackend.CPU, threads = 4)
