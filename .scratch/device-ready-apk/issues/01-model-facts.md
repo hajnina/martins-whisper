@@ -1,7 +1,7 @@
 # 01 — Which Whisper GGML models can v1 ship, from where, at what size?
 
 Type: research
-Status: open
+Status: resolved
 Blocked by: none
 
 ## Question
@@ -14,3 +14,14 @@ Establish the facts the model catalog and D1 docs depend on:
 - Any GGML format-version compatibility constraints for the whisper.cpp revision chosen by E1.
 
 Do not choose the product policy yet; deliver facts with primary-source links.
+
+## Answer
+
+**Recommended v1 model set**
+
+1. **Default: `base` multilingual f16** (`base.en` is the English-only alternative) — `ggml-base.bin`, 147,951,465 B (141.1 MiB), upstream-reported ~388 MB memory. Safe on a 6–8 GB phone.
+2. **First-class low-end: `tiny` multilingual f16** (`tiny.en` available) — `ggml-tiny.bin`, 77,691,713 B (74.1 MiB), ~273 MB memory. Good for 6 GB devices and small downloads.
+3. **Optional/advanced: `small` f16** (`small.en` available) — `ggml-small.bin`, 487,601,967 B (465.0 MiB), ~852 MB memory. Comfortable on 8 GB; validate on 6 GB before calling it supported.
+4. **Catalog, but not first-class:** `medium` and `large-v3-turbo` are required by SPEC R4 but are **not realistic defaults on 6–8 GB**. Keep them as opt-in/experimental, gate on available RAM, and prefer quantized variants (`medium-q5_0` 514.2 MiB, `large-v3-turbo-q5_0` 547.4 MiB). Do not ship f16 `medium` (~2.1 GB) or `large-v3` (~3.9 GB) as v1 defaults; `large-v3-turbo` f16 has no published memory figure but is in the ~2 GB class at best (8 GB devices only).
+5. **No mirror is required for v1.** Download directly from `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/…` (302 to Hugging Face's CDN; public, no auth). Pin the HF revision `5359861c739e955e79d9a303bcbc70fb988958b1` and verify each file's SHA-256. Show the MIT notices.
+6. **Pin the engine + format:** current whisper.cpp loads **custom GGML**, magic `0x67676d6c`, not GGUF. `GGML_FILE_VERSION` is defined but not enforced by the Whisper loader. E1 must pin an exact whisper.cpp commit/tag **and** the model revision + SHA-256, then load-test on the device.
