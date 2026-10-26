@@ -1,70 +1,55 @@
-# PARK — NORA (native build / CI), 2026-10-26
+# PARK — NORA (2026-10-26, quota refill)
 
-## DONE
+## DONE (SHAs)
 
-- **N1 CI fix + native APK** (merged to master, verified ancestor):
-  - `b37577d` — bypass failing `android-actions/setup-android@v3`, native workflow with
-    runner NDK/CMake, CPU-first default, JNI/APK check scripts, device smoke test.
-  - `8938610` — robust sdkmanager discovery + `--sdk_root`.
-  - `89bc35f`, `0bd7e8d` — NORA-1 handoff + APK signature evidence.
-  - Local real arm64 APK built and verified:
-    `/work/martins-whisper-worktrees/n1-native/app/build/outputs/apk/debug/app-debug.apk`
-    sha256 `c90e356f6e65e82722f6a29b35ae2d661244f68b53c806820b3c4d5c751b7476`,
-    12,902,712 bytes, arm64-v8a only, stripped whisper/ggml libs, JNI exports present,
-    no model bundled, debug-signed. Gate then: 141 tests / 0 failures.
-- **N2 intentionally dropped per MFVP scope.** Branch `agent/n2-release` @ `c3939d1`
-  contains a parked refactor (`scripts/native-ci-sdk.sh`) and has the release workflow
-  deleted again; the tag/draft-release idea is NOT in any merged tree. Do not merge this
-  branch for the critical path unless its CI change proves green and useful.
-- Auto-commits by ratewatch: `f5f600e`, master `9ead9ff` (park checkpoints). Nothing of
-  ours was left uncommitted. All worktrees + main report clean.
+- `master` @ `1de97d6` (clean; "park: u2-states reconciled, gate 235/0, push-ready").
+- `agent/n3-native` @ `d843cbc` — 16 KB ELF/zip link flag, rewritten
+  `scripts/native-apk-check.sh` (PASS on N1 + N3 APKs), `scripts/device-smoke.sh`
+  (mock-adb PASS; never run on a real device), docs/model contract. APK then:
+  sha256 `ba768f8e…c864409`, 12,327,744 B, still bundled `libparakeet.so`.
+- `agent/n3-host-tracer` @ `2369ffc` (parked wip commit) — **host JNI tracer bullet works**:
+  - `scripts/host-jni-test.sh` builds pinned whisper.cpp (`samples/jfk.wav`, tiny model) and
+    `whisper_jni.cpp` against `app/src/main/cpp/host-stubs/android/log.h` for this aarch64 host
+    (no NDK), then runs `HostWhisperJniTest` on the JVM. Local result: **PASS**
+    (asserts "ask not what your country can do for you" + "fellow americans", no U+FFFD).
+  - JNI UTF-8: `nativeSegmentText` now returns `jbyteArray`; Kotlin `decodeNativeUtf8()`
+    (`String(bytes, UTF_8)`); `NativeUtf8Test` covers Czech diacritics + emoji + malformed input.
+  - `libparakeet.so` excluded in `app/build.gradle.kts` `packaging.jniLibs.excludes`.
+  - CI `native-build.yml`: host JNI step + tiny-model cache (`WHISPER_TINY_SHA256`) + path triggers.
+  - Not re-verified after these edits: full `:core:test :app:testDebugUnitTest :app:assembleDebug`
+    and `native-apk-check.sh` (APK is stale from `d843cbc`).
 
 ## RUNNING
 
-- Nothing of mine. I launched no worker sessions. The last local Gradle gate process was
-  killed; `pgrep -f gradle` is empty.
-- No post-merge GitHub Actions run was observed before the park (public API last showed
-  the pre-merge failures `40378749976` / `40378749927` on `2dbac3e`, both dying at the old
-  `android-actions/setup-android@v3` step).
+None. No workers launched or awaited. Running PM/other agents were not touched.
 
-## NEXT (ordered small tickets, after refill)
+## NEXT (small tickets, in order)
 
-1. **CI green on master (critical path item 1).** Read runs unauthenticated:
-   `curl -s 'https://api.github.com/repos/hajnina/martins-whisper/actions/runs?per_page=5'`.
-   Report run ids. Per job steps:
-   `curl -s .../actions/runs/<id>/jobs | jq -r '.jobs[].steps[] | [.number,.name,.conclusion] | @tsv'`.
-   Logs endpoint is 403 without auth; owner must paste failed-step logs if needed.
-   If red, fix only the failing workflow step; re-check both `Android CI` and
-   `Android native build` until green.
-2. **Native artifact proof.** Download `martins-whisper-native-debug-<sha>` from the green
-   native run; verify sha256, arm64-v8a only, no bundled model; install with
-   `adb install -r` on an arm64 phone.
-3. **On-device engine smoke (MFVP).** Push `ggml-tiny.bin` to app `files/models/` or use the
-   app download; run `NativeWhisperSmokeTest`; then the real flow: bubble → speak → stop →
-   text inserted in a focused field.
-4. Only after 1–3: fix whatever the phone exposes (input focus, mic, model path). No new
-   features outside MFVP.
+1. **N3-GATE** — rebuild `:app:assembleDebug`, run full unit gate, run
+   `scripts/native-apk-check.sh`; confirm `libparakeet.so` is absent and record new APK sha/tests.
+2. **N3-VERA-UTF8** — hand the UTF-8 assertion set to VERA for review; verify the byte-array
+   signature in `native-jni-check.sh` + both host and device paths.
+3. **N3-HOST-CI** — owner pushes `agent/n3-host-tracer`; watch the new host JNI CI step
+   (cmake/ninja, model cache) and fix any runner-only failures.
+4. **N3-DEVICE** — on a real arm64 device with adb: `scripts/device-smoke.sh --serial …`
+   (still only mock-tested; no aarch64 adb here).
+5. **N3-DOC-GATE** — decide whether `scripts/host-jni-test.sh` joins `test-device-ready.sh`
+   (owner asked for "local gate"; currently CI + standalone only) and document the sha/model fixtures.
 
-## TRAPS LEARNED
+## TRAPS
 
-- `gh` is unauthenticated in the worker; the repo is public, so run/job metadata works via
-  `curl api.github.com`, but `/logs` returns 403. Owner must fetch raw logs.
-- A fresh worktree has no `app/src/main/cpp/whisper.cpp` (gitignored): run
-  `scripts/fetch-whisper-cpp.sh` before any `-Pmartins.native=true` build.
-- Local aarch64 native build needs the community NDK r30 plus two sandbox-only hacks
-  (patchelf to newer glibc, `prebuilt/linux-x86_64 -> linux-aarch64`). CI does not need them.
-- Use a private `GRADLE_USER_HOME` (`/home/node/gh-nora`) and `--offline`; the shared Gradle
-  home has cross-agent locks.
-- CI pins are explicit: `-Pmartins.ndkVersion=27.3.13750724`,
-  `-Pmartins.cmakeVersion=3.31.5`, Vulkan off. Don't rely on runner defaults silently.
-- `sdkmanager --install` is a no-op for present packages; `scripts/native-ci-sdk.sh` was
-  exercised locally on JDK 17 and exits 0.
-- The shared git config authored the N2 merge as `PM`; commits are still NORA's branch only.
-- Do not push/merge/release: owner holds credentials; MARA merges.
-
-## FILES / BRANCHES
-
-- `agent/n1-native` @ `0bd7e8d` (merged).
-- `agent/n2-release` @ `c3939d1` (parked, unmerged, release workflow deleted).
-- `handoffs/NORA-1/HANDOFF.md`, `handoffs/NORA-2/HANDOFF.md` may be absent — N2 was dropped;
-  this file is the authoritative park note.
+- Host toolchain: `nix profile add nixpkgs#gcc --priority 9` (binutils conflict); JDK at
+  `/work/android-toolchain/jdk` is not on PATH; SDK CMake find needs `-type f` (the dir is named `cmake`).
+- Host link: CMake emits only versioned sonames; create unversioned `lib*.so` symlinks and run
+  tests with `LD_LIBRARY_PATH=build/host-native/lib` for libggml deps.
+- NDK r27 still defaults to 4 KB LOAD alignment: explicit `-Wl,-z,max-page-size=16384` is required.
+  `readelf -W` (non-W wraps the alignment column). `libparakeet.so` is an independent target
+  (`whisper.cpp/src/CMakeLists.txt:196`), not in `libwhisper.so` DT_NEEDED.
+- Gradle KTS: `java.io.File` is misparsed (`java` = extension); use `File.pathSeparator`.
+- `libparakeet` exclusion needs a rebuild; old APK sha is not evidence.
+- GGML magic is LE bytes `6c6d6767`, not `67676d6c`. Tiny model sha256
+  `be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21`.
+- `whisper.cpp` is gitignored: fetch before native builds; host fixture model cached in
+  `build/host-native/models` (ignored).
+- Local NDK r30 needs `LD_LIBRARY_PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-aarch64/lib`
+  for libxml2; nix libxml2 2.15.4 has the wrong soname. No aarch64 adb/device here; `gh` absent.
