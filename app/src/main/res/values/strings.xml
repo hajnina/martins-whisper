@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Martins Whisper</string>
+    <string name="accessibility_service_label">Martins Whisper text insertion</string>
+    <string name="accessibility_service_description">Inserts dictated text into the focused text field. Used only while you hold the dictation bubble.</string>
+    <string name="insertion_copied_toast">Transcript copied; paste it manually</string>
+    <string name="insertion_copied_title">Transcript copied</string>
+    <string name="insertion_copied_text">No editable field was available. Paste the transcript manually.</string>
+    <string name="insertion_channel_name">Insertion fallback</string>
 </resources>
