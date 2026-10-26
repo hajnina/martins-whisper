@@ -69,8 +69,53 @@ object TranscriptMerger {
      * Merge chunk transcripts in order, removing duplicated boundary words for overlapped
      * chunks. Implemented by C1.
      */
-    fun merge(parts: List<String>, overlapsMs: List<Int> = emptyList()): String =
-        parts.map { it.trim() }.filter { it.isNotEmpty() }.joinToString(" ")
+    fun merge(parts: List<String>, overlapsMs: List<Int> = emptyList()): String {
+        val maxOverlapWords = 8
+        fun tokenize(text: String): List<String> =
+            text.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        fun normalizedToken(token: String): String =
+            token.lowercase().filter { it.isLetterOrDigit() || it == '\'' }
+        fun punctuationScore(token: String): Int =
+            token.count { !it.isLetterOrDigit() && !it.isWhitespace() }
+        fun richerToken(first: String, second: String): String =
+            if (punctuationScore(second) > punctuationScore(first)) second else first
+
+        val merged = mutableListOf<String>()
+        for ((partIndex, part) in parts.withIndex()) {
+            val tokens = tokenize(part)
+            if (tokens.isEmpty()) continue
+            if (merged.isEmpty()) {
+                merged.addAll(tokens)
+                continue
+            }
+
+            val shouldDedupe = overlapsMs.isEmpty() ||
+                (overlapsMs.getOrNull(partIndex - 1) ?: 0) > 0
+            var matched = 0
+            if (shouldDedupe) {
+                val limit = minOf(maxOverlapWords, merged.size, tokens.size)
+                for (candidate in limit downTo 1) {
+                    val left = merged.subList(merged.size - candidate, merged.size)
+                    val right = tokens.subList(0, candidate)
+                    if (left.map(::normalizedToken) == right.map(::normalizedToken)) {
+                        matched = candidate
+                        break
+                    }
+                }
+            }
+
+            if (matched > 0) {
+                val start = merged.size - matched
+                for (offset in 0 until matched) {
+                    merged[start + offset] = richerToken(merged[start + offset], tokens[offset])
+                }
+                merged.addAll(tokens.drop(matched))
+            } else {
+                merged.addAll(tokens)
+            }
+        }
+        return merged.joinToString(" ")
+    }
 }
 
 object TextInsertionPlanner {
