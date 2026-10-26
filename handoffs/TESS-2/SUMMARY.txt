@@ -1,0 +1,9 @@
+W2 / T2-svc — Robolectric service + overlay state-machine tests: DONE
+Branch agent/t2-svc @ bcc409f (tests) + docs commit, base agent/g2-engine @ 5494b79 — merge AFTER G2.
+2 new app-test suites / 6 tests; no production changes, no new dependencies.
+Acceptance: :app:testDebugUnitTest :app:assembleDebug => BUILD SUCCESSFUL.
+App tests: before 15 suites/66 tests/0 failures -> after 17 suites/72 tests/0 failures/0 errors.
+Covers: record-while-loading in order + insert once; 300 s idle unload + lazy new engine; cancel
+while loading (no insert, engine kept reusable); model switch closes previous engine; overlay
+Idle->Loading->Recording->Processing->Success->Error->Idle; single registered bubble.
+Details: handoffs/TESS-2/W2-SVC.md.
