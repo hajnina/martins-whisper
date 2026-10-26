@@ -42,3 +42,19 @@ When you run L1/L2 tracer bullets, they must catch exactly this class of gap: on
 - merged `agent/u2-states` (ASHA-4/5 handoffs incl. README MFVP-5 replacement, FEEL ticks double-pulse error, FLAG_NOT_FOCUSABLE proof) -> clean auto-merge; then deleted duplicate: my `accessibility/AccessibilityTextInserter.kt` + test removed (ASHA's `service/` version kept - simplest, sync `insertNow`, clipboard fallback on refusal too). Refs: reconcile commit `1d5056f`.
 - FULL GATE after reconcile: 37 suites, **235 tests, 0 failures/errors**; APK 8,982,577 B. master clean, push-ready.
 - NEXT: merge ASHA a1-insert-quality items as they land (with handoffs only). MFVP-2 feels covered by u2-states FEEL. ~10 min to 2M budget park - no new work after this commit except merge+gate if a1 lands instantly.
+
+## PARK (owner order, quota refill, ~2M budget)
+DONE (all on master, clean, push-ready tip `1de97d6` + park `this`):
+- MFVP flow audit + tickets MFVP-1/2 (`1b13c47`).
+- F1 merge (TESS, gate 218/0) `1d9563a`; MFVP-1 merge (CODER handoff MFVP1 @50a4b13, gate 222/0) `e5ca2f8`.
+- u2-states merge + reconcile to ONE inserter (ASHA service/ version) `1d5056f`; FULL GATE 37 suites, **235 tests, 0 failures**; APK 8,982,577 B.
+- u2-states brought FEEL (haptics incl. error double pulse, FLAG_NOT_FOCUSABLE test) and short README = MFVP-2 + MFVP-5 covered.
+- owner/ASKS.md refreshed for H1 (wireless-debugging steps).
+RUNNING: none of mine (CODER mfvp1 completed). Incoming unmerged branches: `agent/a1-insert-quality` (ASHA, tip 2343c4b + park 7a5e850), `agent/v1-verify` (VERA tracers, park 0a38de6), `agent/n3-native` (host tracer/NORA successor?, park 2369ffc). NOT committed to master; each has wip: park commits on its branch.
+NEXT (ordered, small tickets):
+1. On refill: MFVP-1..5 all done pending device. Merge `agent/a1-insert-quality` from ASHA handoff (quality of insertion text merges - expect single-shot flush transcribe tests; gate `:core:test :app:testDebugUnitTest :app:assembleDebug --offline`, GHA=/work/android-toolchain/jdk, GRADLE_USER_HOME=/home/node/gh-mara).
+2. Merge `agent/v1-verify` tracers if she hands off with the focused-node assertions (PARK note relays owner message).
+3. n3-native: read its park/handoff; merge only if it contains MFVP path items (16K page-align IS MFVP-relevant: newer devices demand it).
+4. MFVP-4 H1 device test (owner/ASKS.md has Martin's steps) - the only open critical item.
+5. KANBAN/LOGBOOK touch-up + handoffs/PM-<n> consolidation at next milestone.
+TRAPS: same as above plus: `find -newermt -15 minutes` fails here (use `-mmin`); no python3 exists (node works); awk quoting with double quotes throws runaway-string - avoid.
