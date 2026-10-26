@@ -1,55 +1,58 @@
-# PARK — NORA (2026-10-26, quota refill)
+# PARK — NORA (native build / CI), 2026-10-26 (N3 session)
 
-## DONE (SHAs)
+## DONE
 
-- `master` @ `1de97d6` (clean; "park: u2-states reconciled, gate 235/0, push-ready").
-- `agent/n3-native` @ `d843cbc` — 16 KB ELF/zip link flag, rewritten
-  `scripts/native-apk-check.sh` (PASS on N1 + N3 APKs), `scripts/device-smoke.sh`
-  (mock-adb PASS; never run on a real device), docs/model contract. APK then:
-  sha256 `ba768f8e…c864409`, 12,327,744 B, still bundled `libparakeet.so`.
-- `agent/n3-host-tracer` @ `2369ffc` (parked wip commit) — **host JNI tracer bullet works**:
-  - `scripts/host-jni-test.sh` builds pinned whisper.cpp (`samples/jfk.wav`, tiny model) and
-    `whisper_jni.cpp` against `app/src/main/cpp/host-stubs/android/log.h` for this aarch64 host
-    (no NDK), then runs `HostWhisperJniTest` on the JVM. Local result: **PASS**
-    (asserts "ask not what your country can do for you" + "fellow americans", no U+FFFD).
-  - JNI UTF-8: `nativeSegmentText` now returns `jbyteArray`; Kotlin `decodeNativeUtf8()`
-    (`String(bytes, UTF_8)`); `NativeUtf8Test` covers Czech diacritics + emoji + malformed input.
-  - `libparakeet.so` excluded in `app/build.gradle.kts` `packaging.jniLibs.excludes`.
-  - CI `native-build.yml`: host JNI step + tiny-model cache (`WHISPER_TINY_SHA256`) + path triggers.
-  - Not re-verified after these edits: full `:core:test :app:testDebugUnitTest :app:assembleDebug`
-    and `native-apk-check.sh` (APK is stale from `d843cbc`).
+### N1 (previous session, merged)
+- Native CI workflow fixed and merged (`b37577d`, `8938610`, `0bd7e8d`); CI green on
+  master `636b3f9` (runs 40380372902 native / 40380372979 CI, both success).
+- Real arm64 APK built locally, sha256 `c90e356f…b7476`, 12.9 MB, JNI exports present.
+
+### N3 this session (branch `agent/n3-native`, worktree `/work/martins-whisper-worktrees/n3-native`)
+- **N3-1 16 KB pages:** `app/src/main/cpp/CMakeLists.txt` now passes
+  `-Wl,-z,max-page-size=16384` via `add_link_options()` for *every* target. CI pins NDK r27,
+  which still defaults to 4 KB; r28+ would do it implicitly.
+- **N3-2 artifact proof:** `scripts/native-apk-check.sh` rewritten to verify, without a device:
+  AArch64 ELF64 shared objects; stripped; every LOAD segment align >= 0x4000; every `DT_NEEDED`
+  resolved inside the APK or by an Android system lib (missing `libc++_shared.so` fails); all 14
+  Kotlin `external fun`s exported by `libmartins_whisper.so`; zip `.so` entries 16 KB zipaligned;
+  ABI/size/no-model as before. Verified against the existing N1 APK: PASS, 14/14 JNI, 16 KB.
+- **N3-3 model contract:** documented in `docs/native-build.md` (filesDir/models/<id>.bin, GGML
+  magic, sha256, nativeInit absolute path). `device-smoke.sh` enforces GGML magic + device byte
+  count + resolved absolute path.
+- **N3-4 one-command device smoke:** `scripts/device-smoke.sh` = build native APK -> apk check ->
+  install app+test APK -> push model (catalog SHA) -> verify contract -> run
+  `NativeWhisperSmokeTest`. Supports `--wireless ADDR`, `--serial`, `--model`, `--no-build`.
+  Mock-adb dry run PASS (two tests).
 
 ## RUNNING
 
-None. No workers launched or awaited. Running PM/other agents were not touched.
+- Local full gate + native rebuild in worktree `n3-native` with the new CMake flag
+  (`/tmp/n3-build.log`): to be reported in `handoffs/NORA-3/HANDOFF.md`.
 
-## NEXT (small tickets, in order)
+## NEXT (after this session)
 
-1. **N3-GATE** — rebuild `:app:assembleDebug`, run full unit gate, run
-   `scripts/native-apk-check.sh`; confirm `libparakeet.so` is absent and record new APK sha/tests.
-2. **N3-VERA-UTF8** — hand the UTF-8 assertion set to VERA for review; verify the byte-array
-   signature in `native-jni-check.sh` + both host and device paths.
-3. **N3-HOST-CI** — owner pushes `agent/n3-host-tracer`; watch the new host JNI CI step
-   (cmake/ninja, model cache) and fix any runner-only failures.
-4. **N3-DEVICE** — on a real arm64 device with adb: `scripts/device-smoke.sh --serial …`
-   (still only mock-tested; no aarch64 adb here).
-5. **N3-DOC-GATE** — decide whether `scripts/host-jni-test.sh` joins `test-device-ready.sh`
-   (owner asked for "local gate"; currently CI + standalone only) and document the sha/model fixtures.
+1. Owner: download the CI native artifact once a green run exists for the N3 merge and run
+   `scripts/device-smoke.sh --no-build --apk <artifact> --model ggml-tiny.bin` on the phone.
+2. On a 16 KB-page device, confirm `getconf PAGE_SIZE` = 16384 and the smoke still passes.
+3. Then the real MFVP flow (bubble -> speak -> text inserted); fix only what the phone exposes.
 
-## TRAPS
+## TRAPS LEARNED
 
-- Host toolchain: `nix profile add nixpkgs#gcc --priority 9` (binutils conflict); JDK at
-  `/work/android-toolchain/jdk` is not on PATH; SDK CMake find needs `-type f` (the dir is named `cmake`).
-- Host link: CMake emits only versioned sonames; create unversioned `lib*.so` symlinks and run
-  tests with `LD_LIBRARY_PATH=build/host-native/lib` for libggml deps.
-- NDK r27 still defaults to 4 KB LOAD alignment: explicit `-Wl,-z,max-page-size=16384` is required.
-  `readelf -W` (non-W wraps the alignment column). `libparakeet.so` is an independent target
-  (`whisper.cpp/src/CMakeLists.txt:196`), not in `libwhisper.so` DT_NEEDED.
-- Gradle KTS: `java.io.File` is misparsed (`java` = extension); use `File.pathSeparator`.
-- `libparakeet` exclusion needs a rebuild; old APK sha is not evidence.
-- GGML magic is LE bytes `6c6d6767`, not `67676d6c`. Tiny model sha256
-  `be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21`.
-- `whisper.cpp` is gitignored: fetch before native builds; host fixture model cached in
-  `build/host-native/models` (ignored).
-- Local NDK r30 needs `LD_LIBRARY_PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-aarch64/lib`
-  for libxml2; nix libxml2 2.15.4 has the wrong soname. No aarch64 adb/device here; `gh` absent.
+- CI NDK r27 does **not** default to 16 KB ELF alignment; the explicit link flag is required.
+  `zipalign -c -P 16 4` checks the zip side (AGP already aligns).
+- `readelf -l` wraps long lines; use `-W`, otherwise the LOAD alignment column is on the next
+  line and parsing $NF silently reads 0.
+- GGML magic is a little-endian uint32: `ggml` appears as bytes `6c6d6767` ("lmgg"), not
+  `67676d6c`.
+- Local aarch64 NDK r30 needs `LD_LIBRARY_PATH=<ndk>/toolchains/llvm/prebuilt/linux-aarch64/lib`
+  because the patched `ld.lld` needs `libxml2.so.2` (it is in the NDK lib dir).
+- `gh` is not installed/authenticated here; artifact download must be done by the owner.
+- Do not push/merge/release: owner holds credentials; MARA merges.
+
+## FILES / BRANCHES
+
+- Branch `agent/n3-native`, worktree `/work/martins-whisper-worktrees/n3-native`.
+- Changed: `app/src/main/cpp/CMakeLists.txt`, `scripts/native-apk-check.sh`,
+  `scripts/device-smoke.sh` (new), `docs/native-build.md`, this file, `handoffs/NORA-3/*`.
+- Previous: `agent/n1-native` @ `0bd7e8d` (merged). `agent/n2-release` @ `c3939d1` (parked,
+  not needed for MFVP).

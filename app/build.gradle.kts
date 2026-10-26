@@ -88,6 +88,9 @@ android {
         packaging {
             jniLibs {
                 useLegacyPackaging = false
+                // whisper.cpp 1.9.5 also builds a standalone parakeet library. Nothing in this
+                // app links it (libwhisper.so has no DT_NEEDED on it), so keep it out of the APK.
+                excludes += "**/libparakeet.so"
             }
         }
     }
@@ -103,6 +106,16 @@ android {
 
     testOptions {
         unitTests.isIncludeAndroidResources = true
+    }
+}
+
+// scripts/host-jni-test.sh passes -Pwhisper.host.libDir=<build/host-native/lib> so the JVM
+// test can System.loadLibrary("martins_whisper") and exercise the real JNI path on this host.
+tasks.withType<Test>().configureEach {
+    providers.gradleProperty("whisper.host.libDir").orNull?.let { dir ->
+        val existing = System.getProperty("java.library.path").orEmpty()
+        val joined = if (existing.isBlank()) dir else "$dir${File.pathSeparator}$existing"
+        systemProperty("java.library.path", joined)
     }
 }
 

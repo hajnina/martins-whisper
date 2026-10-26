@@ -14,15 +14,21 @@ on:
       - "app/src/main/cpp/**"
       - "app/build.gradle.kts"
       - "app/src/androidTest/**"
+      - "app/src/test/**"
+      - "app/src/main/kotlin/com/martins/whisper/asr/**"
       - "scripts/fetch-whisper-cpp.sh"
       - "scripts/native-*.sh"
+      - "scripts/host-jni-test.sh"
       - ".github/workflows/native-build.yml"
   pull_request:
     paths:
       - "app/src/main/cpp/**"
       - "app/build.gradle.kts"
+      - "app/src/test/**"
+      - "app/src/main/kotlin/com/martins/whisper/asr/**"
       - "scripts/fetch-whisper-cpp.sh"
       - "scripts/native-*.sh"
+      - "scripts/host-jni-test.sh"
       - ".github/workflows/native-build.yml"
 
 permissions:
@@ -40,6 +46,7 @@ env:
   NDK_VERSION: "27.3.13750724"
   CMAKE_VERSION: "3.31.5"
   WHISPER_CPP_REF: "231638a0717b7822784297e5980965ffcec05810"
+  WHISPER_TINY_SHA256: "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21"
   DEBIAN_FRONTEND: noninteractive
 
 jobs:
@@ -119,6 +126,15 @@ jobs:
             -Pmartins.ndkVersion="$NDK_VERSION" \
             -Pmartins.cmakeVersion="$CMAKE_VERSION" \
             :core:test :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Cache host JNI tiny model
+        uses: actions/cache@v4
+        with:
+          path: build/host-native/models
+          key: whisper-host-tiny-${{ runner.os }}-${{ env.WHISPER_TINY_SHA256 }}
+
+      - name: Host JNI tracer (whisper.cpp + JNI on the build host)
+        run: scripts/host-jni-test.sh
 
       - name: Verify native APK (ABI, libs, size, no bundled model)
         run: scripts/native-apk-check.sh app/build/outputs/apk/debug/app-debug.apk

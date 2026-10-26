@@ -12,6 +12,12 @@ import kotlin.concurrent.withLock
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
 
+/**
+ * Decodes a segment returned by the native layer. whisper.cpp emits standard UTF-8; the JVM's
+ * replacement behaviour is intentional so a split/invalid sequence cannot abort transcription.
+ */
+internal fun decodeNativeUtf8(bytes: ByteArray): String = String(bytes, Charsets.UTF_8)
+
 class SpeechEngineException(message: String, val code: Int? = null, cause: Throwable? = null) :
     RuntimeException(message, cause)
 
@@ -49,7 +55,7 @@ internal object WhisperCppNative {
     external fun nativeInit(modelPath: String, useGpu: Boolean, gpuDevice: Int): Long
     external fun nativeFull(handle: Long, samples: FloatArray, language: String?, threads: Int): Int
     external fun nativeSegmentCount(handle: Long): Int
-    external fun nativeSegmentText(handle: Long, index: Int): String
+    external fun nativeSegmentText(handle: Long, index: Int): ByteArray
     external fun nativeSegmentStartMs(handle: Long, index: Int): Long
     external fun nativeSegmentEndMs(handle: Long, index: Int): Long
     external fun nativeSegmentNoSpeechProb(handle: Long, index: Int): Float
@@ -121,7 +127,7 @@ class WhisperCppEngine private constructor(
                 val builder = StringBuilder()
                 var noSpeech = 0f
                 for (index in 0 until count) {
-                    val text = WhisperCppNative.nativeSegmentText(handle, index).trim()
+                    val text = decodeNativeUtf8(WhisperCppNative.nativeSegmentText(handle, index)).trim()
                     if (text.isNotEmpty()) {
                         if (builder.isNotEmpty()) builder.append(' ')
                         builder.append(text)
