@@ -17,7 +17,7 @@ Label: `wayfinder:map`
 
 ## Decisions so far
 
-<!-- one line per resolved ticket -->
+- [01 — What do reviews, benchmarks and issue reports say about each free model?](issues/01-web-research.md): all nine have public evidence; served limits are 200k/32k for DeepSeek/GLM/MiMo, ~1M for Nemotron Ultra/Super VL/Beam, 256k Flint, 200k big-pickle; strongest public coding evidence for DeepSeek, GLM, Beam, Flint (vendor-only), with documented tool-call loop risk across most models. Full citations in `research/01-web-research.md`.
 
 ## Not yet specified
 
