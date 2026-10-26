@@ -18,6 +18,10 @@ import kotlinx.coroutines.withContext
  */
 internal fun decodeNativeUtf8(bytes: ByteArray): String = String(bytes, Charsets.UTF_8)
 
+/** Normalizes a language tag for whisper.cpp: blank and "auto" mean auto-detect (null). */
+internal fun normalizeLanguage(language: String?): String? =
+    language?.trim()?.lowercase()?.takeIf { it.isNotEmpty() && it != "auto" }
+
 class SpeechEngineException(message: String, val code: Int? = null, cause: Throwable? = null) :
     RuntimeException(message, cause)
 
@@ -52,14 +56,16 @@ internal object WhisperCppNative {
     external fun nativeBackendInfo(): String
     external fun nativeHasVulkanDevice(): Boolean
     external fun nativeSetLogging(enabled: Boolean)
-    external fun nativeInit(modelPath: String, useGpu: Boolean, gpuDevice: Int): Long
-    external fun nativeFull(handle: Long, samples: FloatArray, language: String?, threads: Int): Int
+    external fun nativeInit(modelPath: String?, useGpu: Boolean, gpuDevice: Int): Long
+    external fun nativeFull(handle: Long, samples: FloatArray?, language: String?, threads: Int): Int
     external fun nativeSegmentCount(handle: Long): Int
-    external fun nativeSegmentText(handle: Long, index: Int): ByteArray
+    external fun nativeSegmentText(handle: Long, index: Int): ByteArray?
+    /** Standard-UTF-8 fixture (one script per line) for the JNI decode contract; tests only. */
+    external fun nativeUtf8Fixture(): ByteArray?
     external fun nativeSegmentStartMs(handle: Long, index: Int): Long
     external fun nativeSegmentEndMs(handle: Long, index: Int): Long
     external fun nativeSegmentNoSpeechProb(handle: Long, index: Int): Float
-    external fun nativeDetectedLanguage(handle: Long): String
+    external fun nativeDetectedLanguage(handle: Long): String?
     external fun nativeFree(handle: Long)
 }
 
@@ -94,29 +100,45 @@ class WhisperCppEngine private constructor(
     val isClosed: Boolean
         get() = closed
 
-    override suspend fun transcribe(chunk: AudioChunk, language: String?): Transcript =
-        withContext(dispatcher) {
+    override suspend fun transcribe(chunk: AudioChunk, language: String?): Transcript {
+        if (closed) {
+            throw SpeechEngineException("WhisperCppEngine is closed", code = STATUS_INVALID_CONTEXT)
+        }
+        return withContext(dispatcher) {
             lock.withLock {
-                check(!closed) { "WhisperCppEngine is closed" }
-                require(chunk.sampleRate == SAMPLE_RATE) {
-                    "whisper.cpp requires ${SAMPLE_RATE} Hz mono audio, got ${chunk.sampleRate}"
+                if (closed) {
+                    throw SpeechEngineException("WhisperCppEngine is closed", code = STATUS_INVALID_CONTEXT)
                 }
-                require(chunk.samples.isNotEmpty()) { "audio chunk is empty" }
+                if (chunk.sampleRate != SAMPLE_RATE) {
+                    throw SpeechEngineException(
+                        "whisper.cpp requires $SAMPLE_RATE Hz mono audio, got ${chunk.sampleRate}",
+                        code = STATUS_INVALID_AUDIO,
+                    )
+                }
+                if (chunk.samples.isEmpty()) {
+                    throw SpeechEngineException("audio chunk is empty", code = STATUS_INVALID_AUDIO)
+                }
 
                 val handle = context
-                check(handle != 0L) { "WhisperCppEngine has no native context" }
+                if (handle == 0L) {
+                    throw SpeechEngineException(
+                        "WhisperCppEngine has no native context",
+                        code = STATUS_INVALID_CONTEXT,
+                    )
+                }
+                val requestedLanguage = normalizeLanguage(language)
                 val code = WhisperCppNative.nativeFull(
                     handle = handle,
                     samples = chunk.samples,
-                    language = language?.trim()?.takeIf { it.isNotEmpty() },
+                    language = requestedLanguage,
                     threads = threads,
                 )
-                if (code != 0) {
+                if (code != STATUS_OK) {
                     throw SpeechEngineException(
                         message = when (code) {
-                            -1 -> "whisper.cpp context is invalid"
-                            -2 -> "whisper.cpp rejected the audio samples"
-                            -3 -> "whisper.cpp transcription failed"
+                            STATUS_INVALID_CONTEXT -> "whisper.cpp context is invalid"
+                            STATUS_INVALID_AUDIO -> "whisper.cpp rejected the audio samples"
+                            STATUS_TRANSCRIBE_FAILED -> "whisper.cpp transcription failed"
                             else -> "whisper.cpp transcription failed (code $code)"
                         },
                         code = code,
@@ -127,23 +149,25 @@ class WhisperCppEngine private constructor(
                 val builder = StringBuilder()
                 var noSpeech = 0f
                 for (index in 0 until count) {
-                    val text = decodeNativeUtf8(WhisperCppNative.nativeSegmentText(handle, index)).trim()
+                    val segment = WhisperCppNative.nativeSegmentText(handle, index) ?: ByteArray(0)
+                    val text = decodeNativeUtf8(segment).trim()
                     if (text.isNotEmpty()) {
                         if (builder.isNotEmpty()) builder.append(' ')
                         builder.append(text)
                     }
                     noSpeech = maxOf(noSpeech, WhisperCppNative.nativeSegmentNoSpeechProb(handle, index))
                 }
-                val detected = WhisperCppNative.nativeDetectedLanguage(handle).takeIf { it.isNotBlank() }
+                val detected = (WhisperCppNative.nativeDetectedLanguage(handle) ?: "").takeIf { it.isNotBlank() }
                 Transcript(
                     text = builder.toString().trim(),
-                    language = detected ?: language,
+                    language = detected ?: requestedLanguage,
                     avgLogProb = null,
                     noSpeechProb = if (count > 0) noSpeech else null,
                     compressionRatio = null,
                 )
             }
         }
+    }
 
     fun segmentTimestamps(): List<Pair<Long, Long>> = lock.withLock {
         if (closed || context == 0L) return emptyList()
@@ -172,6 +196,11 @@ class WhisperCppEngine private constructor(
         const val SAMPLE_RATE = 16_000
         const val DEFAULT_THREADS = 4
 
+        const val STATUS_OK = 0
+        const val STATUS_INVALID_CONTEXT = -1
+        const val STATUS_INVALID_AUDIO = -2
+        const val STATUS_TRANSCRIBE_FAILED = -3
+
         val isNativeAvailable: Boolean
             get() = WhisperCppNative.isAvailable
 
@@ -195,7 +224,9 @@ class WhisperCppEngine private constructor(
         ): WhisperCppEngine {
             WhisperCppNative.requireAvailable()
             val file = File(modelPath)
-            require(file.isFile && file.length() > 0) { "Model file is missing or empty: $modelPath" }
+            if (!file.isFile || file.length() == 0L) {
+                throw SpeechEngineException("Model file is missing or empty: $modelPath")
+            }
             val threadCount = threads.coerceIn(1, Runtime.getRuntime().availableProcessors().coerceAtLeast(1))
             WhisperCppNative.nativeSetLogging(true)
 
