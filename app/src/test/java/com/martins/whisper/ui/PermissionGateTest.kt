@@ -47,4 +47,21 @@ class PermissionGateTest {
         )
         assertEquals("Missing: microphone, overlay", PermissionGate.summary(snapshot))
     }
+
+    @Test
+    fun `accessibility is read from the enabled services setting`() {
+        val pkg = "com.martins.whisper"
+        val cls = "com.martins.whisper.accessibility.DictationAccessibilityService"
+        assertTrue(
+            PermissionGate.accessibilityServiceEnabled(
+                "com.other.app/com.other.Service:$pkg/$cls",
+                pkg,
+                cls,
+            ),
+        )
+        assertTrue(PermissionGate.accessibilityServiceEnabled("$pkg/.accessibility.DictationAccessibilityService", pkg, cls))
+        assertFalse(PermissionGate.accessibilityServiceEnabled("com.other.app/com.other.Service", pkg, cls))
+        assertFalse(PermissionGate.accessibilityServiceEnabled("", pkg, cls))
+        assertFalse(PermissionGate.accessibilityServiceEnabled(null, pkg, cls))
+    }
 }

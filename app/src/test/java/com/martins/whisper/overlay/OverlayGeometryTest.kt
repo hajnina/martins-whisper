@@ -13,10 +13,10 @@ class OverlayGeometryTest {
     }
 
     @Test
-    fun `default is bottom end above inset`() {
+    fun `default is the right edge vertically centred away from the keyboard`() {
         assertEquals(
-            1080 - 56 - 12 to 1920 - 56 - 12 - 72,
-            OverlayGeometry.defaultBottomEnd(56, 56, 1080, 1920, 12, 72),
+            1080 - 56 - 12 to (1920 - 56) / 2,
+            OverlayGeometry.defaultSide(56, 56, 1080, 1920, 12),
         )
     }
 

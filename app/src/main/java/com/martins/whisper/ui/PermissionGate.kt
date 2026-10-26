@@ -29,4 +29,27 @@ object PermissionGate {
         if (missing(snapshot).isEmpty()) "All required permissions granted" else {
             "Missing: " + missing(snapshot).joinToString { it.name.lowercase().replace('_', ' ') }
         }
+
+    /**
+     * Reads the authoritative Settings.Secure value instead of AccessibilityManager's cached list,
+     * so a service enabled in system settings is visible immediately (the device report saw a stale
+     * "not granted" until the activity was recreated).
+     */
+    fun accessibilityServiceEnabled(
+        enabledServices: String?,
+        packageName: String,
+        serviceClassName: String,
+    ): Boolean = enabledServices
+        ?.split(':')
+        ?.map { it.trim() }
+        ?.filter { it.isNotEmpty() }
+        ?.any { entry ->
+            val slash = entry.indexOf('/')
+            if (slash <= 0) return@any false
+            val pkg = entry.substring(0, slash)
+            val shortClass = entry.substring(slash + 1)
+            val className = if (shortClass.startsWith(".")) pkg + shortClass else shortClass
+            pkg == packageName && className == serviceClassName
+        }
+        ?: false
 }

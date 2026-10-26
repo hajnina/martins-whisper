@@ -94,10 +94,10 @@ class MicBubbleView(context: Context) : View(context) {
         }
     }
 
-    private var downX = 0f
-    private var downY = 0f
-    private var lastX = 0f
-    private var lastY = 0f
+    private var downRawX = 0f
+    private var downRawY = 0f
+    private var lastRawX = 0f
+    private var lastRawY = 0f
     private var downAt = 0L
     private var tracking = false
     private var dragging = false
@@ -112,10 +112,10 @@ class MicBubbleView(context: Context) : View(context) {
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                downX = event.x
-                downY = event.y
-                lastX = event.x
-                lastY = event.y
+                downRawX = event.rawX
+                downRawY = event.rawY
+                lastRawX = event.rawX
+                lastRawY = event.rawY
                 downAt = SystemClock.elapsedRealtime()
                 dragging = false
                 val control = controlAt(event.x, event.y)
@@ -134,19 +134,19 @@ class MicBubbleView(context: Context) : View(context) {
             MotionEvent.ACTION_MOVE -> {
                 if (pendingControl != null) return true
                 if (!tracking) return true
-                val totalX = event.x - downX
-                val totalY = event.y - downY
+                val totalX = event.rawX - downRawX
+                val totalY = event.rawY - downRawY
                 if (!dragging && (abs(totalX) > touchSlop || abs(totalY) > touchSlop)) {
                     dragging = true
                     listener?.onCancel()
                 }
                 if (dragging) {
-                    val dx = event.x - lastX
-                    val dy = event.y - lastY
+                    val dx = event.rawX - lastRawX
+                    val dy = event.rawY - lastRawY
                     listener?.onDrag(dx, dy)
                 }
-                lastX = event.x
-                lastY = event.y
+                lastRawX = event.rawX
+                lastRawY = event.rawY
                 return true
             }
 
