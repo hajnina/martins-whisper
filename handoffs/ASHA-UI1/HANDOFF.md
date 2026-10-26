@@ -1,13 +1,25 @@
 # ASHA — UI device fixes (DEVICE-REPORT items 2,3,4,5)
 
 Branch `agent/ui-device1`, worktree `/work/martins-whisper-worktrees/ui-device1`.
-Base master `c62f533`. HEAD `e7ad490` (commits `bd26755`, `e7ad490`).
+Base master `c62f533`. Code through `bb35f0a` (commits `bd26755`, `e7ad490`, `bb35f0a`).
 
 ## Merge
 ```
 git merge --no-ff agent/ui-device1
 ```
-Only `app/src/{main,test}` files changed; no core/capture/gate files. No conflict expected.
+Only `app/src/{main,test}`, `.gitignore` and `handoffs/ASHA-UI1/` changed; no core/capture/gate files.
+
+## Overlap with `agent/mara-ui` (read before merging)
+MARA's `agent/mara-ui` (`1835ae7`, authored concurrently at 19:45) covers the same items 2-4:
+insets with `systemBars()` only, `AccessibilityManager` listener + `onWindowFocusChanged`, and
+percent/MB in the **global** bar below all rows. It has no item 5.
+This branch is the ticket superset: adds displayCutout, authoritative `Settings.Secure` read +
+`ContentObserver`, per-row **inline** progress (fixes the reported off-screen bar), byte handling
+for imports, and item 5 (bubble default + raw-delta drag). `recordings/` ignore from MARA's branch
+is included here too.
+Recommendation: merge `agent/ui-device1` and drop `agent/mara-ui` (merging both conflicts and
+loses item 5). If MARA prefers its own branch, use `bb35f0a`'s `MainActivity`/`ui`/`overlay` code
+as the conflict resolution.
 
 ## What changed
 - **Item 2 edge-to-edge (Android 16):** `enableEdgeToEdge()` in `MainActivity.onCreate`; a `ViewCompat.setOnApplyWindowInsetsListener` on the root `ScrollView` applies `systemBars() | displayCutout()` insets as padding (`clipToPadding = true`), so the title clears the status bar and the last model buttons clear the nav bar.
