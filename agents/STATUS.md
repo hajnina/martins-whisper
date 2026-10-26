@@ -12,7 +12,7 @@ Snapshot: 2026-10-26T17:10Z
 | E1 | done, merged | `9b2ee46`; 35 new tests; native opt-in | closed |
 | T1 | partly done | Layer 2 `assembleDebugAndroidTest` builds; Layer 1 E2E after wiring | run on device at H1 |
 | D1 | queued | map ticket 06 resolved | after G1 UI |
-| G1 | in progress | B1+E1 merged; engine/model UI wiring | finish wiring + full gate |
+| G1 | blocked: provider since 2026-10-26 18:20:12 (free tier limit) | B1+E1 merged; engine/model UI wiring | wait for PROVIDER-STATUS ok, then finish wiring + full gate |
 | H1/H2 | blocked | map tickets 08/09 | needs physical device + thresholds |
 
 Toolchain: `/work/android-toolchain/TOOLCHAIN-READY.md`. The shared Gradle home is used by a sibling PM; use `GRADLE_USER_HOME=/home/node/gh-pm --offline`.
