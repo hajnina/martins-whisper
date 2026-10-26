@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/work/martins-whisper-worktrees/v1-verify/./scripts/verify/mutate.py", line 15, in <module>
+    "PATH": env["JAVA_HOME"] + "/bin:/work/android-toolchain/gradle/gradle-8.9/bin:" + env["PATH"],
+            ~~~^^^^^^^^^^^^^
+KeyError: 'JAVA_HOME'
