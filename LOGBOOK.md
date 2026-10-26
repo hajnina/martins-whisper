@@ -26,3 +26,4 @@ Chronological project log. PM owns this file; agents add entries via their hando
 - 17:10Z - Merged `pm/b1-e1` into `master`. Remaining for G1: wire `EngineFactory` to the real engine and `ModelRepository`, add model download/import UI, then T1 fake-audio E2E. H1/H2 still blocked on device; signing/device questions in `owner/ASKS.md`.
 - 18:20Z - Provider limited (free tier); G1 set blocked: provider; worker branches wip-committed; waiting for PROVIDER-STATUS.md ok.
 - 18:29Z - Provider recovered (PROVIDER-STATUS ok). Re-opened G1; resuming integration work with the existing PM session and no new workers until needed.
+- 18:5xZ - Provider status ok again (ratewatch cleared). Reopened G1 (`blocked: provider` -> in progress in KANBAN/STATUS), PROVIDER-STATUS.md set to `ok`, committed `0262633` + this change. Relaunching G1 integration worker with the fallback model order.

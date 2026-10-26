@@ -1,6 +1,6 @@
 # Provider status
 
-Status: LIMITED since 2026-10-26 18:20:12 (free tier limit, free_tier_limit).
+Status: ok (reopened 2026-10-26; resumed KANBAN waves).
 
 Rules while LIMITED:
 - Do not launch new worker sessions.
