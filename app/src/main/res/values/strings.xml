@@ -43,7 +43,9 @@
     <string name="idle_unload_label">Unload model when idle</string>
     <string name="section_diagnostics">Diagnostics</string>
     <string name="diagnostics_text">Only JVM/Robolectric validation has run. Device microphone, overlay and GPU behavior require a physical Android device.</string>
-    <string name="language_auto">Auto detect</string>
+    <string name="language_auto">Auto detect (unreliable on short clips)</string>
+    <string name="language_english">English</string>
+    <string name="language_czech">\u010ce\u0161tina</string>
     <string name="backend_auto">Auto (Vulkan, CPU fallback)</string>
     <string name="backend_gpu">Vulkan (GPU)</string>
     <string name="backend_cpu">CPU</string>

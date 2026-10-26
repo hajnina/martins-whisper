@@ -5,12 +5,15 @@ import android.provider.Settings
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ScrollView
+import android.widget.Spinner
 import android.widget.TextView
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.martins.whisper.MainActivity
+import com.martins.whisper.data.SettingsStore
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -75,6 +78,26 @@ class MainActivityDeviceFixTest {
         assertEquals("Granted", status.text.toString())
     }
 
+    @Test
+    fun `language spinner offers Auto English Czech and defaults to English`() {
+        val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+        val spinner = languageSpinner(activity.window.decorView)
+            ?: error("language spinner not found")
+
+        assertEquals(3, spinner.adapter.count)
+        val labels = (0 until spinner.adapter.count).map { spinner.adapter.getItem(it).toString() }
+        assertTrue(labels.first().startsWith("Auto detect"))
+        assertEquals("English", labels[1])
+        assertEquals("\u010ce\u0161tina", labels[2])
+        assertEquals(1, spinner.selectedItemPosition)
+
+        spinner.setSelection(2)
+        shadowOf(Looper.getMainLooper()).idle()
+
+        assertEquals("cs", SettingsStore(activity).language)
+        assertEquals("cs", SettingsStore(activity).effectiveLanguage())
+    }
+
     private fun contentScroll(activity: MainActivity): ScrollView {
         val content = activity.findViewById<ViewGroup>(android.R.id.content)
         return content.getChildAt(0) as ScrollView
@@ -85,6 +108,19 @@ class MainActivityDeviceFixTest {
             ?: error("accessibility row title not found")
         val row = title.parent as ViewGroup
         return row.getChildAt(1) as TextView
+    }
+
+    private fun languageSpinner(view: View): Spinner? {
+        if (view is Spinner) {
+            val labels = (0 until view.adapter.count).map { view.adapter.getItem(it).toString() }
+            if (labels.contains("English") && labels.contains("\u010ce\u0161tina")) return view
+        }
+        if (view is ViewGroup) {
+            for (index in 0 until view.childCount) {
+                languageSpinner(view.getChildAt(index))?.let { return it }
+            }
+        }
+        return null
     }
 
     private fun findText(view: View, text: String): TextView? {
