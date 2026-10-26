@@ -1,0 +1,5 @@
+NORA-1 done: CI sdkmanager bootstrap fixed (no setup-android action), native
+arm64 workflow ready, and a real 12.9 MB native APK built + verified locally
+(141 tests green, arm64-v8a only, stripped .so, no bundled model). Owner must
+push agent/n1-native to run Actions; worker has no gh auth. Full evidence:
+handoffs/NORA-1/HANDOFF.md.

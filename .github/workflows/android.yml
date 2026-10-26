@@ -13,6 +13,15 @@ concurrency:
   group: android-ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Use the SDK that ships with the GitHub-hosted runner. The old
+  # android-actions/setup-android@v3 step failed here with
+  # "sdkmanager failed with exit code 1"; calling the preinstalled
+  # sdkmanager directly avoids that bootstrap entirely.
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+  DEBIAN_FRONTEND: noninteractive
+
 jobs:
   build:
     name: Unit tests + debug APK
@@ -29,20 +38,33 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Gradle
+      - name: Set up Gradle (with cache)
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install SDK packages
+      - name: Configure preinstalled Android SDK
+        shell: bash
         run: |
-          sdkmanager --install \
+          set -euo pipefail
+          SDK="$ANDROID_HOME"
+          SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            SDKMANAGER="$(find "$SDK/cmdline-tools" -maxdepth 3 -path '*/bin/sdkmanager' 2>/dev/null | sort -V | tail -1)"
+          fi
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            echo "::error::No preinstalled Android sdkmanager under $SDK"
+            ls -la /usr/local/lib/android 2>/dev/null || true
+            exit 1
+          fi
+          dirname "$SDKMANAGER" >> "$GITHUB_PATH"
+          # Accept licences non-interactively. `yes` exits 141 on SIGPIPE, hence `|| true`.
+          yes | "$SDKMANAGER" --sdk_root="$SDK" --licenses >/dev/null 2>&1 || true
+          # No-op when the runner image already has them; keeps the build reproducible.
+          "$SDKMANAGER" --sdk_root="$SDK" --install \
             "platforms;android-35" \
             "build-tools;34.0.0" \
             "build-tools;35.0.1" \
-            "platform-tools" \
-            "ndk;27.0.12077973"
+            "platform-tools" >/dev/null
+          "$SDKMANAGER" --sdk_root="$SDK" --list_installed | head -30
 
       - name: Unit tests
         run: ./gradlew :core:test :app:testDebugUnitTest --no-daemon --stacktrace
@@ -55,6 +77,7 @@ jobs:
         with:
           name: app-debug-apk
           if-no-files-found: error
+          retention-days: 30
           path: |
             app/build/outputs/apk/debug/app-debug.apk
             app/build/outputs/apk/debug/output-metadata.json

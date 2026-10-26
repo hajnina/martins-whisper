@@ -1,44 +1,135 @@
 name: Android native build
 
+# Produces the real arm64-v8a APK (bundled whisper.cpp, CPU-first). Vulkan stays opt-in.
 on:
-  push:
-  pull_request:
   workflow_dispatch:
+    inputs:
+      vulkan:
+        description: "Build the Vulkan backend (default: CPU only)"
+        type: boolean
+        default: false
+  push:
+    branches: ["**"]
+    paths:
+      - "app/src/main/cpp/**"
+      - "app/build.gradle.kts"
+      - "app/src/androidTest/**"
+      - "scripts/fetch-whisper-cpp.sh"
+      - "scripts/native-*.sh"
+      - ".github/workflows/native-build.yml"
+  pull_request:
+    paths:
+      - "app/src/main/cpp/**"
+      - "app/build.gradle.kts"
+      - "scripts/fetch-whisper-cpp.sh"
+      - "scripts/native-*.sh"
+      - ".github/workflows/native-build.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-native-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+  # Versions preinstalled on ubuntu-latest (see actions/runner-images Ubuntu2404-Readme).
+  # Both are still pinned explicitly so the build does not silently drift.
+  NDK_VERSION: "27.3.13750724"
+  CMAKE_VERSION: "3.31.5"
+  WHISPER_CPP_REF: "231638a0717b7822784297e5980965ffcec05810"
+  DEBIAN_FRONTEND: noninteractive
 
 jobs:
-  build:
+  native:
+    name: Native arm64 debug APK
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    timeout-minutes: 45
 
-      - uses: actions/setup-java@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
-      - uses: android-actions/setup-android@v3
+      - name: Set up Gradle (with cache)
+        uses: gradle/actions/setup-gradle@v4
 
-      - name: Install SDK/NDK/CMake
+      - name: Configure preinstalled Android SDK + NDK/CMake
+        shell: bash
         run: |
-          yes | sdkmanager --licenses >/dev/null
-          sdkmanager --install \
-            "platforms;android-35" \
-            "build-tools;35.0.1" \
-            "cmake;3.22.1" \
-            "ndk;27.0.12077973"
+          set -euo pipefail
+          SDK="$ANDROID_HOME"
+          SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            SDKMANAGER="$(find "$SDK/cmdline-tools" -maxdepth 3 -path '*/bin/sdkmanager' 2>/dev/null | sort -V | tail -1)"
+          fi
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            echo "::error::No preinstalled Android sdkmanager under $SDK"
+            ls -la /usr/local/lib/android 2>/dev/null || true
+            exit 1
+          fi
+          dirname "$SDKMANAGER" >> "$GITHUB_PATH"
+          yes | "$SDKMANAGER" --sdk_root="$SDK" --licenses >/dev/null 2>&1 || true
+
+          # Fast path: the runner image already has the pinned NDK and CMake.
+          need=()
+          [ -d "$SDK/ndk/$NDK_VERSION" ] || need+=("ndk;$NDK_VERSION")
+          [ -x "$SDK/cmake/$CMAKE_VERSION/bin/cmake" ] || need+=("cmake;$CMAKE_VERSION")
+          for pkg in "platforms;android-35" "build-tools;35.0.1" "platform-tools"; do
+            need+=("$pkg")
+          done
+          "$SDKMANAGER" --sdk_root="$SDK" --install "${need[@]}" >/dev/null
+          echo "ANDROID_NDK_HOME=$SDK/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+          "$SDK/cmake/$CMAKE_VERSION/bin/cmake" --version
+          "$SDK/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" --version | head -1
+
+      - name: Cache pinned whisper.cpp checkout
+        uses: actions/cache@v4
+        with:
+          path: app/src/main/cpp/whisper.cpp
+          key: whisper-cpp-${{ runner.os }}-${{ env.WHISPER_CPP_REF }}
 
       - name: Fetch pinned whisper.cpp
-        run: scripts/fetch-whisper-cpp.sh
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            scripts/fetch-whisper-cpp.sh && break
+            echo "fetch attempt $attempt failed; retrying" >&2
+            sleep $((attempt * 5))
+          done
+          test -f app/src/main/cpp/whisper.cpp/CMakeLists.txt
 
-      - uses: gradle/actions/setup-gradle@v4
+      - name: Check Kotlin/JNI signatures
+        run: scripts/native-jni-check.sh
+
+      - name: Unit tests + native debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew --no-daemon --stacktrace \
+            -Pmartins.native=true \
+            -Pmartins.vulkan=${{ inputs.vulkan || 'false' }} \
+            -Pmartins.ndkVersion="$NDK_VERSION" \
+            -Pmartins.cmakeVersion="$CMAKE_VERSION" \
+            :core:test :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Verify native APK (ABI, libs, size, no bundled model)
+        run: scripts/native-apk-check.sh app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload native APK
+        uses: actions/upload-artifact@v4
         with:
-          gradle-version: '8.9'
-
-      - name: Test and build
-        run: gradle --no-daemon -Pmartins.native=true :core:test :app:testDebugUnitTest :app:assembleDebug
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: martins-whisper-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: martins-whisper-native-debug-${{ github.sha }}
           if-no-files-found: error
+          retention-days: 30
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/debug/output-metadata.json
+            build/native-apk-report.txt

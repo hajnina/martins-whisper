@@ -5,6 +5,18 @@ plugins {
 
 val nativeEnabled = providers.gradleProperty("martins.native").orNull?.lowercase() == "true"
 val vulkanEnabled = providers.gradleProperty("martins.vulkan").orNull?.lowercase() == "true"
+// NDK used only by native builds. CI pins the official r27; the aarch64 sandbox can
+// override it to the community r30 package installed by scripts/bootstrap-build.sh --with-ndk.
+val nativeNdkVersion = providers.gradleProperty("martins.ndkVersion").orNull
+    ?.trim()
+    ?.takeIf { it.isNotEmpty() }
+    ?: "27.0.12077973"
+// CMake is resolved from the SDK. CI reuses the runner's preinstalled CMake instead of
+// downloading the default one; override only when you know the SDK copy exists.
+val nativeCmakeVersion = providers.gradleProperty("martins.cmakeVersion").orNull
+    ?.trim()
+    ?.takeIf { it.isNotEmpty() }
+    ?: "3.22.1"
 
 android {
     namespace = "com.martins.whisper"
@@ -66,11 +78,11 @@ android {
     }
 
     if (nativeEnabled) {
-        ndkVersion = "27.0.12077973"
+        ndkVersion = nativeNdkVersion
         externalNativeBuild {
             cmake {
                 path = file("src/main/cpp/CMakeLists.txt")
-                version = "3.22.1"
+                version = nativeCmakeVersion
             }
         }
         packaging {
