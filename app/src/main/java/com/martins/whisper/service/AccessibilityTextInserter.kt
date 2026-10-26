@@ -19,6 +19,7 @@ class AccessibilityTextInserter(context: Context) : TextInserter {
             AccessibilityInsertResult.Inserted -> InsertResult.Inserted
             is AccessibilityInsertResult.Copied -> InsertResult.Copied(result.reason)
             is AccessibilityInsertResult.Failed -> clipboard.insert(text)
+            is AccessibilityInsertResult.Rejected -> InsertResult.Rejected(result.reason)
         }
     }
 }
