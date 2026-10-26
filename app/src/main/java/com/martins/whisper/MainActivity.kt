@@ -79,6 +79,7 @@ class MainActivity : ComponentActivity() {
     private var transferProgressView: TextView? = null
     private var lastTransferUiAt = 0L
     private var accessibilityObserverRegistered = false
+    private var legacyUiBuilt = false
     private lateinit var modelBrowser: ModelBrowser
     private var bootSwitch: Switch? = null
     private var pendingImportId: String? = null
@@ -117,11 +118,13 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         settings = SettingsStore(this)
         setContentView(buildContent())
+        legacyUiBuilt = true
         observeService()
     }
 
     override fun onResume() {
         super.onResume()
+        if (!legacyUiBuilt) return
         registerAccessibilityObserver()
         refresh()
         if (intent?.getBooleanExtra(EXTRA_OPEN_SETTINGS, false) == true) {
@@ -168,6 +171,7 @@ class MainActivity : ComponentActivity() {
         grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (!legacyUiBuilt) return
         refresh()
     }
 
@@ -718,6 +722,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun refresh() {
+        if (!legacyUiBuilt) return
         val snapshot = currentSnapshot()
         statusView.text = PermissionGate.summary(snapshot)
         micStatus.text = grantedText(snapshot.microphone)
