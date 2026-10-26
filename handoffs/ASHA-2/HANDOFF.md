@@ -2,8 +2,9 @@
 
 ## Executive summary
 
-Branch `agent/g2-engine` (worktree `/work/martins-whisper-worktrees/g2-engine`), tip **`5494b79`**,
-merged with current `master` (`ba6b160`, wave 2) at **`045e55c`**. Working tree clean.
+Branch `agent/g2-engine` (worktree `/work/martins-whisper-worktrees/g2-engine`), code tip
+**`5494b79`** (branch tip **`4a5cd07`**, docs only), merged with current `master` (`ba6b160`, wave 2)
+at **`045e55c`**. Working tree clean.
 
 - **G2a — custom (non-catalog) GGML import:** a user can import any local model file, it is persisted
   as a `ModelSpec` (Base64 text records in `SharedPreferences`), listed and selected on the model
@@ -100,11 +101,14 @@ APK:
 ## Commits on `agent/g2-engine` since `master`
 
 ```
+4a5cd07 docs(g2): ASHA-2 handoff and ticket results
 5494b79 test(g2): cover custom model flows; keep descriptor when delete fails
 045e55c Merge branch 'master' into agent/g2-engine
 dd04afd wip: checkpoint before provider limited   (G2a custom models)
 480b0ae feat(service): record while the model loads and unload the engine when idle (G2b)
 ```
+
+The gate below ran on `5494b79`; the commits after it are docs/tickets only.
 
 Ticket files (reconstructed from the WIP commits, so a restart needs no session context):
 `.scratch/device-ready-apk/build-tickets/G2a-custom-models.md` and `G2b-engine-lifecycle.md`.
@@ -139,7 +143,8 @@ Ticket files (reconstructed from the WIP commits, so a restart needs no session 
 
 ## Integration notes for MARA
 
-- Merge `agent/g2-engine` into `master` with `--no-ff`; branch is clean at `5494b79`.
+- Merge `agent/g2-engine` into `master` with `--no-ff`; branch is clean at `4a5cd07` (code at
+  `5494b79`; later commits are docs/tickets only).
 - Re-run the gate on the merge result; expected totals are 155 tests / 0 failures (or more if wave 3
   lands first), `assembleDebug` green.
 - Suggested KANBAN rows: `G2a` custom model import and `G2b` record-while-loading/idle-unload, both
