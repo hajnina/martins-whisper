@@ -19,8 +19,21 @@ BUILD SUCCESSFUL; `scripts/test-device.sh` exits non-zero with a clear "no devic
 
 ## Status
 
-open (provider OK 18:36Z)
+done (TESS, 2026-10-26; re-verified 2026-10-26 on master 421f223)
 
 ## Result
 
--
+Delivered in `cf92851`, merged to master in `425412c`. `app/src/androidTest` contains
+`OverlayFocusRetentionTest`, `AccessibilityInsertionReadBackTest`, `PasswordFieldRefusalTest`,
+`PermissionDenialTest` (skips when mic is granted; run with `--deny-mic`) and
+`ServiceLifecycleTest`, documented device-only in `app/src/androidTest/DEVICE-TESTS.md`.
+`scripts/test-device.sh` builds/installs both APKs, best-effort grants overlay/accessibility,
+runs `am instrument`, and exits 3 with a clear message when `adb devices` is empty.
+
+Acceptance evidence (run in this sandbox; Layer 2 is compiled only, never faked as executed):
+
+```
+scripts/test-device-ready.sh -> :app:assembleDebugAndroidTest BUILD SUCCESSFUL
+                                app-debug-androidTest.apk 1,326,409 B
+scripts/test-device.sh       -> exit 3, "No Android device or emulator is connected"
+```
