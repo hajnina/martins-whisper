@@ -87,3 +87,15 @@ NEXT (on owner push + device run):
    agent/lena-ux (shaped bubble, wip), agent/harry-e2e, agent/replay2 (telemetry contract).
 TRAPS: gradle needs own GRADLE_USER_HOME (re-copied /work/android-toolchain/gradle-home ->
 /home/node/gh-mara this shift); always gradle-slot.sh; no python3.
+
+## B2 FINAL (ROADMAP 22:10, lane 1)
+- Integrated NORA-3 capture fix (`1a6eb2f`): probe fail-open (warm-up ignored, exact-silence
+  threshold, restore previous source, never abort a running session on a failed fallback);
+  `AudioRecordSourceTest` +1.
+- Telemetry contract frozen: `handoffs/CONTRACT-TELEMETRY.md` (field names/types, where written,
+  additive-only rules) — consumers build against this.
+- FINAL B2 gate on master `1a6eb2f`: core 165 + app 140 tests, 0 failures/0 errors, 2 env-skips;
+  walls PASS; APK 9,170,241 B signed by `app/debug.keystore`. Owner: push master + CI native APK.
+- NOTE: the main checkout was switched to `agent/gemma-research` by another lane mid-shift; my
+  commits landed there, moved them back to master (`1a6eb2f`) and reset `agent/gemma-research`
+  to `160168d` (its base, no work lost). Main checkout is back on master.

@@ -1,6 +1,6 @@
 # BUILD-READY #2 (MARA, 2026-10-26 ~21:40)
 
-**Code SHA: `06b7db6`** (master, all work committed; this file is a docs-only tip on top of it).
+**Code SHA: `1a6eb2f`** (master tip, all work committed; the contract/docs commits are on top of the B2 code).
 Push master and dispatch `native-build.yml`.
 
 ## Why this build exists (DEVICE-REPORT #2)
@@ -15,16 +15,17 @@ Push master and dispatch `native-build.yml`.
 4. **All audio saved**: every session, including too-short/cancelled/error, writes
    `files/debug-audio/<stamp>.wav` + `<stamp>.json` sidecar; telemetry `last.json` is written for
    aborts too.
-5. **Stable debug signature**: `app/debug.keystore` is committed and used by the debug build, so
+5. **Capture probe fail-open (NORA-3)**: the dead-source probe no longer stops a working recorder before trying the next source; 400 ms warm-up is ignored, a switch needs 500 ms of peak == 0, and a failed fallback restores the previous source and keeps the session alive.
+6. **Stable debug signature**: `app/debug.keystore` is committed and used by the debug build, so
    CI builds install over each other (`adb install -r`) and the downloaded model survives.
 
 ## Gate evidence (fresh, offline)
 - `source /work/android-toolchain/scripts/env.sh; GRADLE_USER_HOME=/home/node/gh-mara`
 - `/work/owner/tools/gradle-slot.sh :core:test :app:testDebugUnitTest :app:assembleDebug --offline`
-- **BUILD SUCCESSFUL**: core 165 tests + app 139 tests, **0 failures, 0 errors**, 2 env-skips
+- **BUILD SUCCESSFUL**: core 165 tests + app 140 tests, **0 failures, 0 errors**, 2 env-skips
   (host-native JNI + jfk replay, need the host native build/CI).
 - Walls: `scan-weak-tests PASS`, `scan-mocks PASS`, `scan-oracle-copy PASS`.
-- APK `app/build/outputs/apk/debug/app-debug.apk` 9,054,349 B, signed by the committed key
+- APK `app/build/outputs/apk/debug/app-debug.apk` 9,170,241 B, signed by the committed key
   (SHA-256 `0aae920be5363081f479c65fd9165ecd9c523ac4bab53c55212885259275dfac`).
 
 ## Device expectations (build #2)
