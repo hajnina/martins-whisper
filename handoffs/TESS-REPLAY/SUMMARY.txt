@@ -1,0 +1,7 @@
+DEVICE-REPORT 1e done: scripts/replay-wav.sh replays any 16 kHz mono WAV through the real
+DictationService -> capture buffer -> engine host -> whisper.cpp JNI -> TranscriptGate path.
+jfk asserts literal words + SPEAK; a dBFS sweep (-60..-20) proves one gate flip (REJECT at
+-37.5, SPEAK at -37.0; declared threshold -36.48). Gate: 269 tests, 0 failures, 2 env skips;
+assembleDebug + assembleDebugAndroidTest green; v1 scanners pass. Host build fixes: SONAME
+symlinks, CC/CMake wiring, glibc-compatible compiler trap (nix gcc -> GLIBC_2.44, JVM on 2.36).
+Branch agent/replay1, commits 964ac87/e6b724f + handoff commit. No production/capture/gate code changed.

@@ -38,4 +38,5 @@ research/model-bench/raw-from-pm/repos/
 
 # Owner flash loop: downloaded CI APKs and voice recordings (personal data)
 dist/
+# Human voice recordings and pulled debug audio stay local (DEVICE-REPORT #1).
 recordings/
