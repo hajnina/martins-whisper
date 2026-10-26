@@ -1,6 +1,6 @@
 # Martins Whisper
 
-Local-only, hold-to-talk dictation for Android. Tap the floating bubble in any app, speak,
+Local-only, tap-to-talk dictation for Android. Tap the floating bubble in any app, speak,
 tap again, and the transcript is inserted into the focused text field. Whisper runs on-device
 via whisper.cpp; audio and text never leave the phone. No account, no telemetry.
 
