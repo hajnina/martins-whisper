@@ -22,6 +22,10 @@ android {
     namespace = "com.martins.whisper"
     compileSdk = 35
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     defaultConfig {
         applicationId = "com.martins.whisper"
         minSdk = 29

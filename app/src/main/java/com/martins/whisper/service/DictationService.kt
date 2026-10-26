@@ -20,10 +20,13 @@ import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import com.martins.whisper.BuildConfig
 import com.martins.whisper.MainActivity
 import com.martins.whisper.R
 import com.martins.whisper.accessibility.AccessibilityInserter
+import com.martins.whisper.core.SpeechEnvelope
 import com.martins.whisper.service.AccessibilityTextInserter
+import com.martins.whisper.asr.WhisperCppEngine
 import com.martins.whisper.audio.AudioRecordSource
 import com.martins.whisper.audio.AudioSource
 import com.martins.whisper.core.AudioEnergy
@@ -69,6 +72,10 @@ class DictationService : Service() {
     private var watchdogJob: Job? = null
     private var stateResetJob: Job? = null
     private var lastNotificationKey: String? = null
+    private var loadStartElapsed = 0L
+
+    @Volatile
+    private var telemetry: DictationTelemetry? = null
 
     private val overlayListener = object : MicBubbleView.Listener {
         override fun onPress() = this@DictationService.onPress()
@@ -145,7 +152,14 @@ class DictationService : Service() {
         val modelName = settings.customModels.firstOrNull { it.id == settings.modelId }?.displayName
             ?: ModelCatalog.byId(settings.modelId)?.displayName
             ?: settings.modelId
+        telemetry = null
+        val tm = telemetryFactory(this)
+        telemetry = tm
+        tm?.tTapStart = SystemClock.elapsedRealtime()
+        tm?.model = settings.modelId
+        tm?.threads = WhisperCppEngine.DEFAULT_THREADS
         publishState(DictationState.Loading("Loading $modelName\u2026"))
+        loadStartElapsed = SystemClock.elapsedRealtime()
 
         if (!hasMicrophonePermission()) {
             fail(getString(R.string.error_mic))
@@ -153,6 +167,8 @@ class DictationService : Service() {
         }
         ensureForeground(withMicrophone = true)
         if (!startAudio(id)) return
+        tm?.tMicOpen = SystemClock.elapsedRealtime()
+        tm?.sampleRate = SAMPLE_RATE
 
         val modelId = settings.modelId
         scope.launch {
@@ -161,6 +177,7 @@ class DictationService : Service() {
                     engineHost.prepare(modelId)
                     engineHost.load()
                 }
+                telemetry?.engineLoadMs = SystemClock.elapsedRealtime() - loadStartElapsed
             } catch (t: Throwable) {
                 if (pressed && id == sessionId) fail(t.message ?: "Engine failed to load")
                 return@launch
@@ -264,42 +281,79 @@ class DictationService : Service() {
         val samples = captured.toFloatArray()
         val durationMs = captured.durationMs()
         val energy = AudioEnergy.of(samples)
-        Log.d(
-            TAG,
-            "captured ${samples.size} samples (${durationMs} ms) peak=${energy.peak} rms=${energy.rms}",
-        )
         publishState(DictationState.Processing())
+        val tapStopElapsed = SystemClock.elapsedRealtime()
+        val envelope = SpeechEnvelope.of(samples)
+        Log.d(TAG, "captured ${samples.size} samples (${durationMs} ms) ${envelope.gateLog()}")
+        telemetry?.tTapStop = tapStopElapsed
+        telemetry?.audioMs = durationMs
+        telemetry?.peakDbfs = envelope.peakDb
+        telemetry?.rmsDbfs = SpeechEnvelope.toDbfs(energy.rms)
+        telemetry?.noiseFloorDbfs = envelope.floorDb
+        telemetry?.gateThresholdDb = SpeechEnvelope.GATE_MARGIN_DB
+        if (BuildConfig.DEBUG) {
+            val dumpPath = DebugWavDump.dump(filesDir, System.currentTimeMillis(), samples, "")
+            Log.d(TAG, "debug WAV dump: $dumpPath")
+        }
         if (energy.isDigitalSilence) {
+            telemetry?.gateVerdict = "silent-mic"
+            telemetry?.publishTelemetry(result = "error", error = TranscriptGate.SILENT_MIC_MESSAGE)
             publishState(DictationState.Error(TranscriptGate.SILENT_MIC_MESSAGE))
             scheduleReset()
             return
         }
-        val speech = speechDetected
+        val speech = envelope.isSpeech
+        if (!speech) {
+            telemetry?.gateVerdict = "no-speech"
+            val message = envelope.gateMessage()
+            telemetry?.publishTelemetry(result = "error", error = message)
+            publishState(DictationState.Error(message))
+            scheduleReset()
+            return
+        }
+        telemetry?.gateVerdict = "speak"
+        telemetry?.language = settings.effectiveLanguage() ?: "auto"
         val language = settings.effectiveLanguage()
+        val inferStart = SystemClock.elapsedRealtime()
         scope.launch {
             try {
                 val transcript = withContext(Dispatchers.Default) {
                     engineHost.transcribe(samples, durationMs, language)
                 }
+                telemetry?.engineInferMs = SystemClock.elapsedRealtime() - inferStart
                 val text = when (val decision = TranscriptGate.evaluate(transcript.text, speech, energy.peak)) {
                     is TranscriptGate.Decision.Reject -> {
+                        telemetry?.publishTelemetry(result = "rejected", error = decision.reason)
                         publishState(DictationState.Error(decision.message))
                         scheduleReset()
                         return@launch
                     }
                     is TranscriptGate.Decision.Speak -> decision.text
                 }
+                telemetry?.textLen = text.length
                 emitTranscript(text)
                 val result = inserterFactory(this@DictationService).insert(text)
+                telemetry?.tInserted = SystemClock.elapsedRealtime()
                 val (message, inserted) = when (result) {
                     InsertResult.Inserted -> "Inserted" to true
                     is InsertResult.Copied -> "Transcript copied to clipboard" to true
                     is InsertResult.Failed -> "Copy failed: ${result.reason}" to false
                     is InsertResult.Rejected -> "Nothing inserted: ${result.reason}" to false
                 }
-                publishState(
-                    if (inserted) DictationState.Success(message) else DictationState.Error(message),
-                )
+                telemetry?.insertMethod = when (result) {
+                    is InsertResult.Copied -> "clipboard"
+                    else -> "accessibility"
+                }
+                telemetry?.targetPackage = AccessibilityInserter.lastTargetPackage
+                telemetry?.targetChanged = (result as? InsertResult.Rejected)?.reason
+                    ?.contains("target changed") == true || AccessibilityInserter.lastTargetChanged == true
+                if (inserted) {
+                    telemetry?.publishTelemetry(result = "inserted", error = null)
+                    publishState(DictationState.Success(message))
+                } else {
+                    telemetry?.publishTelemetry(result = "insert-failed", error = message)
+                    publishState(DictationState.Error(message))
+                }
                 updateNotification(
                     if (inserted) DictationState.Success(message) else DictationState.Error(message),
                     force = true,
@@ -336,6 +390,9 @@ class DictationService : Service() {
         timerJob?.cancel()
         stopAudio()
         engineHost.cancelSession()
+        telemetry?.error = message
+        telemetry?.publishTelemetry(result = "error", error = message)
+        telemetry = null
         publishState(DictationState.Error(message))
         scheduleReset()
     }
@@ -546,6 +603,11 @@ class DictationService : Service() {
         /** Captures the focused field at the START tap so insertion can verify the target later. */
         @Volatile
         internal var targetCapture: () -> Unit = { AccessibilityInserter.captureTargetAtStart() }
+
+        /** Per-session telemetry builder; null on release builds. */
+        @Volatile
+        internal var telemetryFactory: (Context) -> DictationTelemetry? =
+            { if (BuildConfig.DEBUG) DictationTelemetry(TelemetryRecorder.forContext(it)) else null }
 
         fun start(context: Context) {
             val intent = Intent(context, DictationService::class.java).setAction(ACTION_START)

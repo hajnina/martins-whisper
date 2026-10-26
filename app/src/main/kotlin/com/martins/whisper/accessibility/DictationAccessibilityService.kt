@@ -101,6 +101,7 @@ class DictationAccessibilityService : AccessibilityService(), TextInserter {
             null
         }
         startTarget = captured
+        AccessibilityInserter.noteTarget(captured?.packageName)
         return captured != null
     }
 
@@ -112,6 +113,7 @@ class DictationAccessibilityService : AccessibilityService(), TextInserter {
         try {
             val live = node.toSnapshot()
             if (!TargetGuard.stillSameTarget(captured, live)) {
+                AccessibilityInserter.noteTargetChanged()
                 return InsertResult.Rejected("target changed")
             }
             return when (val route = InsertionPolicy.route(live, packageName, text)) {
@@ -299,6 +301,25 @@ class DictationAccessibilityService : AccessibilityService(), TextInserter {
 object AccessibilityInserter {
     private val _connected = MutableStateFlow(false)
     val connected: StateFlow<Boolean> = _connected.asStateFlow()
+
+    /** Telemetry: package of the field captured at the last START tap; null when none. */
+    @Volatile
+    var lastTargetPackage: String? = null
+        private set
+
+    fun noteTarget(packageName: String?) {
+        lastTargetPackage = packageName
+        lastTargetChanged = false
+    }
+
+    fun noteTargetChanged() {
+        lastTargetChanged = true
+    }
+
+    /** Telemetry: whether the last insert was refused because the target changed. */
+    @Volatile
+    var lastTargetChanged: Boolean? = null
+        private set
 
     @Volatile
     private var service: DictationAccessibilityService? = null
