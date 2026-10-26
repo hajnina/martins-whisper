@@ -14,9 +14,9 @@
 3. H1 device session (blocked: Martin's phone).
 
 ## NEXT (ordered)
-1. MFVP-1: launch CODER worker (branch agent/mfvp1-inserter, default model, wip commits) -> I merge with gate `:core:test :app:testDebugUnitTest :app:assembleDebug --offline`.
-2. MFVP-2: same pattern if worker capacity allows.
-3. MFVP-3 model sanity: confirm one-tap base/tiny download + SHA w/ G3a loopback tests (G3a already merged; verify once in a session, no rebuild).
+1. MFVP-1: CODER launched in background, branch `agent/mfvp1-inserter`, worktree mfvp1 -> I merge with gate `:core:test :app:testDebugUnitTest :app:assembleDebug --offline`.
+2. MFVP-3 model sanity: **DONE, verified on master** - SettingsStore DEFAULT_MODEL_ID="base" (SettingsStore.kt:102), one-tap download w/ progress in ModelBrowser.kt:149; HttpModelDownloaderTest covers happy path, resume mid-body, sha-mismatch rejection. Single default, nothing to build.
+3. MFVP-2 FEEL polish (haptics/bubble focus) after MFVP-1 merge.
 4. H1: ask in owner/ASKS.md once more, concretely (need Martin's phone on same Wi-Fi + dev options, wireless adb pair).
 5. Owner pushes master; verify CI green + native APK artifact.
 
