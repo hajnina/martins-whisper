@@ -2,6 +2,7 @@ package com.martins.whisper.audio
 
 import android.media.MediaRecorder
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -39,6 +40,18 @@ class AudioRecordSourceTest {
                 supportsUnprocessed = true,
             ),
         )
+    }
+
+    @Test
+    fun `fallback needs the full probe window of exact digital silence`() {
+        assertTrue(AudioRecordSource.shouldFallBack(25, 0))
+        assertTrue("more frames of digital silence also qualify", AudioRecordSource.shouldFallBack(30, 0))
+        assertFalse("one frame short must not switch", AudioRecordSource.shouldFallBack(24, 0))
+        assertFalse(
+            "quiet room noise (peak 1) is not a dead source",
+            AudioRecordSource.shouldFallBack(25, 1),
+        )
+        assertFalse("a loud frame resets the decision", AudioRecordSource.shouldFallBack(25, 8))
     }
 
     @Test

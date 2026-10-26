@@ -27,10 +27,12 @@ import kotlin.math.sqrt
  *      (bypasses OEM AGC/NS if MIC is processed into silence)
  *   3. [MediaRecorder.AudioSource.VOICE_RECOGNITION] (last resort; optional per device)
  *
- * If the chosen source initialises but only produces digital silence for the first ~300 ms, the
- * capture thread transparently reopens the recorder with the next candidate. The probe only
- * fires on a dead source (peak <= [DEAD_SOURCE_PEAK]); an ordinary quiet room has higher peaks,
- * so a user who waits before speaking is not switched.
+ * If the chosen source initialises but only produces exact digital silence, the capture thread
+ * transparently reopens the recorder with the next candidate: 400 ms of warm-up are ignored and
+ * the switch needs 500 ms of peak == [DEAD_SOURCE_PEAK] (0). An ordinary quiet room, or a user
+ * who waits before speaking, is never switched. If the next source cannot be opened or started,
+ * the previous one is reopened and the capture continues; a failed fallback never aborts a
+ * running session (the gate/telemetry report a genuinely silent mic).
  */
 class AudioRecordSource(
     private val context: Context,
@@ -101,6 +103,7 @@ class AudioRecordSource(
                 }
 
                 val frame = ShortArray(frameSamples)
+                var warmupFrames = 0
                 var probeFrames = 0
                 var probePeak = 0
                 var zeroReads = 0
@@ -108,35 +111,54 @@ class AudioRecordSource(
                     val read = current.read(frame, 0, frame.size)
                     if (read > 0) {
                         zeroReads = 0
-                        if (probeFrames < PROBE_FRAMES) {
+                        if (warmupFrames < PROBE_WARMUP_FRAMES) {
+                            // The HAL can deliver zeros while the route opens; that is not a
+                            // dead source and must never trigger a switch.
+                            warmupFrames++
+                        } else if (probeFrames < PROBE_FRAMES) {
                             probePeak = maxOf(probePeak, peakOf(frame, read))
                             probeFrames++
                         }
                         val copy = if (read == frame.size) frame.copyOf() else frame.copyOf(read)
                         onFrame(copy, SystemClock.elapsedRealtime())
 
-                        if (preferredSource == null && probeFrames == PROBE_FRAMES &&
-                            probePeak <= DEAD_SOURCE_PEAK && index < candidates.lastIndex
+                        if (preferredSource == null && shouldFallBack(probeFrames, probePeak) &&
+                            index < candidates.lastIndex
                         ) {
-                            index++
-                            val next = candidates[index]
+                            val previous = activeSource
+                            val nextIndex = index + 1
+                            val next = candidates[nextIndex]
                             Log.w(
                                 TAG,
-                                "capture: ${sourceNameFor(activeSource)} returned only silence " +
-                                    "(peak=$probePeak); retrying with ${sourceNameFor(next)}",
+                                "capture: ${sourceNameFor(previous)} returned only digital silence " +
+                                    "(peak=$probePeak); trying ${sourceNameFor(next)}",
                             )
                             runCatching { current.stop() }
                             current.release()
-                            current = open(next, bufferBytes, sampleRate)
-                                ?: throw IllegalStateException(
-                                    "Could not open fallback microphone source ${sourceNameFor(next)}",
+                            // Skip a candidate that failed once for the rest of this session.
+                            index = nextIndex
+                            val switched = startSource(next, bufferBytes, sampleRate)
+                            if (switched != null) {
+                                current = switched
+                                activeSource = next
+                                Log.i(TAG, "capture: switched to ${sourceNameFor(next)}")
+                            } else {
+                                // A failed fallback must never abort a capture that was running.
+                                Log.w(
+                                    TAG,
+                                    "capture: ${sourceNameFor(next)} unavailable; keeping " +
+                                        sourceNameFor(previous),
                                 )
-                            recorder = current
-                            activeSource = next
-                            current.startRecording()
-                            if (current.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
-                                throw IllegalStateException("Fallback source ${sourceNameFor(next)} did not start")
+                                val restored = startSource(previous, bufferBytes, sampleRate)
+                                    ?: throw IllegalStateException(
+                                        "No usable microphone source after fallback " +
+                                            "(tried ${sourceNameFor(next)}, ${sourceNameFor(previous)})",
+                                    )
+                                current = restored
+                                activeSource = previous
                             }
+                            recorder = current
+                            warmupFrames = 0
                             probeFrames = 0
                             probePeak = 0
                         }
@@ -172,7 +194,10 @@ class AudioRecordSource(
     }
 
     override fun stop() {
-        running.set(false)
+        val wasRunning = running.getAndSet(false)
+        if (wasRunning) {
+            Log.i(TAG, "capture stop requested (source=${sourceNameFor(activeSource)})")
+        }
         thread?.join(STOP_JOIN_MS)
         thread = null
     }
@@ -188,8 +213,11 @@ class AudioRecordSource(
         private const val TAG = "MartinsWhisper"
         private const val BUFFER_MULTIPLIER = 4
         private const val BUFFER_FRAMES = 8
-        private const val PROBE_FRAMES = 15
-        private const val DEAD_SOURCE_PEAK = 8
+        // 400 ms of warm-up is not probed: a HAL may deliver zeros while the route opens.
+        internal const val PROBE_WARMUP_FRAMES = 20
+        // Then 500 ms of *exact* digital silence (peak == 0), not merely a quiet room.
+        internal const val PROBE_FRAMES = 25
+        internal const val DEAD_SOURCE_PEAK = 0
         private const val MAX_ZERO_READS = 400
         private const val ZERO_READ_BACKOFF_MS = 5L
         private const val STOP_JOIN_MS = 500L
@@ -230,6 +258,31 @@ class AudioRecordSource(
                 sum += normalized * normalized
             }
             return sqrt(sum / samples.size).toFloat().coerceIn(0f, 1f)
+        }
+
+        /**
+         * A source is dead only after the warm-up and [PROBE_FRAMES] consecutive frames of exact
+         * digital silence. A quiet room or a user who waits before speaking stays above zero.
+         */
+        internal fun shouldFallBack(probedFrames: Int, peak: Int): Boolean =
+            probedFrames >= PROBE_FRAMES && peak <= DEAD_SOURCE_PEAK
+
+        /** Opens and starts [source]; returns null instead of throwing when it cannot be used. */
+        private fun startSource(source: Int, bufferBytes: Int, sampleRate: Int): AudioRecord? {
+            val recorder = open(source, bufferBytes, sampleRate) ?: return null
+            return try {
+                recorder.startRecording()
+                if (recorder.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+                    recorder.release()
+                    null
+                } else {
+                    recorder
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "capture: ${sourceNameFor(source)} failed to start: ${t.message}")
+                runCatching { recorder.release() }
+                null
+            }
         }
 
         private fun peakOf(samples: ShortArray, count: Int = samples.size): Int {
