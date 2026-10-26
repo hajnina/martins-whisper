@@ -19,6 +19,7 @@ import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.CompoundButton
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.Switch
@@ -37,9 +38,14 @@ import com.martins.whisper.core.asr.ModelRepository
 import com.martins.whisper.data.SettingsStore
 import com.martins.whisper.service.DictationService
 import com.martins.whisper.service.DictationState
+import com.martins.whisper.ui.ModelAction
+import com.martins.whisper.ui.ModelBrowser
+import com.martins.whisper.ui.ModelPresentation
+import com.martins.whisper.ui.ModelTransfer
 import com.martins.whisper.ui.PermissionGate
 import com.martins.whisper.ui.PermissionSnapshot
 import java.io.File
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -54,22 +60,20 @@ class MainActivity : ComponentActivity() {
     private lateinit var accessibilityStatus: TextView
     private lateinit var notificationsStatus: TextView
     private lateinit var overlayButton: Button
-    private lateinit var modelSpinner: Spinner
-    private lateinit var modelStatus: TextView
-    private lateinit var modelProgress: TextView
+    private lateinit var modelContainer: LinearLayout
+    private lateinit var modelProgressBar: ProgressBar
+    private lateinit var modelTransferView: TextView
     private lateinit var diagnosticsView: TextView
-    private lateinit var downloadButton: Button
-    private lateinit var importButton: Button
-    private lateinit var deleteButton: Button
+    private lateinit var modelBrowser: ModelBrowser
     private var bootSwitch: Switch? = null
-    private var suppressSpinnerCallbacks = false
+    private var pendingImportId: String? = null
 
     private val repository: ModelRepository by lazy { ModelRepositoryProvider.forContext(this) }
 
-    private var modelBusy = false
-
-    private val importModel = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) importModelFrom(uri)
+    private val importDocument = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val id = pendingImportId
+        pendingImportId = null
+        if (uri != null && id != null) importModelFrom(id, uri)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -168,59 +172,23 @@ class MainActivity : ComponentActivity() {
         root.addView(overlayButton, matchWidth())
 
         root.addView(section(getString(R.string.section_model)))
-        root.addView(label(getString(R.string.model_label)))
-        modelSpinner = Spinner(this)
-        modelSpinner.adapter = spinnerAdapter(ModelCatalog.specs.map { it.displayName })
-        val modelIndex = ModelCatalog.specs.indexOfFirst { it.id == settings.modelId }.coerceAtLeast(0)
-        suppressSpinnerCallbacks = true
-        modelSpinner.setSelection(modelIndex, false)
-        suppressSpinnerCallbacks = false
-        modelSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                if (suppressSpinnerCallbacks) return
-                settings.modelId = ModelCatalog.specs[position].id
-                modelProgress.text = ""
-                refreshModelPanel()
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        modelBrowser = ModelBrowser(ModelCatalog.specs, installedModelIds(), settings.modelId)
+        modelContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(modelContainer, matchWidth())
+        modelProgressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100
+            visibility = View.GONE
         }
-        root.addView(modelSpinner, matchWidth())
-
-        modelStatus = body("").apply {
+        root.addView(modelProgressBar, matchWidth())
+        modelTransferView = caption("").apply {
+            visibility = View.GONE
             setPadding(0, dp(4), 0, dp(4))
         }
-        root.addView(modelStatus)
-
-        val modelButtons = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        downloadButton = Button(this).apply {
-            text = getString(R.string.model_download)
-            setOnClickListener { downloadSelectedModel() }
-        }
-        importButton = Button(this).apply {
-            text = getString(R.string.model_import)
-            setOnClickListener { importModel.launch(arrayOf("*/*")) }
-        }
-        deleteButton = Button(this).apply {
-            text = getString(R.string.model_delete)
-            setOnClickListener { deleteSelectedModel() }
-        }
-        val buttonParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-        modelButtons.addView(downloadButton, buttonParams)
-        modelButtons.addView(importButton, buttonParams)
-        modelButtons.addView(deleteButton, buttonParams)
-        root.addView(modelButtons, matchWidth())
-
-        modelProgress = caption("").apply {
-            setPadding(0, dp(4), 0, dp(4))
-        }
-        root.addView(modelProgress)
+        root.addView(modelTransferView)
         root.addView(caption(getString(R.string.model_note)).apply {
             setPadding(0, dp(4), 0, dp(10))
         })
+        renderModels()
 
         root.addView(section(getString(R.string.section_asr)))
         root.addView(label(getString(R.string.language_label)))
@@ -289,35 +257,204 @@ class MainActivity : ComponentActivity() {
         root.addView(caption(getString(R.string.diagnostics_text)).apply {
             setPadding(0, 0, 0, dp(8))
         })
+        updateDiagnostics()
         return scroll
     }
 
-    private fun selectedSpec(): ModelSpec =
-        ModelCatalog.specs[modelSpinner.selectedItemPosition.coerceIn(0, ModelCatalog.specs.lastIndex)]
+    private fun installedModelIds(): Set<String> =
+        ModelCatalog.specs.asSequence()
+            .filter { repository.isInstalled(it) }
+            .map { it.id }
+            .toSet()
 
-    private fun refreshModelPanel() {
-        if (!::modelStatus.isInitialized) return
-        val spec = selectedSpec()
-        val installed = repository.isInstalled(spec)
-        val sizeMb = formatMegabytes(spec.sizeBytes)
-        modelStatus.text = if (installed) {
-            getString(R.string.model_installed)
-        } else {
-            getString(R.string.model_not_installed, sizeMb)
+    private fun renderModels() {
+        if (!::modelContainer.isInitialized) return
+        modelContainer.removeAllViews()
+        val state = modelBrowser.state
+        for (row in state.rows) {
+            val spec = row.spec
+            val box = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(0, dp(8), 0, dp(10))
+                isClickable = true
+                setOnClickListener { selectModel(spec.id) }
+            }
+
+            val header = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            header.addView(body(spec.displayName).apply {
+                setTypeface(typeface, Typeface.BOLD)
+                setTextColor(if (row.selected) Color.rgb(19, 93, 102) else Color.rgb(35, 42, 46))
+                layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            header.addView(caption(ModelPresentation.sizeLabel(spec.sizeBytes)))
+            box.addView(header)
+
+            box.addView(caption(ModelPresentation.statusLabel(row.installed, row.selected)).apply {
+                setTextColor(if (row.installed) Color.rgb(19, 120, 70) else Color.rgb(170, 90, 20))
+            })
+            if (spec.notes.isNotBlank()) box.addView(caption(spec.notes))
+
+            val actions = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(0, dp(4), 0, 0)
+            }
+            if (!row.installed && spec.url != null) {
+                actions.addView(actionButton(R.string.model_download, !state.isBusy) {
+                    downloadModel(spec.id)
+                })
+            }
+            actions.addView(actionButton(R.string.model_import, !state.isBusy) {
+                pickImport(spec.id)
+            })
+            if (row.installed) {
+                actions.addView(actionButton(R.string.model_delete, !state.isBusy) {
+                    deleteModel(spec.id)
+                })
+            }
+            box.addView(actions)
+            modelContainer.addView(box, matchWidth())
         }
-        modelStatus.setTextColor(
-            if (installed) Color.rgb(19, 120, 70) else Color.rgb(170, 90, 20),
-        )
-        downloadButton.isEnabled = !modelBusy && !installed && spec.url != null
-        importButton.isEnabled = !modelBusy
-        deleteButton.isEnabled = !modelBusy && installed
-        refreshDiagnostics()
+        state.error?.let {
+            modelContainer.addView(caption(it).apply { setTextColor(Color.rgb(180, 40, 40)) })
+        }
+        state.message?.let {
+            modelContainer.addView(caption(it).apply { setTextColor(Color.rgb(19, 93, 102)) })
+        }
+        renderTransfer()
     }
 
-    private fun refreshDiagnostics() {
+    private fun renderTransfer() {
+        if (!::modelProgressBar.isInitialized) return
+        val transfer = modelBrowser.state.transfer
+        if (transfer == null) {
+            modelProgressBar.visibility = View.GONE
+            modelTransferView.visibility = View.GONE
+            return
+        }
+        val displayName = ModelCatalog.byId(transfer.modelId)?.displayName ?: transfer.modelId
+        val fraction = when (transfer) {
+            is ModelTransfer.Download -> transfer.fraction
+            is ModelTransfer.Import -> transfer.fraction
+            is ModelTransfer.Delete -> null
+        }
+        modelProgressBar.visibility = View.VISIBLE
+        modelProgressBar.isIndeterminate = fraction == null
+        if (fraction != null) modelProgressBar.progress = (fraction * 100).roundToInt()
+        modelTransferView.visibility = View.VISIBLE
+        modelTransferView.text = ModelPresentation.transferLabel(transfer, displayName)
+    }
+
+    private fun actionButton(label: Int, enabled: Boolean, onClick: () -> Unit): Button =
+        Button(this).apply {
+            setText(label)
+            isEnabled = enabled
+            minWidth = 0
+            minimumWidth = 0
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            setOnClickListener { onClick() }
+        }
+
+    private fun selectModel(id: String) {
+        settings.modelId = id
+        modelBrowser.select(id)
+        renderModels()
+        updateDiagnostics()
+    }
+
+    private fun downloadModel(id: String) {
+        val spec = ModelCatalog.byId(id) ?: return
+        if (!modelBrowser.begin(id, ModelAction.DOWNLOAD)) return
+        renderModels()
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    repository.install(spec = spec) { progress -> publishProgress(progress) }
+                }
+                modelBrowser.completeInstalled(id)
+            } catch (t: Throwable) {
+                modelBrowser.fail(t.message ?: t.javaClass.simpleName)
+            }
+            renderModels()
+            updateDiagnostics()
+        }
+    }
+
+    private fun pickImport(id: String) {
+        pendingImportId = id
+        try {
+            importDocument.launch(arrayOf("*/*"))
+        } catch (t: Throwable) {
+            pendingImportId = null
+            modelBrowser.fail(t.message ?: "Cannot open the file picker")
+            renderModels()
+        }
+    }
+
+    private fun importModelFrom(id: String, uri: Uri) {
+        val spec = ModelCatalog.byId(id) ?: return
+        if (!modelBrowser.begin(id, ModelAction.IMPORT)) return
+        renderModels()
+        lifecycleScope.launch {
+            var temp: File? = null
+            try {
+                withContext(Dispatchers.IO) {
+                    val tempFile = File(cacheDir, "model-import-${System.currentTimeMillis()}.bin")
+                    temp = tempFile
+                    val input = contentResolver.openInputStream(uri)
+                        ?: error("Cannot open the selected file")
+                    input.use { source ->
+                        tempFile.outputStream().use { target -> source.copyTo(target) }
+                    }
+                    repository.importFile(spec = spec, source = tempFile) { progress ->
+                        publishProgress(progress)
+                    }
+                }
+                modelBrowser.completeInstalled(id)
+            } catch (t: Throwable) {
+                modelBrowser.fail(t.message ?: t.javaClass.simpleName)
+            } finally {
+                temp?.delete()
+            }
+            renderModels()
+            updateDiagnostics()
+        }
+    }
+
+    private fun deleteModel(id: String) {
+        val spec = ModelCatalog.byId(id) ?: return
+        if (!modelBrowser.begin(id, ModelAction.DELETE)) return
+        renderModels()
+        lifecycleScope.launch {
+            try {
+                val deleted = withContext(Dispatchers.IO) { repository.delete(spec) }
+                if (deleted) {
+                    modelBrowser.completeDeleted(id)
+                } else {
+                    modelBrowser.fail("Model file was already absent")
+                }
+            } catch (t: Throwable) {
+                modelBrowser.fail(t.message ?: t.javaClass.simpleName)
+            }
+            renderModels()
+            updateDiagnostics()
+        }
+    }
+
+    private fun publishProgress(progress: DownloadProgress) {
+        val fraction = progress.fraction
+        runOnUiThread {
+            if (isFinishing || isDestroyed) return@runOnUiThread
+            modelBrowser.progress(fraction)
+            renderTransfer()
+        }
+    }
+
+    private fun updateDiagnostics() {
         if (!::diagnosticsView.isInitialized) return
-        val spec = selectedSpec()
-        val installed = repository.isInstalled(spec)
+        val engine = settings.engineState
         val nativeAvailable = WhisperCppEngine.isNativeAvailable
         val lines = buildList {
             add(
@@ -331,117 +468,16 @@ class MainActivity : ComponentActivity() {
             if (!nativeAvailable) {
                 WhisperCppEngine.nativeLoadError?.let { add(getString(R.string.diag_native_error, it)) }
             }
-            add(
-                getString(
-                    R.string.diag_model,
-                    spec.displayName,
-                    getString(if (installed) R.string.diag_installed else R.string.diag_not_installed),
-                ),
-            )
-            add(getString(R.string.diag_backend, settings.lastBackend ?: getString(R.string.diag_backend_unloaded)))
-            settings.lastFallbackReason?.let { add(getString(R.string.diag_fallback, it)) }
-            if (settings.gpuFailureCount > 0) {
-                add(getString(R.string.diag_gpu_failures, settings.gpuFailureCount))
-            }
-            settings.lastEngineError?.let { add(getString(R.string.diag_last_error, it)) }
-            if (settings.lastBackend == null && settings.lastEngineError == null) {
+            add(getString(R.string.diag_backend, engine.activeBackend ?: getString(R.string.diag_backend_unloaded)))
+            add(getString(R.string.diag_fallback, ModelPresentation.fallbackLabel(engine.fallbackReason)))
+            add(getString(R.string.diag_gpu_failures, engine.gpuFailureCount))
+            engine.lastError?.let { add(getString(R.string.diag_last_error, it)) }
+            if (engine.activeBackend == null && engine.lastError == null) {
                 add(getString(R.string.diag_idle))
             }
         }
         diagnosticsView.text = lines.joinToString("\n")
     }
-
-    private fun downloadSelectedModel() {
-        val spec = selectedSpec()
-        val url = spec.url ?: return
-        setModelBusy(true)
-        modelProgress.text = getString(R.string.model_progress, spec.displayName, 0)
-        lifecycleScope.launch {
-            try {
-                withContext(Dispatchers.IO) {
-                    repository.install(spec = spec) { progress ->
-                        postProgress(spec, progress)
-                    }
-                }
-                modelProgress.text = getString(R.string.model_ready, spec.displayName)
-            } catch (t: Throwable) {
-                modelProgress.text = getString(
-                    R.string.model_failed,
-                    t.message ?: t.javaClass.simpleName,
-                )
-            } finally {
-                setModelBusy(false)
-                refreshModelPanel()
-            }
-        }
-    }
-
-    private fun importModelFrom(uri: Uri) {
-        val spec = selectedSpec()
-        setModelBusy(true)
-        modelProgress.text = getString(R.string.model_progress, spec.displayName, 0)
-        lifecycleScope.launch {
-            var temp: File? = null
-            try {
-                val tempFile = File(cacheDir, "model-import-${System.currentTimeMillis()}.bin")
-                temp = tempFile
-                withContext(Dispatchers.IO) {
-                    val input = contentResolver.openInputStream(uri)
-                        ?: error("Cannot open the selected file")
-                    input.use { source ->
-                        tempFile.outputStream().use { target -> source.copyTo(target) }
-                    }
-                    repository.importFile(spec = spec, source = tempFile) { progress ->
-                        postProgress(spec, progress)
-                    }
-                }
-                modelProgress.text = getString(R.string.model_ready, spec.displayName)
-            } catch (t: Throwable) {
-                modelProgress.text = getString(
-                    R.string.model_failed,
-                    t.message ?: t.javaClass.simpleName,
-                )
-            } finally {
-                temp?.delete()
-                setModelBusy(false)
-                refreshModelPanel()
-            }
-        }
-    }
-
-    private fun deleteSelectedModel() {
-        val spec = selectedSpec()
-        val deleted = runCatching { repository.delete(spec) }.getOrDefault(false)
-        modelProgress.text = getString(
-            if (deleted) R.string.model_deleted else R.string.model_delete_missing,
-            spec.displayName,
-        )
-        refreshModelPanel()
-    }
-
-    private fun setModelBusy(busy: Boolean) {
-        modelBusy = busy
-        modelSpinner.isEnabled = !busy
-        if (busy) {
-            downloadButton.isEnabled = false
-            importButton.isEnabled = false
-            deleteButton.isEnabled = false
-        } else {
-            refreshModelPanel()
-        }
-    }
-
-    private fun postProgress(spec: ModelSpec, progress: DownloadProgress) {
-        val percent = progress.fraction?.let { (it * 100).toInt() } ?: 0
-        runOnUiThread {
-            if (!isFinishing) {
-                modelProgress.text = getString(R.string.model_progress, spec.displayName, percent)
-            }
-        }
-    }
-
-    private fun formatMegabytes(bytes: Long?): String =
-        bytes?.let { "%.0f".format(it / 1_048_576.0) } ?: "?"
 
     private fun languageSpinner(languages: List<Pair<String, String>>): Spinner {
         val spinner = Spinner(this)
@@ -490,7 +526,11 @@ class MainActivity : ComponentActivity() {
             getString(R.string.start_overlay)
         }
         bootSwitch?.isChecked = settings.bootStart
-        if (::modelStatus.isInitialized) refreshModelPanel()
+        if (::modelBrowser.isInitialized) {
+            modelBrowser.syncInstalled(installedModelIds())
+            renderModels()
+            updateDiagnostics()
+        }
     }
 
     private fun observeService() {
