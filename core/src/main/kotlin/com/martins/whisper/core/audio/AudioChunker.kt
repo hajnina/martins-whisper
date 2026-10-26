@@ -140,7 +140,7 @@ class AudioChunker(
         val cutEnd = chunk[cutIndex].endMs
         val emittedFrames = chunk.subList(0, cutIndex + 1).toList()
         val overlapStart = cutEnd - OVERLAP_MS
-        val overlapTail = tailFrom(overlapStart)
+        val overlapTail = tailFrom(overlapStart, cutIndex)
         val afterCut = chunk.subList(cutIndex + 1, chunk.size).toList()
         val remaining = (overlapTail + afterCut).toMutableList()
 
@@ -157,9 +157,10 @@ class AudioChunker(
         return emitted
     }
 
-    private fun tailFrom(fromMs: Long): MutableList<BufferedFrame> {
+    private fun tailFrom(fromMs: Long, lastIndex: Int): MutableList<BufferedFrame> {
         val result = mutableListOf<BufferedFrame>()
-        for (frame in chunk) {
+        for (index in 0..lastIndex) {
+            val frame = chunk[index]
             if (frame.endMs <= fromMs) continue
             if (frame.startMs >= fromMs) {
                 result.add(frame)

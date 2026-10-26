@@ -1,0 +1,4 @@
+TESS-F1: fixed AudioChunker.splitAtMaxLength duplicating post-cut audio in the next chunk
+(tailFrom now stops at the cut frame). Added an exact 11_680-sample regression and a
+samples<=duration invariant to the random-stream test. Gate green: core 16/138, app 18/80,
+0 failures. No app/deps/scripts changes. F2-F6 remain out of scope.
