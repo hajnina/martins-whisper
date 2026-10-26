@@ -37,6 +37,30 @@ Logs: `/work/tess-t1/logs/tess2-w1-verify-final.log`, `.../tess2-w2-verify.log`.
 No skips, `@Ignore` or `assumeTrue` in the new tests. New tests use JUnit4 only, no new
 dependencies; the Gradle caches stayed offline (`gh-t2-edge`, `gh-t2-svc` are private copies).
 
+### Integration check on current master (TESS)
+
+Master has since merged G2 (`01fa735`, gate 155/0) and is at `2dbac3e`. In a throwaway detached
+worktree (`/tmp/tess-t2-integration`, removed afterwards) TESS merged both branches with
+`git merge --no-ff`:
+
+```
+merge agent/t2-svc  -> clean, exit 0
+merge agent/t2-edge -> clean, exit 0
+```
+
+Full gate on the integrated tree (`:core:test :app:testDebugUnitTest :app:assembleDebug
+:app:assembleDebugAndroidTest`, `--rerun-tasks --offline`, `GRADLE_USER_HOME=/home/node/gh-tess`):
+
+```
+BUILD SUCCESSFUL
+core: 16 suites / 137 tests / 0 failures / 0 errors   (master 12/89 + 48)
+app : 17 suites /  72 tests / 0 failures / 0 errors   (master 15/66 + 6)
+app-debug.apk 8,970,737 B; app-debug-androidTest.apk 1,326,409 B
+```
+
+Log: `/work/tess-t1/logs/tess2-integration-gate.log`. Baseline master 155/0 + 48 + 6 = 209 tests,
+all green. The `handoffs/TESS-2/` additions from both branches coexist with no conflict.
+
 ## W1 — `agent/t2-edge` (tests commit `b7f0ae7`, then docs)
 
 New suites (48 tests): `TextInsertionPlannerEdgeTest` (13), `TextNormalizerEdgeTest` (10),
@@ -90,9 +114,10 @@ Findings recorded, no code changed: `MicBubbleView.contentDescription` is null u
 
 ## Merge order (MARA)
 
-1. `agent/g2-engine` first (`8497d83` is docs-only after the tested code `5494b79`).
-2. Then `agent/t2-svc` — it is based on G2 and adds tests only, expected conflict-free.
-3. Then `agent/t2-edge` — based on `master` `88d189a`, adds `core/src/test/**` only.
+1. ~~`agent/g2-engine`~~ — already merged as `01fa735`; master was `2dbac3e` at verification.
+2. `agent/t2-svc` — verified clean on current master (tests only).
+3. `agent/t2-edge` — verified clean on top of t2-svc (tests only). Either order works; the
+   integration check above used svc then edge.
 4. Separately, `agent/t1-harness` still has two unmerged commits from the T1 re-verify:
    `7211eab` (fail-closed `scripts/test-device-ready.sh`) and `667dba3` (T1 ticket closes +
    `handoffs/TESS-2/HANDOFF.md`). They are not in master; merge them too, otherwise the gate
@@ -101,13 +126,13 @@ Findings recorded, no code changed: `MicBubbleView.contentDescription` is null u
 
 After each merge run the branch's acceptance command; after all of them run
 `GRADLE_USER_HOME=/home/node/gh-tess scripts/test-device-ready.sh` (needs the T1 commit) and
-expect core 15/133 + app 17/72.
+expect core 16/137 + app 17/72.
 
 ## Risks / notes
 
-- `agent/t2-svc` inherits G2's unmerged commits. If ASHA changes `DictationService` semantics
-  (especially cancel-while-loading), the assertion "engine stays loaded after cancel" may need an
-  update; it is documenting current behaviour, not a requirement.
+- `agent/t2-svc` was written on G2 before it merged (G2 is now in master). If `DictationService`
+  semantics change later (especially cancel-while-loading), the assertion "engine stays loaded
+  after cancel" may need an update; it documents current behaviour, not a requirement.
 - F1 is a user-audible defect (duplicated speech in the next chunk) and should get a production
   ticket before H1; T2 deliberately does not fix it.
 - APK sha256 is not reproducible across rebuilds; test counts are.
