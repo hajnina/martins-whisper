@@ -200,7 +200,8 @@ bytes in the APK). The model is not bundled: it is downloaded/imported on device
 
 - **ABI:** `arm64-v8a` only. No x86/x86_64/armeabi-v7a in the v1 artifact. The workflow and
   `scripts/native-apk-check.sh` fail if another ABI appears.
-- **Size budget:** 20 MiB (20,971,520 bytes) for the debug APK; currently 12.9 MB. The check is
+- **Size budget:** 32 MiB (33,554,432 bytes) for the debug APK (20 MiB was the pre-Compose
+  budget; the Compose onboarding runtime adds ~12 MB of unminified debug dex). The check is
   `MAX_APK_BYTES` in `scripts/native-apk-check.sh`.
 - **Stripping:** AGP's `stripDebugDebugSymbols` runs for debug native builds; the check asserts
   every bundled `.so` has no `.debug_info` and still exports the JNI symbols.
