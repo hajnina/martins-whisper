@@ -1,5 +1,7 @@
 # Martins Whisper
 
+License: Apache-2.0 (see LICENSE)
+
 A local-only, hold-to-talk dictation app for **Android**, in Kotlin. Think "Wispr Flow clone" with no cloud:
 
 - Always-visible floating mic overlay. Hold it, speak, release.

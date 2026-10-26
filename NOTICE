@@ -1,0 +1,6 @@
+Martins Whisper
+Copyright 2026 The Martins Whisper authors
+
+This product includes software developed for on-device dictation on Android.
+It can build against whisper.cpp (MIT License, https://github.com/ggml-org/whisper.cpp)
+when compiled with -Pmartins.native=true; whisper.cpp is fetched at build time, not bundled in this repository.
