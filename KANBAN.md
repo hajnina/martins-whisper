@@ -20,13 +20,13 @@ Map: `.scratch/device-ready-apk/map.md` (10 decision tickets; local markdown). B
 
 ## In Progress / queued
 
+Provider LIMITED since 2026-10-26T19:01:38Z (`/work/.yoloseek/PROVIDER-STATUS.md`). All running tickets blocked: provider (see Blocked). No new workers.
+
 | ID | Deliverable | Owner / branch | Ticket | Handoff |
 |---|---|---|---|---|
-| T1-1 | Fake-audio -> fake-engine JVM E2E | TESS / `agent/t1-harness` | `build-tickets/T1-1-fake-e2e.md` | pending |
-| T1-2 | Instrumentation plan compiles; device-only run documented | TESS / `agent/t1-harness` | `build-tickets/T1-2-instrumentation-plan.md` | pending |
-| DORA-2 | Docs corrected to post-G1 reality (model UI, typed errors, native opt-in) | DORA / `agent/d1-docs` | inline in `agents/prompts/DORA-2-docs-post-g1.md` | pending |
-
-Provider: OK since 18:36:31Z (`/work/.yoloseek/PROVIDER-STATUS.md`). At most 2 workers at a time.
+| T1-1 | Fake-audio -> fake-engine JVM E2E | TESS / `agent/t1-harness` | `build-tickets/T1-1-fake-e2e.md` | blocked: provider 19:01:38Z |
+| T1-2 | Instrumentation plan compiles; device-only run documented | TESS / `agent/t1-harness` | `build-tickets/T1-2-instrumentation-plan.md` | blocked: provider 19:01:38Z |
+| DORA-2 | Docs corrected to post-G1 reality (model UI, typed errors, native opt-in) | DORA / `agent/d1-docs` | inline in `agents/prompts/DORA-2-docs-post-g1.md` | blocked: provider 19:01:38Z |
 
 ## Review (waiting for MARA integration)
 
@@ -45,8 +45,14 @@ Provider: OK since 18:36:31Z (`/work/.yoloseek/PROVIDER-STATUS.md`). At most 2 w
 
 | ID | Reason | Unblock |
 |---|---|---|
+| T1-1 | blocked: provider since 2026-10-26T19:01:38Z | Provider returns ok (`/work/.yoloseek/PROVIDER-STATUS.md`). |
+| T1-2 | blocked: provider since 2026-10-26T19:01:38Z | Provider returns ok (`/work/.yoloseek/PROVIDER-STATUS.md`). |
+| DORA-2 | blocked: provider since 2026-10-26T19:01:38Z | Provider returns ok (`/work/.yoloseek/PROVIDER-STATUS.md`). |
 | H1/H2 | No physical Android device in sandbox. | User supplies device/ADB access (owner/ASKS.md). |
 | EMU1 | Android emulator requires KVM/x86_64; sandbox is aarch64 without /dev/kvm. | x86_64 KVM runner or accept JVM/Robolectric only. |
+| T1-1 | Provider limited (free tier) since 2026-10-26 19:01:38Z. | PROVIDER-STATUS.md ok + refill. |
+| T1-2 | Provider limited (free tier) since 2026-10-26 19:01:38Z. | PROVIDER-STATUS.md ok + refill. |
+| DORA-2 | Provider limited (free tier) since 2026-10-26 19:01:38Z. | PROVIDER-STATUS.md ok + refill. |
 | GPU1 | No Android GPU available in sandbox. | Real device or GPU-capable emulator. |
 
 ## Backlog
