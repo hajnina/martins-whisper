@@ -6,7 +6,8 @@
 - `:app:assembleDebug`: `BUILD SUCCESSFUL`, `app-debug.apk` 8,876,133 bytes, SHA-256 `c2aa1350607ae00239f2bdab02633b2e91980b7f3eca3658f4d301bfe83e8cd0`.
 - `:app:assembleDebugAndroidTest`: `BUILD SUCCESSFUL` (T1 Layer 2 compiles; not run without a device).
 - Native whisper.cpp is now **opt-in** (`-Pmartins.native=true`); the default APK builds without an NDK, per ADR-004's CPU-first fallback.
-- B1/E1 source worktrees were not edited; their uncommitted files were copied into `pm/b1-e1` because their workers were no longer active.
+- B1/E1 source worktrees were inactive with uncommitted files, so their content was integrated via `pm/b1-e1`; those worktrees were then committed and recorded on `master` with `-s ours` merges (`beabf22`, `d529395`) so no content was duplicated.
+- The PM bench workspace was archived to `research/model-bench/raw-from-pm` (`7771eaa`) and handed to ORIN; no further bench work is done here.
 - Still not wired: real engine in `EngineFactory` (currently fake), model download/import UI, and the device work. These are G1/T1/D1 scope.
 
 ## What changed
@@ -76,7 +77,7 @@ Native build is not proven here: NDK 27.0.12077973 is absent. `-Pmartins.native=
 - **T1**: run the Layer 1 fake-audio E2E once wired; instrumentation is compiled but device-only.
 - **D1**: write the docs set from map ticket 06 to match the real UI.
 - **H1/H2**: blocked on a physical device; ADB access and signing are in `owner/ASKS.md`.
-- B1/E1 worker worktrees still contain uncommitted copies of the same files; do not merge them again. Reconcile or discard after the sibling PM confirms it is stopped.
+- B1/E1 worker branches are committed at `323a380` and `c22617c` and merged into `master` for provenance; their content is identical to the `pm/b1-e1` integration, so do not re-apply it.
 
 ## References
 - `research/01-model-facts.md` (model hashes/sizes)
@@ -86,5 +87,9 @@ Native build is not proven here: NDK 27.0.12077973 is absent. `-Pmartins.native=
 ## Commits
 - `caf0d09` build(b1): wrapper, Docker/CI, env scripts
 - `9b2ee46` feat(e1): ASR model layer + native scaffolding + tests
+- `08de31c` merge: B1 build harness + E1 ASR layer
+- `7771eaa` research(bench): hand off raw PM bench workspace to ORIN
+- `323a380` / `c22617c` B1/E1 worker commits
+- `beabf22` / `d529395` provenance merges (`-s ours`)
+- Post-merge gate re-run: `BUILD SUCCESSFUL`, 109 tests / 0 failures, APK 8,876,133 bytes, same SHA-256.
 - Handoff commit: this file
-- Merge: `merge: B1 build harness + E1 ASR layer`
