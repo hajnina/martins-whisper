@@ -189,4 +189,6 @@ no broken links).
 
 - `561b059` docs(d1): install/permissions/models/privacy/troubleshooting/doctor +
   operator scripts
-- Handoff commit: HEAD of `agent/d1-docs` after this file (see `git log`).
+- `14e02de` docs(d1): handoff + restrict model push to catalog ids
+- `fe6461d` docs(d1): verify base+model download hashes in evidence
+- Final handoff commit: HEAD of `agent/d1-docs` after this file (see `git log`).
