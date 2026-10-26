@@ -116,7 +116,14 @@ class DictationAccessibilityService : AccessibilityService(), TextInserter {
                 AccessibilityInserter.noteTargetChanged()
                 return InsertResult.Rejected("target changed")
             }
-            return when (val route = InsertionPolicy.route(live, packageName, text)) {
+            return when (
+                val route = InsertionPolicy.route(
+                    live,
+                    packageName,
+                    text,
+                    allowOwnPackage = InsertionPolicy.allowOwnPackageForE2E,
+                )
+            ) {
                 InsertionRoute.SetText -> setText(node, live, text)
                 InsertionRoute.Paste -> paste(node, live, text)
                 is InsertionRoute.ClipboardOnly -> copyFallback(text, route.reason)
