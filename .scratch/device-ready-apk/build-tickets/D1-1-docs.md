@@ -16,8 +16,8 @@ captured or explicitly marked UNVERIFIED. `git status` clean on the branch.
 
 ## Status
 
-open (provider OK 18:36Z)
+done (2026-10-26)
 
 ## Result
 
--
+Merged: ASHA-1 `fcb8299` (G1), DORA-1 `b33c8c3` (D1). MARA gate: 135 tests, 0 failures, APK 8,938,813 B.

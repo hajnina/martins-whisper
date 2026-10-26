@@ -1,6 +1,6 @@
 # Kanban - Martins Whisper (Android)
 
-Updated: 2026-10-26T18:40Z (UTC)
+Updated: 2026-10-26T18:56Z (UTC)
 Columns: Backlog | Ready | In Progress | Review | Blocked | Done
 WIP limit: 2 worker sessions (free-tier quota; MARA stays <=2 workers + integrator).
 
@@ -22,20 +22,24 @@ Map: `.scratch/device-ready-apk/map.md` (10 decision tickets; local markdown). B
 
 | ID | Deliverable | Owner / branch | Ticket | Handoff |
 |---|---|---|---|---|
-| G1a-2 | Real `EngineFactory`: installed model, typed failure, persisted engine state | ASHA / `agent/g1-engine` | `build-tickets/G1a-2-engine-factory.md` | pending |
-| G1b | Model download/import/delete UI + diagnostics | ASHA / `agent/g1-engine` | `build-tickets/G1b-model-ui.md` | pending |
 | T1-1 | Fake-audio -> fake-engine JVM E2E | TESS / `agent/t1-harness` | `build-tickets/T1-1-fake-e2e.md` | pending |
 | T1-2 | Instrumentation plan compiles; device-only run documented | TESS / `agent/t1-harness` | `build-tickets/T1-2-instrumentation-plan.md` | pending |
-| D1-1 | Operator docs + device matrix | DORA / `agent/d1-docs` | `build-tickets/D1-1-docs.md` | pending |
-| D1-2 | Install/model-push/doctor scripts | DORA / `agent/d1-docs` | `build-tickets/D1-2-scripts.md` | pending |
+| DORA-2 | Docs corrected to post-G1 reality (model UI, typed errors, native opt-in) | DORA / `agent/d1-docs` | inline in `agents/prompts/DORA-2-docs-post-g1.md` | pending |
 
-Provider: OK since 18:36:31Z (`/work/.yoloseek/PROVIDER-STATUS.md`). Launch at most 2 workers at a time.
+Provider: OK since 18:36:31Z (`/work/.yoloseek/PROVIDER-STATUS.md`). At most 2 workers at a time.
 
 ## Review (waiting for MARA integration)
 
 | ID | Branch | Merge gate |
 |---|---|---|
-| (none yet) | - | - |
+| (none) | - | - |
+
+## Merged (this wave)
+
+| ID | Branch | Merge commit | Evidence |
+|---|---|---|---|
+| G1a-2 + G1b | `agent/g1-engine` | `fcb8299` | ASHA-1: 135 tests, APK 8,938,813 B; MARA gate green offline |
+| D1-1 + D1-2 | `agent/d1-docs` | `b33c8c3` | DORA-1: docs/scripts + `bash -n` + no-device exits; MARA re-ran scripts |
 
 ## Blocked
 
@@ -60,6 +64,10 @@ Provider: OK since 18:36:31Z (`/work/.yoloseek/PROVIDER-STATUS.md`). Launch at m
 | ID | Deliverable | Evidence |
 |---|---|---|
 | G1a-1 | App uses `core.asr.ModelCatalog`; `ui/ModelOptions` stub removed. | `1511ca1`; `:app:testDebugUnitTest` green offline |
+| G1a-2 | Real `EngineFactory` + installed model + typed failures + persisted `EngineState`. | ASHA-1, merged `fcb8299`; 135 tests green |
+| G1b | Catalog model screen: installed state, download/SAF import/delete, progress, diagnostics. | ASHA-1, merged `fcb8299`; `:app:assembleDebug` green |
+| D1-1 | Operator docs: INSTALL/PERMISSIONS/MODELS/PRIVACY/DEVICE-MATRIX/TROUBLESHOOTING/DOCTOR + README. | DORA-1, merged `b33c8c3`; commands run or marked UNVERIFIED |
+| D1-2 | `install-apk.sh`, `push-model.sh` (SHA-256), `doctor.sh` (secret-free). | DORA-1, merged `b33c8c3`; `bash -n` + no-device exits verified |
 | B1 | Build harness: Gradle wrapper 8.9, x86_64 Dockerfile, CI, env scripts, build docs. | merged `caf0d09`; `./gradlew` gate green; `handoffs/PM-2026-10-26-2/` |
 | E1 | ASR/model layer + whisper.cpp JNI scaffolding + 35 tests; native opt-in. | merged `9b2ee46`; 109 tests, 0 failures; APK 8.88 MB |
 | P0a | Replanned from Linux desktop to Android/Kotlin. | SPEC.md v2 |

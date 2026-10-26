@@ -19,7 +19,7 @@ BUILD SUCCESSFUL; `scripts/test-device.sh` exits non-zero with a clear "no devic
 
 ## Status
 
-open (provider OK 18:36Z)
+running (TESS, 18:52Z)
 
 ## Result
 
