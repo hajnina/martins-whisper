@@ -133,8 +133,46 @@ class AudioChunkerEdgeTest {
         assertEquals(25_000L, next.endMs)
         assertEquals(250, next.overlapMs)
         assertEquals(730L, next.endMs - next.startMs)
-        assertTrue(next.samples.size >= 11_680)
-        assertEquals(0, next.samples.size % 160)
+        assertEquals(11_680, next.samples.size)
+        assertEquals(next.startMs + next.samples.size * 1_000L / AudioChunker.SAMPLE_RATE, next.endMs)
+    }
+
+    @Test
+    fun `regression F1 mid chunk cut does not duplicate post cut audio in the next chunk`() {
+        val chunker = AudioChunker()
+        val out = mutableListOf<AudioChunk>()
+        var time = 0L
+        repeat(1_225) {
+            out += chunker.push(frame(2_000), time)
+            time += AudioChunker.FRAME_MS
+        }
+        out += chunker.push(frame(50), time)
+        time += AudioChunker.FRAME_MS
+        repeat(24) {
+            out += chunker.push(frame(2_000), time)
+            time += AudioChunker.FRAME_MS
+        }
+
+        val max = out.single()
+        assertEquals(ChunkReason.MAX_LENGTH, max.reason)
+        assertEquals(24_520L, max.endMs)
+        assertEquals(392_320, max.samples.size)
+
+        val next = chunker.flush(time)!!
+        assertEquals(24_270L, next.startMs)
+        assertEquals(25_000L, next.endMs)
+        assertEquals(250, next.overlapMs)
+        assertEquals(
+            "next chunk must hold exactly 250 ms overlap + 480 ms after the cut",
+            11_680,
+            next.samples.size,
+        )
+        assertEquals(next.startMs + next.samples.size * 1_000L / AudioChunker.SAMPLE_RATE, next.endMs)
+        val overlapSamples = next.overlapMs * AudioChunker.SAMPLE_RATE / 1_000
+        assertTrue(
+            max.samples.copyOfRange(max.samples.size - overlapSamples, max.samples.size)
+                .contentEquals(next.samples.copyOfRange(0, overlapSamples)),
+        )
     }
 
     @Test
@@ -273,6 +311,10 @@ class AudioChunkerEdgeTest {
             assertTrue(
                 "chunk ${chunk.index} samples ${chunk.samples.size} shorter than duration ${chunk.endMs - chunk.startMs}",
                 sampleMs >= (chunk.endMs - chunk.startMs) - 1L,
+            )
+            assertTrue(
+                "chunk ${chunk.index} samples ${chunk.samples.size} longer than duration ${chunk.endMs - chunk.startMs} (duplicated audio)",
+                sampleMs <= (chunk.endMs - chunk.startMs) + 1L,
             )
             assertEquals(0, chunk.samples.size % 160)
             val prev = previous
