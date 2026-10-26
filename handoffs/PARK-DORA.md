@@ -22,9 +22,8 @@ I am DORA (docs/operator-scripts engineer), branch agent/d1-docs → renamed wor
 4. Deferred (NOT doing until owner re-opens public work): CONTRIBUTING/SECURITY/issue templates, docs index, CHANGELOG/ARCHITECTURE.
 
 ## TRAPS learned (for whoever resumes)
-1. opencode Zen sessions die at session budget mid-turn with NO commit — commit early from partial output actually. commit yourself. Keep tickets ≤ 1 commit duration before the session expires.
-2. `git stash -u` + `git checkout stash@{0} -- .` + `git stash drop` ate my untracked files; worktrees are dangerous crossing multi-branch resets. Or disk pressure by owner's cleaner tools? Regenerate-able from memory. Never combine.
-3. Branch names: agent/d2-public was created from worktree while branches elsewhere pre-checked-out (refusing force-update). Use `git merge --fff-only` or check out then branch.
-4. `git reset -q` in a dirty worktree WITHOUT要对 commit untracked → 我? Unless `commit -a` or `stash` first.nero ALL data loss via add before every rebase.
-- Do NOT touch shared toolchain; own GRADLE_USER_HOME per brief.
-- Bench/dock never share contract with workers' handoffs; write handoff even if stalled.
+1. opencode Zen sessions die mid-turn at session budget with NO commit — when output is valuable, commit it yourself the moment it appears, don't wait for the worker to self-commit. Keep tickets ≤ 1 commit duration ahead of expiry.
+2. `git stash -u` + `git checkout stash@{0} -- .` + `git stash drop` ate my untracked files in the d1-docs worktree; never mix stash-restore with branch fast-forwards. Commit (even wip) before any branch/reset dance.
+3. A branch checked out in a worktree cannot be force-updated from elsewhere; from inside the worktree use `git merge --ff-only <sha>` instead of `git branch -f`.
+4. `git reset` in a dirty worktree loses work unless all changes are staged/committed first — always `git add -A` before any rework.
+5. As per the DORA brief: own GRADLE_USER_HOME copy, never the shared one; write a handoff even when a ticket stalls.
