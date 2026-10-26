@@ -6,6 +6,7 @@ import com.martins.whisper.core.ComputeBackend
 import com.martins.whisper.core.ModelSpec
 import com.martins.whisper.core.asr.CustomModelCodec
 import com.martins.whisper.core.asr.EngineState
+import com.martins.whisper.core.asr.LanguagePrefs
 
 class SettingsStore(context: Context) {
 
@@ -83,14 +84,34 @@ class SettingsStore(context: Context) {
         prefs.edit().putInt(KEY_BUBBLE_X, x).putInt(KEY_BUBBLE_Y, y).apply()
     }
 
+    /**
+     * Primary/secondary/sticky language selection written by onboarding; null when onboarding has
+     * not run yet (the legacy [language] key then remains the source of truth).
+     */
+    var languagePrefs: LanguagePrefs?
+        get() = LanguagePrefs.decode(prefs.getString(KEY_LANGUAGE_PREFS, null))
+        set(value) {
+            prefs.edit().apply {
+                if (value == null) {
+                    remove(KEY_LANGUAGE_PREFS)
+                } else {
+                    val normalized = value.normalized()
+                    putString(KEY_LANGUAGE_PREFS, normalized.encode())
+                    putString(KEY_LANGUAGE, normalized.primaryLanguage)
+                }
+            }.apply()
+        }
+
     fun languageOrNull(): String? = language.takeUnless { it == LANGUAGE_AUTO }
 
-    fun effectiveLanguage(): String? = languageOrNull()
+    fun effectiveLanguage(): String? =
+        languagePrefs?.primaryLanguage ?: languageOrNull()
 
     companion object {
         const val PREFS_NAME = "martins_whisper_settings"
         const val KEY_MODEL_ID = "model_id"
         const val KEY_LANGUAGE = "language"
+        const val KEY_LANGUAGE_PREFS = "language_prefs"
         const val KEY_BACKEND = "backend"
         const val KEY_ENGINE_ACTIVE_BACKEND = "engine_active_backend"
         const val KEY_ENGINE_FALLBACK_REASON = "engine_fallback_reason"
