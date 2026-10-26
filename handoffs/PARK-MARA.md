@@ -99,3 +99,15 @@ TRAPS: gradle needs own GRADLE_USER_HOME (re-copied /work/android-toolchain/grad
 - NOTE: the main checkout was switched to `agent/gemma-research` by another lane mid-shift; my
   commits landed there, moved them back to master (`1a6eb2f`) and reset `agent/gemma-research`
   to `160168d` (its base, no work lost). Main checkout is back on master.
+
+## B3 OWNER FOCUS (23:1x shift, release captain)
+- LANDED rc/ci-walls `38e4d84` (verify walls in cloud gate) via land.sh --cloud.
+- PENDING landings: engines-contract (contract-first, ci green @eebfde2, requeue on new master), lena/onboarding-l0 board (rebased to afda6fc, flags conflict resolved: master's Flags won, content superseded; slice=REFERENCE-BOARD.md 138 L).
+- MOTIF live in motif worktree: committed VoiceFeatures extractor (4871edc) - DO NOT TOUCH, they land their own slice.
+- Landing log: ~/logs/land-*.log; python3 via nix installed.
+- NEXT: after engines-contract + lena board land, drive lena-ux onboarding flow compile-fixes + orb slice; cut BUILD-READY when master = B2 intact + onboarding + orb (flags default OFF, debug flips them).
+## B3 laser focus (owner 23:2x)
+- Master landed: 38e4d84 (rc walls), c4766e4 (engines contract), f46f75b (tess telemetry), dbc0465 (lena L0 board), 656ce0e+b839e2e (MOTIF VoiceFeatures+extractor, self-landed).
+- My in-flight gates: rc/b3-s1 (compose plumbing 38L, 55b061d0), lang1-text (6954c400), lang1-catalog (e12eb986) - other lanes now land themselves too.
+- mara-b3 (rc/b3-onboard) = onboarding v1 screens (be366fc) + flag wiring (ae8db72), compiles with scratch ASHA contracts; needs lang1-prefs+catalog landed, then one cloud land (--max-lines 3200, owner-imperative B3 in 60 min). Then BUILD-READY.
+- Orb: MOTIF self-landed slices 1-2; orb UI = their lane, watching.

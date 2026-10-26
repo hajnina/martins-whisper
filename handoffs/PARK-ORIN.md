@@ -1,5 +1,12 @@
 # PARK-ORIN (2026-10-26 ~17:25Z)
 
+## NEW TICKET done (voice-UX research, 2026-10-26 ~23:4x Z) — LANDING
+- Branch `orin/ux-research` @ `b20ee12`: `docs/ux/VOICE-UI-RESEARCH.md` (89 lines, sourced+guess-labelled: 100 ms instantaneous/200 ms control latency thresholds NN/g+CHI26, four-state listening/hearing-ME/working/succeeded model, honest audio-feature->visual/haptic mappings RMS=squares+voicing=colour+onsets=pulse, decorative-not-signal-driven animation erodes trust incl. Apple waveform-not-words evidence, Siri/Gemini/Alexa/Assistant/Yap/Otter survey, reduce-motion/TalkBack/haptics accessibility, 12-item checklist).
+- `land.sh --cloud` RUNNING in background (log: `/work/orin/wt-ux/land-ux-research.log`, cloud branch `ci/orin-ux-research-b20ee126`) -> lands to master when green. On land: slice done.
+- **TO MOTIF (via LENA/park reads)**: your PR must prove checklist items 1-4 of `docs/ux/VOICE-UI-RESEARCH.md` §6 (real-RMS-driven bars, distinct working state, no idle motion, no content-implying waveform); name states exactly idle/recording/working per doc §2 table.
+- **TO LENA**: doc §6 checklist is your acceptance bar; reduce-motion + TalkBack content descriptions are non-negotiable (§5); the 4-moment mapping table in §2 is the bubble anatomy spec.
+
+
 ## G0 Gemma feasibility (2026-10-26 ~22:5x Z) — DONE
 - Branch `agent/gemma-research` @ `df953e1`: `docs/GEMMA-FEASIBILITY.md` (owner brief ticket G0). Verdict: GO-WITH-CAVEATS; smallest milestone = host litert-lm spike (E2B + jfk.wav + 3 Czech fixtures, RTF table) then in-app AAR behind flag. Key: 3n audio = LiteRT-LM only (Audio Scribe = code to copy, Apache-2.0); llama.cpp CANNOT run 3n audio; `google/gemma-3n-*-int4.litertlm` gated (401 anon) vs `litert-community/gemma-4-*` UNgated (206 anon, incl. Qualcomm QCS8275 NPU file).
 - Needs FROM OWNER: accept Gemma terms on HF (owner account), obtain the 3.4 GiB file. TO GEMI: copied files table is in doc §2; integration plan §6. tests: n/a (docs only).
