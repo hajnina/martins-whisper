@@ -1,0 +1,1 @@
+Master 1511ca1+ (G1a-1 catalog swap) is green: 109 JVM tests, 0 failures, APK 8,873,577 bytes. Scope split to ASHA (G1a-2/G1b), TESS (T1), DORA (D1); MARA integrates. Provider OK; H1/H2 still need a device.
