@@ -23,9 +23,9 @@ set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
 set(GGML_LLAMAFILE OFF CACHE BOOL "" FORCE)
 
-# Vulkan is enabled by default for the GPU path; Gradle passes -DGGML_VULKAN=OFF for CPU-only builds.
+# CPU-first: Vulkan is opt-in via -DGGML_VULKAN=ON (Gradle: -Pmartins.vulkan=true).
 if (NOT DEFINED GGML_VULKAN)
-    set(GGML_VULKAN ON CACHE BOOL "" FORCE)
+    set(GGML_VULKAN OFF CACHE BOOL "" FORCE)
 endif()
 
 add_subdirectory("${WHISPER_CPP_DIR}" "${CMAKE_BINARY_DIR}/whisper.cpp" EXCLUDE_FROM_ALL)
