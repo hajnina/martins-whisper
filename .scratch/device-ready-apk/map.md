@@ -17,6 +17,7 @@ A signed-off APK that dictates into any app on a real Android phone: H1 device b
 
 ## Decisions so far
 
+- [03 — What must the B1 build harness guarantee before it merges?](issues/03-b1-merge-gate.md): B1 must be committed and clean with a wrapper, Docker/CI, scripts and docs; `./gradlew :core:test :app:testDebugUnitTest :app:assembleDebug --offline` must pass from a fresh checkout; supported hosts are this aarch64 container and x86_64 Docker/CI; handoff needs commands, counts, APK hash and no-secrets proof. PM verifies in a scratch worktree and merges `--no-ff`.
 - [01 — Which Whisper GGML models can v1 ship, from where, at what size?](issues/01-model-facts.md): v1 default `base` f16 (141 MiB, ~388 MB RAM), `tiny` first-class, `small` optional on 8 GB; `medium`/`large-v3-turbo` catalog-only and RAM-gated. Direct HF download from the pinned `ggerganov/whisper.cpp` revision, SHA-256 verified, MIT notices. Custom GGML (magic `0x67676d6c`), not GGUF; E1 must pin the whisper.cpp revision. Details: `research/01-model-facts.md`.
 
 ## Not yet specified
