@@ -8,7 +8,6 @@ WIP limit: 6 background agents.
 
 | ID | Deliverable | Owner / branch | Depends on | Handoff |
 |---|---|---|---|---|
-| R1 | Prior-art research: Android offline dictation/overlay/accessibility/whisper.cpp-Vulkan/sherpa-onnx. Clone repos, extract reusable code, recommend engine + insertion strategy. | agent/r1-research | - | handoffs/R1-research/HANDOFF.md |
 | B1 | Android build harness: JDK 17, Gradle, SDK 35, aarch64 host workarounds, native NDK feasibility, emulator feasibility, reproducible Docker/CI. Produce build report + scripts. **Toolchain READY; `:core:test` passes; finishing app build + handoff.** | agent/b1-build | skeleton | handoffs/B1-build/HANDOFF.md |
 | C1 | Pure Kotlin core audio: EnergyVad, AudioChunker, TranscriptMerger, TextInsertionPlanner + JUnit tests. **v2 relaunched with ready toolchain (pid 7875).** | agent/c1-core-audio | skeleton/contract | handoffs/C1-core-audio/HANDOFF.md |
 | E1 | ASR/model layer: SpeechEngine contract, whisper.cpp JNI + CMake + Vulkan, ModelCatalog/Repository, ModelManager idle-unload + tests. Coordinate with R1 decision. | agent/e1-asr | R1 (partial), B1 (partial) | handoffs/E1-asr/HANDOFF.md |
@@ -49,3 +48,6 @@ WIP limit: 6 background agents.
 |---|---|---|
 | P0a | Replanned from Linux desktop to Android/Kotlin. | This document, SPEC.md v2 |
 | P0b | Repo skeleton, kanban, spec, logbook, agent worktree convention. | git commit |
+| R1 | Android prior-art research + ADR-004 recommendation (whisper.cpp/GGML, insertion, model lifecycle). | `research/ANDROID_PRIOR_ART.md`, `handoffs/R1-research/`, merged `d7ce482` |
+| ADR-004 | Accept whisper.cpp + Vulkan/CPU, GGML-only v1, CPU fallback; sherpa emergency only. | `DECISIONS.md` |
+| ADR-007 | Reboot uses tap-to-re-arm notification; no mic FGS from boot. | `DECISIONS.md` |

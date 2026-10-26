@@ -14,3 +14,6 @@ Chronological project log. PM owns this file; agents add entries via their hando
 - 15:13Z - Toolchain exposure fixed without touching read-only `~/.nix-profile`: restored Gradle launcher, added JAVA_HOME wrapper at `~/.local/bin/gradle`, wrote `/work/android-toolchain/TOOLCHAIN-READY.md` and `scripts/env.sh`.
 - 15:15Z - Killed C1/I1/U1 stuck nix sessions; relaunched all three as v2 with absolute toolchain paths and code-first instructions. New PIDs: C1 7875, I1 8022, U1 8102.
 - 15:17Z - B1 reports `:core:test` BUILD SUCCESSFUL (probe test, 0 failures) using shared JDK 17 + Gradle 8.9 + SDK 35. B1 still finishing `assembleDebug`, docs and handoff.
+- 15:23Z - C1 v2 wasted time on broad `find`; killed and relaunched v3 with a no-reconnaissance, write-first prompt (pid 11231).
+- 15:24Z - R1 delivered handoff + 456-line prior-art report. PM merged `agent/r1-research` (`d7ce482`), accepted ADR-004 Option A (whisper.cpp + Vulkan/CPU, GGML-only v1, CPU fallback) and ADR-007 (tap-to-re-arm after reboot). SPEC R4 narrowed to GGML import.
+- 15:25Z - E1 writing model layer + JNI; U1 writing overlay/service/UI; I1 writing accessibility tests; B1 still investigating aarch64 NDK after green `:core:test`.
