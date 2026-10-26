@@ -35,7 +35,7 @@ jobs:
           gradle-version: '8.9'
 
       - name: Test and build
-        run: gradle --no-daemon :core:test :app:testDebugUnitTest :app:assembleDebug
+        run: gradle --no-daemon -Pmartins.native=true :core:test :app:testDebugUnitTest :app:assembleDebug
 
       - uses: actions/upload-artifact@v4
         with:

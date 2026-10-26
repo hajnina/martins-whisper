@@ -1,0 +1,1 @@
+B1 + E1 merged on pm/b1-e1: 109 JVM tests, 0 failures; app-debug.apk 8.88 MB (sha256 c2aa1350...); assembleDebugAndroidTest builds. Native is opt-in; default APK is CPU-seam. G1 still needs real engine/model wiring; H1/H2 need a device.

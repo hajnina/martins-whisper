@@ -3,8 +3,8 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-val nativeEnabled = providers.gradleProperty("martins.native").orNull?.lowercase() != "false"
-val vulkanEnabled = providers.gradleProperty("martins.vulkan").orNull?.lowercase() != "false"
+val nativeEnabled = providers.gradleProperty("martins.native").orNull?.lowercase() == "true"
+val vulkanEnabled = providers.gradleProperty("martins.vulkan").orNull?.lowercase() == "true"
 
 android {
     namespace = "com.martins.whisper"

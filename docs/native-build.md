@@ -4,6 +4,10 @@ The speech engine is built from a pinned whisper.cpp checkout with CMake/NDK. Th
 `app/src/main/cpp/whisper_jni.cpp`; the Kotlin bridge is
 `app/src/main/kotlin/com/martins/whisper/asr/WhisperCppEngine.kt`.
 
+Native is **opt-in**: `./gradlew :app:assembleDebug` builds a CPU-seam APK without the NDK. Add
+`-Pmartins.native=true` (and optionally `-Pmartins.vulkan=true`) only on an NDK-equipped
+x86_64/Docker host. This matches ADR-004's CPU-first fallback.
+
 ## Pinned source
 
 ```bash
