@@ -24,9 +24,9 @@ Provider LIMITED since 2026-10-26T19:01:38Z (`/work/.yoloseek/PROVIDER-STATUS.md
 
 | ID | Deliverable | Owner / branch | Ticket | Handoff |
 |---|---|---|---|---|
-| T1-1 | Fake-audio -> fake-engine JVM E2E | TESS / `agent/t1-harness` | `build-tickets/T1-1-fake-e2e.md` | blocked: provider 19:01:38Z |
-| T1-2 | Instrumentation plan compiles; device-only run documented | TESS / `agent/t1-harness` | `build-tickets/T1-2-instrumentation-plan.md` | blocked: provider 19:01:38Z |
-| DORA-2 | Docs corrected to post-G1 reality (model UI, typed errors, native opt-in) | DORA / `agent/d1-docs` | inline in `agents/prompts/DORA-2-docs-post-g1.md` | blocked: provider 19:01:38Z |
+| T1-1 | Fake-audio -> fake-engine JVM E2E | TESS / `agent/t1-harness` | `build-tickets/T1-1-fake-e2e.md` | done; merged `425412c`; gate 141/0 |
+| T1-2 | Instrumentation plan compiles; device-only run documented | TESS / `agent/t1-harness` | `build-tickets/T1-2-instrumentation-plan.md` | done; merged `425412c`; run blocked on H1 |
+| DORA-2 | Docs corrected to post-G1 reality (model UI, typed errors, native opt-in) | DORA / `agent/d1-docs` | inline in `agents/prompts/DORA-2-docs-post-g1.md` | done; merged `421f223`; handoff `DORA-2` |
 
 ## Review (waiting for MARA integration)
 
@@ -45,9 +45,10 @@ Provider LIMITED since 2026-10-26T19:01:38Z (`/work/.yoloseek/PROVIDER-STATUS.md
 
 | ID | Reason | Unblock |
 |---|---|---|
-| T1-1 | blocked: provider since 2026-10-26T19:01:38Z | Provider returns ok (`/work/.yoloseek/PROVIDER-STATUS.md`). |
-| T1-2 | blocked: provider since 2026-10-26T19:01:38Z | Provider returns ok (`/work/.yoloseek/PROVIDER-STATUS.md`). |
-| DORA-2 | blocked: provider since 2026-10-26T19:01:38Z | Provider returns ok (`/work/.yoloseek/PROVIDER-STATUS.md`). |
+| T1-1 | merged; nothing left to unblock | none. |
+| T1-2 | merged; Layer-2 device run at H1 | Physical device (owner/ASKS.md). |
+| DORA-2 | merged; nothing left to unblock | none. |
+| W2 | ASHA `agent/g2-engine` at wip `dd04afd`, no handoff | ASHA handoff; provider ok for more work. |
 | H1/H2 | No physical Android device in sandbox. | User supplies device/ADB access (owner/ASKS.md). |
 | EMU1 | Android emulator requires KVM/x86_64; sandbox is aarch64 without /dev/kvm. | x86_64 KVM runner or accept JVM/Robolectric only. |
 | T1-1 | Provider limited (free tier) since 2026-10-26 19:01:38Z. | PROVIDER-STATUS.md ok + refill. |
@@ -72,6 +73,9 @@ Provider LIMITED since 2026-10-26T19:01:38Z (`/work/.yoloseek/PROVIDER-STATUS.md
 | G1a-1 | App uses `core.asr.ModelCatalog`; `ui/ModelOptions` stub removed. | `1511ca1`; `:app:testDebugUnitTest` green offline |
 | G1a-2 | Real `EngineFactory` + installed model + typed failures + persisted `EngineState`. | ASHA-1, merged `fcb8299`; 135 tests green |
 | G1b | Catalog model screen: installed state, download/SAF import/delete, progress, diagnostics. | ASHA-1, merged `fcb8299`; `:app:assembleDebug` green |
+| T1 | JVM fake-audio E2E, Robolectric suite, Layer-2 device tests (compiled), test-device scripts. | TESS-1, merged `425412c`; 141 tests, 0 failures |
+| DORA-2 | Docs aligned to post-G1 engine/model UI; doctor reads engine state; D1-docs duplicate removed. | DORA-2, merged `421f223`; doc link check 52/0 |
+| W2 (MARAWAVE) | Integration wave 2: T1 + DORA-2 merges, full gate. | `handoffs/PM-2026-10-26-5/`; 141 tests, APK `73c0fa1cd...` |
 | D1-1 | Operator docs: INSTALL/PERMISSIONS/MODELS/PRIVACY/DEVICE-MATRIX/TROUBLESHOOTING/DOCTOR + README. | DORA-1, merged `b33c8c3`; commands run or marked UNVERIFIED |
 | D1-2 | `install-apk.sh`, `push-model.sh` (SHA-256), `doctor.sh` (secret-free). | DORA-1, merged `b33c8c3`; `bash -n` + no-device exits verified |
 | B1 | Build harness: Gradle wrapper 8.9, x86_64 Dockerfile, CI, env scripts, build docs. | merged `caf0d09`; `./gradlew` gate green; `handoffs/PM-2026-10-26-2/` |

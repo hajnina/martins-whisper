@@ -40,3 +40,4 @@ Chronological project log. PM owns this file; agents add entries via their hando
 - 18:56Z - TESS launched on `agent/t1-harness` (T1-1/T1-2); DORA-2 running. ASHA halted cleanly after handoff.
 - 19:01Z - Provider LIMITED; running tickets T1-1/T1-2/DORA-2 set blocked: provider; wip commits on d1-docs/g2-engine/t1-harness; no new workers.
 - 19:01Z - Provider limited (5 sessions hit free tier); T1-1/T1-2/DORA-2 set blocked: provider; worker branches wip-committed; waiting for PROVIDER-STATUS.md ok, no retry-loop.
+- 19:20Z - MARA integration wave 2: merged TESS-1 (T1 harness, `425412c`) and DORA-2 (docs refresh, `421f223`) from their handoffs, no conflicts. Full offline gate on master: 141 tests (85 core + 56 app), 0 failures; APK 8,939,909 B (`73c0fa1cd...`), androidTest APK builds. g2-engine NOT merged (no handoff). Handoff `handoffs/PM-2026-10-26-5/`.
