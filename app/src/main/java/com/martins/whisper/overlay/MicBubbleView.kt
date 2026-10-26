@@ -13,6 +13,8 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
+import com.martins.whisper.core.voice.OrbDynamics
+import com.martins.whisper.core.voice.OrbMotion
 import com.martins.whisper.service.DictationState
 import kotlin.math.abs
 import kotlin.math.min
@@ -57,6 +59,7 @@ class MicBubbleView(context: Context) : View(context) {
                     else -> Unit
                 }
             }
+            updateOrbAnimation(value)
             contentDescription = BubblePresentation.of(value).contentDescription
             invalidate()
         }
@@ -82,6 +85,20 @@ class MicBubbleView(context: Context) : View(context) {
         color = Color.WHITE
         textSize = sp(12f)
         alpha = 220
+    }
+
+    private val orbDynamics = OrbDynamics()
+    private val orbRenderer = SoundOrbRenderer()
+    private var orbRunning = false
+    private var lastOrbFrameAt = 0L
+    private var previousSpeechDetected = false
+    private var stopOrbAfter: Runnable? = null
+    private val orbTick = object : Runnable {
+        override fun run() {
+            if (!orbRunning) return
+            invalidate()
+            postDelayed(this, 16)
+        }
     }
 
     private var spinnerAngle = 0f
@@ -185,6 +202,53 @@ class MicBubbleView(context: Context) : View(context) {
 
     private fun isExpandedLayout(): Boolean = width >= expandedWidthPx * 0.9f
 
+    /**
+     * The orb only animates on a real state: while recording (level is measured RMS) and for a
+     * short decay after success/error. Idle and loading stay static except for their spinner.
+     */
+    private fun updateOrbAnimation(value: DictationState) {
+        stopOrbAfter?.let { removeCallbacks(it) }
+        stopOrbAfter = null
+        when (value) {
+            is DictationState.Idle -> stopOrb()
+            is DictationState.Recording -> startOrb()
+            is DictationState.Success, is DictationState.Error -> {
+                startOrb()
+                val stop = Runnable { stopOrb() }
+                stopOrbAfter = stop
+                postDelayed(stop, 1_200L)
+            }
+            else -> Unit
+        }
+    }
+
+    private fun startOrb() {
+        orbRunning = true
+        lastOrbFrameAt = SystemClock.elapsedRealtime()
+        removeCallbacks(orbTick)
+        post(orbTick)
+    }
+
+    private fun stopOrb() {
+        orbRunning = false
+        removeCallbacks(orbTick)
+    }
+
+    private fun motionForDraw(): OrbMotion {
+        val now = SystemClock.elapsedRealtime()
+        val dt = if (lastOrbFrameAt == 0L) 1f / 60f else ((now - lastOrbFrameAt) / 1000f).coerceIn(0f, 0.1f)
+        lastOrbFrameAt = now
+        val current = state
+        if (current is DictationState.Recording) {
+            val onset = current.speechDetected && !previousSpeechDetected
+            previousSpeechDetected = current.speechDetected
+            val voiced = if (current.speechDetected) 1f else 0f
+            return orbDynamics.update(current.level, null, voiced, null, onset, dt)
+        }
+        previousSpeechDetected = false
+        return orbDynamics.idle(dt)
+    }
+
     private fun controlAt(x: Float, y: Float): Control? {
         if (state is DictationState.Idle) return null
         if (!isExpandedLayout()) return null
@@ -229,8 +293,7 @@ class MicBubbleView(context: Context) : View(context) {
             circleCenter + circleRadius,
             circleCenter + circleRadius,
         )
-        surfacePaint.color = accent
-        canvas.drawOval(circleRect, surfacePaint)
+        orbRenderer.draw(canvas, circleRect, motionForDraw(), accent)
 
         when (visual.icon) {
             BubbleIcon.SPINNER -> drawSpinner(canvas, circleRect)
