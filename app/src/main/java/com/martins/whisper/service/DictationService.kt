@@ -511,7 +511,7 @@ class DictationService : Service() {
         val state: StateFlow<DictationState> = _state.asStateFlow()
 
         @Volatile
-        var inserterFactory: (Context) -> TextInserter = { ClipboardTextInserter(it) }
+        var inserterFactory: (Context) -> TextInserter = { AccessibilityTextInserter(it) }
 
         @Volatile
         internal var audioSourceFactory: (Context) -> AudioSource = { AudioRecordSource(it) }

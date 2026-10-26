@@ -282,11 +282,13 @@ object AccessibilityInserter {
 
     suspend fun insert(text: String): InsertResult {
         if (text.isEmpty()) return InsertResult.Failed("empty text")
-        return withContext(Dispatchers.Main.immediate) {
-            val active = service ?: return@withContext InsertResult.Failed(
-                "accessibility service not connected",
-            )
-            active.insert(text)
-        }
+        return withContext(Dispatchers.Main.immediate) { insertNow(text) }
+    }
+
+    /** Non-suspending entry for callers already on the main thread (for example the dictation service). */
+    fun insertNow(text: String): InsertResult {
+        if (text.isEmpty()) return InsertResult.Failed("empty text")
+        val active = service ?: return InsertResult.Failed("accessibility service not connected")
+        return active.insert(text)
     }
 }
