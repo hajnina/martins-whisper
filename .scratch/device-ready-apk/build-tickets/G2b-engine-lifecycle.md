@@ -32,4 +32,4 @@ done (2026-10-26)
 
 ## Result
 
-WIP `480b0ae`; final branch tip and gate evidence in `handoffs/ASHA-2/HANDOFF.md`.
+WIP `480b0ae`; final branch tip `5494b79`; gate evidence in `handoffs/ASHA-2/HANDOFF.md`.
