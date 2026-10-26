@@ -1,4 +1,8 @@
-# Android Device Test Matrix (later, on real device)
+# Android Device Test Matrix (extended, later on real device)
+
+> The v1 sign-off gate, support tiers and H2 thresholds are in
+> [DEVICE-MATRIX.md](DEVICE-MATRIX.md). This file is the longer exploratory
+> checklist for a later hardening pass; nothing here has been run on hardware.
 
 ## Setup
 - Install APK via `adb install -r app-debug.apk`.
