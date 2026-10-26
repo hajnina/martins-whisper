@@ -21,20 +21,24 @@ Master merged in at `fbb94d7` (master tip `636b3f9`). App gate: **97 tests / 0 f
   `ResumableModelDownloader` SHA+resume already covered by `ModelDownloaderTest` (7) and
   `HttpModelDownloaderTest` (4). No gap found; no change.
 
-## RUNNING at this note
+## DONE after the first note (same shift)
 
-- **APK-1 local native build**: `./gradlew :app:assembleDebug -Pmartins.native=true
-  -Pmartins.vulkan=false --offline` in the u2-states worktree, log `/tmp/asha-native-build2.log`.
-  First attempt failed on a dangling `ninja` symlink; fixed by `nix profile install nixpkgs#ninja`.
-  Result pending; if green, inspect `app-debug.apk` for `lib/arm64-v8a/*.so`.
+- **APK-1 evidence** (`87a2bcb`): verified NORA-1's arm64 artifact — `native-code: 'arm64-v8a'`,
+  `lib/{whisper,ggml,ggml-base,ggml-cpu,martins_whisper,parakeet}.so`, debug-signed, 12,902,712 B,
+  sha256 `c90e356f...b7476`. Recipe on master in `.github/workflows/native-build.yml`.
+  **Local native build on THIS host is impossible: uname -m = aarch64, NDK clang is x86_64
+  (`Exec format error`).** CI/ubuntu x86_64 or an x86 host must build it.
+- **README-1** (`87a2bcb`): README rewritten to the short MFVP page (what, install, permissions,
+  use). Existing `docs/` left untouched.
+- **Full gate**: `:core:test :app:testDebugUnitTest :app:assembleDebug --offline` → **137 + 97 =
+  234 tests, 0 failures/errors**; default APK 8,982,513 B.
 
 ## NEXT (ordered, small)
 
-1. **APK-1**: finish native build; `unzip -l` + `apksigner verify` + `aapt2 dump badging` evidence
-   for arm64 `.so`; DO NOT add release/signing workflow (NORA-1 covers CI).
-2. **README-1**: one short README (what, install, 3 grants: mic + overlay + accessibility, use).
-3. **PHONE-1**: on-device wireless adb run; needs Martin's phone (owner).
-4. Hand the branch to MARA: gate = `:core:test :app:testDebugUnitTest` green + the flow test names.
+1. **MARA: merge `agent/u2-states`** (`87a2bcb`) after re-running the gate; handoff
+   `handoffs/ASHA-5/HANDOFF.md`. Branch includes U2b-2 + the accessibility insert link + README.
+2. **Owner/CI**: push and confirm the native Build workflow produced the arm64 APK (Actions).
+3. **PHONE-1**: on-device wireless adb run; needs Martin's phone. Fix only real bugs it exposes.
 
 ## TRAPS / NOTES
 
@@ -43,7 +47,8 @@ Master merged in at `fbb94d7` (master tip `636b3f9`). App gate: **97 tests / 0 f
   GRADLE_USER_HOME=/home/node/gh-asha` (copied this session; never touch the shared home).
 - `ninja` symlinks in `/work/android-toolchain/sdk/cmake/*/bin` point at
   `/home/node/.nix-profile/bin/ninja`; a refilled container loses it → `nix profile install
-  nixpkgs#ninja` before native builds.
+  nixpkgs#ninja`. But the real native-build blocker here is the **aarch64 host**: NDK
+  `linux-x86_64/clang` cannot execute. Use CI or an x86 host for `-Pmartins.native=true`.
 - Do **not** edit `/work/martins-whisper` main checkout; it stays clean for MARA's merge.
 - `DictationService.onStartCommand` still calls `ensureForeground()` + `startOverlay()` after
   actions; tile work remains out of scope.
