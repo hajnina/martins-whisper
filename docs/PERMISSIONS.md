@@ -85,7 +85,8 @@ This is a device setting, not an app permission. See
 The **Start overlay on boot** switch is stored by the app. When it is on and the
 overlay is enabled, the app restores the bubble after a reboot. Android 14+
 restricts starting a microphone foreground service from boot, so the restored
-bubble starts **without the microphone** until you open the app once. This is
+bubble starts **without the microphone**. Pressing the bubble requests the
+microphone foreground service again; opening the app also re-arms it. This is
 expected; it is not a permission failure.
 
 ## Checking permissions from a computer

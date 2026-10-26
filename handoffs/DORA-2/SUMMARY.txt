@@ -1,0 +1,9 @@
+DORA-2 aligns the D1 docs with post-G1 master. 0.1.0 now has real
+WhisperCppEngine wiring, catalog model download/SAF import/delete, installed
+state and typed diagnostics; the default APK still has no native libs, so real
+transcription needs -Pmartins.native=true on arm64 (UNVERIFIED, no device).
+MODELS/TROUBLESHOOTING/DOCTOR/INSTALL/README updated; doctor.sh reads persisted
+engine state (backend/fallback/gpu_failures/last_error/native_engine).
+Gate: 135 JVM tests, 0 failures; APK 9,163,557 B, no libs; bash -n + shellcheck
+clean; doctor.sh no-device exit 3; stale-claim grep empty. Removed duplicate
+handoffs/D1-docs; DORA-1 evidence untouched. Branch agent/d1-docs, MARA merges.
