@@ -2,18 +2,13 @@
 
 ## Executive summary (<=10 lines)
 
-- Delivered the D1 doc set from ticket 06: README index, refreshed BUILD, INSTALL,
-  PERMISSIONS, MODELS, PRIVACY, DEVICE-MATRIX, TROUBLESHOOTING and DOCTOR.
-- Added three operator scripts: `install-apk.sh`, `push-model.sh` (catalog
-  SHA-256 enforced) and `doctor.sh` (pasteable, secret-free report).
-- Host checks pass: `bash -n` and shellcheck clean; no-device paths fail with a
-  clear message and exit 3; a bad hash exits 1.
-- Gradle gate green: 109 tests, 0 failures; APK 8,873,577 bytes; default APK has
-  zero native libs. `tiny` and `base` model downloads match their catalog hashes.
-- Every phone-dependent step is marked **UNVERIFIED (device, H1-blocked)**.
-  Real dictation remains blocked by G1 (0.1.0 still uses the fake engine and has
-  no in-app model UI); the docs say so instead of overclaiming the acceptance.
-- Branch `agent/d1-docs`; MARA integrates. No merge or push was performed.
+- Delivered the D1 docs: README, BUILD, INSTALL, PERMISSIONS, MODELS, PRIVACY, DEVICE-MATRIX, TROUBLESHOOTING, DOCTOR.
+- Added install-apk.sh, push-model.sh (catalog SHA-256 enforced) and doctor.sh (pasteable, secret-free report).
+- Host checks: bash -n + shellcheck clean; install/doctor no-device exit 3; push with a model/no device exit 3; bad hash exit 1.
+- Gradle gate green: 109 tests, 0 failures; APK 8,873,577 B; no native libs; tiny/base hashes match.
+- Phone-dependent steps are UNVERIFIED (no device; H1-blocked) and marked as such.
+- Real dictation is blocked by G1 (0.1.0 fake engine, no in-app model UI); docs say so.
+- Branch agent/d1-docs; MARA integrates. No merge or push was performed.
 
 ## What changed / exact file list
 
