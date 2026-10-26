@@ -86,3 +86,23 @@ I did **not** touch `DictationService`, `TranscriptGate`, `EnergyVad` or WAV dum
 3. If the next device run still logs `source=MIC` with healthy peak/RMS but no text, it is an
    engine/model issue, not capture. If it logs `returned only silence` for every source, the
    mic is held/muted by HyperOS -> check foreground-service state.
+
+## FLASH-LOOP EVIDENCE (local, no GitHub credentials here)
+
+- `scripts/fetch-latest-apk.sh --help` and fake-`gh` runs:
+  - happy path: picks run 424242, downloads artifact, copies to
+    `dist/latest-apk/martins-whisper-latest.apk`, checks `lib/arm64-v8a/libmartins_whisper.so`,
+    `libwhisper.so`, `libggml.so`, prints sha256/size + adb command, writes `latest-apk.txt`.
+  - no successful run: exits 4 with the `--allow-failed` / `--any-branch` hint.
+  - `--run-id 999`: resolves metadata via `gh run view` and downloads.
+  - `bash -n` clean. Real gh/CI execution is owner-only (this container has no gh auth/device).
+- `native-build.yml`: `actionlint` (nix actionlint) => exit 0. Jobs:
+  - `apk`: SDK fast path (only missing packages), cached whisper.cpp, JNI check,
+    `:app:assembleDebug -Pmartins.native=true`, `native-apk-check.sh`, upload => target <6 min
+    warm. Unit tests were removed from this job so the artifact is not gated on them.
+  - `tests`: `:core:test :app:testDebugUnitTest` + host JNI tracer, parallel.
+  - Push path filters now include `app/**`, `core/**`, `scripts/**` (before, a change in
+    `app/src/main/java/.../audio/` did not trigger a native build at all).
+- ACTION NEEDED after the first green owner push: report the `apk` job wall time; if >6 min,
+  the remaining cost is the whisper.cpp NDK compile and would need a `.cxx` cache keyed on the
+  pinned whisper ref + CMakeLists/JNI hashes (do not add without measuring).

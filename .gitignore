@@ -36,3 +36,7 @@ app/src/main/cpp/whisper.cpp/
 
 # Raw benchmark workspace clones/build outputs (archived logs/runs/meta only)
 research/model-bench/raw-from-pm/repos/
+
+# Owner flash loop: downloaded CI APKs and voice recordings (personal data)
+dist/
+recordings/
