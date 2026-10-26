@@ -78,7 +78,7 @@ DONE (commit `06b7db6`, master clean):
 - Stable committed debug keystore `app/debug.keystore`; APK now signed by it
   (SHA-256 0aae92...5dfac), so CI builds `adb install -r` over each other and keep the model.
 GATE (fresh, offline, gradle-slot): core 165 tests + app 139 tests, 0 failures, 0 errors,
-2 env-skips; `:app:assembleDebug` green; APK 9,054,349 B signed with the committed key.
+2 env-skips; walls scan-weak-tests/scan-mocks/scan-oracle-copy PASS; `:app:assembleDebug` green; APK 9,054,349 B signed with the committed key.
 NEXT (on owner push + device run):
 1. Owner pushes master, CI native-build.yml -> flash; expect logcat on tap 1
    `MartinsWhisperState tap-start` + `capture-start`, on tap 2 `tap-stop` -> gate -> transcribe.

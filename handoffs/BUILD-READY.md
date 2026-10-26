@@ -23,6 +23,7 @@ Push master and dispatch `native-build.yml`.
 - `/work/owner/tools/gradle-slot.sh :core:test :app:testDebugUnitTest :app:assembleDebug --offline`
 - **BUILD SUCCESSFUL**: core 165 tests + app 139 tests, **0 failures, 0 errors**, 2 env-skips
   (host-native JNI + jfk replay, need the host native build/CI).
+- Walls: `scan-weak-tests PASS`, `scan-mocks PASS`, `scan-oracle-copy PASS`.
 - APK `app/build/outputs/apk/debug/app-debug.apk` 9,054,349 B, signed by the committed key
   (SHA-256 `0aae920be5363081f479c65fd9165ecd9c523ac4bab53c55212885259275dfac`).
 
