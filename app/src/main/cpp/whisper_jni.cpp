@@ -212,15 +212,22 @@ Java_com_martins_whisper_asr_WhisperCppNative_nativeSegmentCount(
     return whisper_full_n_segments(context);
 }
 
-extern "C" JNIEXPORT jstring JNICALL
+extern "C" JNIEXPORT jbyteArray JNICALL
 Java_com_martins_whisper_asr_WhisperCppNative_nativeSegmentText(
         JNIEnv * env, jobject /*thiz*/, jlong handle, jint index) {
     struct whisper_context * context = as_context(handle);
     if (context == nullptr || index < 0 || index >= whisper_full_n_segments(context)) {
-        return env->NewStringUTF("");
+        return env->NewByteArray(0);
     }
     const char * text = whisper_full_get_segment_text(context, index);
-    return env->NewStringUTF(text != nullptr ? text : "");
+    if (text == nullptr) return env->NewByteArray(0);
+    // Return the raw UTF-8 bytes. NewStringUTF expects modified UTF-8 and can abort the VM on
+    // standard 4-byte sequences (emoji) or invalid/split multibyte input; Kotlin decodes instead.
+    const jsize length = static_cast<jsize>(std::strlen(text));
+    jbyteArray bytes = env->NewByteArray(length);
+    if (bytes == nullptr) return nullptr;
+    env->SetByteArrayRegion(bytes, 0, length, reinterpret_cast<const jbyte *>(text));
+    return bytes;
 }
 
 extern "C" JNIEXPORT jlong JNICALL
