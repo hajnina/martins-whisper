@@ -30,6 +30,14 @@ fi
 [[ -n "$CMAKE" && -x "$CMAKE" ]] || die "cmake not found (set CMAKE or ANDROID_HOME)" 2
 CXX="${CXX:-$(command -v c++ || command -v g++ || command -v clang++ || true)}"
 [[ -n "$CXX" && -x "$CXX" ]] || die "C++ compiler not found (set CXX)" 2
+if [[ -z "${CC:-}" ]]; then
+    case "$(basename "$CXX")" in
+        *g++) CC="${CXX%++}" ;;
+        *c++) CC="${CXX%c++}cc" ;;
+        *) CC="$(command -v gcc || command -v clang || true)" ;;
+    esac
+fi
+[[ -n "$CC" && -x "$CC" ]] || die "C compiler not found (set CC)" 2
 if command -v ninja >/dev/null; then
     GENERATOR="Ninja"
 else
@@ -43,6 +51,8 @@ scripts/fetch-whisper-cpp.sh "$WHISPER" >/dev/null
 echo "== Building whisper.cpp for the host ($("$CMAKE" --version | head -1))"
 "$CMAKE" -S "$WHISPER" -B "$BUILD/whisper" -G "$GENERATOR" \
     -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_C_COMPILER="$CC" \
+    -DCMAKE_CXX_COMPILER="$CXX" \
     -DBUILD_SHARED_LIBS=ON \
     -DWHISPER_BUILD_TESTS=OFF \
     -DWHISPER_BUILD_EXAMPLES=OFF \
@@ -56,10 +66,13 @@ echo "== Building whisper.cpp for the host ($("$CMAKE" --version | head -1))"
 "$CMAKE" --build "$BUILD/whisper" --target whisper -j "$(getconf _NPROCESSORS_ONLN || echo 4)" >/dev/null
 
 find "$BUILD/whisper" -maxdepth 4 -type f -name '*.so*' -exec cp -Lf {} "$LIB/" \;
-# CMake installs versioned sonames only; -lwhisper needs the unversioned dev symlink.
+# CMake installs versioned sonames only; both the unversioned dev symlink and the
+# soname major (libwhisper.so.1) are needed by the loader at JNI time.
 for so in "$LIB"/lib*.so.*; do
     [[ -e "$so" ]] || continue
     ln -sf "$(basename "$so")" "${so%%.so.*}.so"
+    major="${so##*.so.}"; major="${major%%.*}"
+    ln -sf "$(basename "$so")" "${so%%.so.*}.so.$major"
 done
 [[ -f "$LIB/libwhisper.so" ]] || die "host whisper build produced no libwhisper.so"
 
@@ -89,6 +102,11 @@ actual="$(sha256sum "$MODEL" | awk '{print $1}')"
 
 JFK="${WHISPER_HOST_JFK:-$WHISPER/samples/jfk.wav}"
 [[ -f "$JFK" ]] || die "jfk.wav not found at $JFK" 2
+
+if [[ "${HOST_JNI_BUILD_ONLY:-0}" == "1" ]]; then
+    echo "host-jni-test: build-only OK (lib=$LIB model=$MODEL)"
+    exit 0
+fi
 
 # --- run the JVM test --------------------------------------------------------
 echo "== Java library dir: $LIB"
