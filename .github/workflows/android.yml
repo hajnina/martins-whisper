@@ -46,21 +46,25 @@ jobs:
         run: |
           set -euo pipefail
           SDK="$ANDROID_HOME"
-          test -x "$SDK/cmdline-tools/latest/bin/sdkmanager" || {
-            echo "::error::No preinstalled Android SDK at $SDK"
+          SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            SDKMANAGER="$(find "$SDK/cmdline-tools" -maxdepth 3 -path '*/bin/sdkmanager' 2>/dev/null | sort -V | tail -1)"
+          fi
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            echo "::error::No preinstalled Android sdkmanager under $SDK"
             ls -la /usr/local/lib/android 2>/dev/null || true
             exit 1
-          }
-          echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          fi
+          dirname "$SDKMANAGER" >> "$GITHUB_PATH"
           # Accept licences non-interactively. `yes` exits 141 on SIGPIPE, hence `|| true`.
-          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+          yes | "$SDKMANAGER" --sdk_root="$SDK" --licenses >/dev/null 2>&1 || true
           # No-op when the runner image already has them; keeps the build reproducible.
-          "$SDK/cmdline-tools/latest/bin/sdkmanager" --install \
+          "$SDKMANAGER" --sdk_root="$SDK" --install \
             "platforms;android-35" \
             "build-tools;34.0.0" \
             "build-tools;35.0.1" \
             "platform-tools" >/dev/null
-          "$SDK/cmdline-tools/latest/bin/sdkmanager" --list_installed | head -30
+          "$SDKMANAGER" --sdk_root="$SDK" --list_installed | head -30
 
       - name: Unit tests
         run: ./gradlew :core:test :app:testDebugUnitTest --no-daemon --stacktrace

@@ -66,13 +66,17 @@ jobs:
         run: |
           set -euo pipefail
           SDK="$ANDROID_HOME"
-          test -x "$SDK/cmdline-tools/latest/bin/sdkmanager" || {
-            echo "::error::No preinstalled Android SDK at $SDK"
+          SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            SDKMANAGER="$(find "$SDK/cmdline-tools" -maxdepth 3 -path '*/bin/sdkmanager' 2>/dev/null | sort -V | tail -1)"
+          fi
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            echo "::error::No preinstalled Android sdkmanager under $SDK"
             ls -la /usr/local/lib/android 2>/dev/null || true
             exit 1
-          }
-          echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+          fi
+          dirname "$SDKMANAGER" >> "$GITHUB_PATH"
+          yes | "$SDKMANAGER" --sdk_root="$SDK" --licenses >/dev/null 2>&1 || true
 
           # Fast path: the runner image already has the pinned NDK and CMake.
           need=()
@@ -81,7 +85,7 @@ jobs:
           for pkg in "platforms;android-35" "build-tools;35.0.1" "platform-tools"; do
             need+=("$pkg")
           done
-          "$SDK/cmdline-tools/latest/bin/sdkmanager" --install "${need[@]}" >/dev/null
+          "$SDKMANAGER" --sdk_root="$SDK" --install "${need[@]}" >/dev/null
           echo "ANDROID_NDK_HOME=$SDK/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
           "$SDK/cmake/$CMAKE_VERSION/bin/cmake" --version
           "$SDK/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" --version | head -1
