@@ -25,7 +25,7 @@ for root in ("core/src/test", "app/src/test"):
 
 assertions = re.compile(
     r"\bassertEquals\b|\bassertTrue\b|\bassertFalse\b|\bassertNull\b|\bassertNotNull\b|"
-    r"\bassertSame\b|\bassertNotEquals\b|\bassertFailsWith\b|\bassertThat\b|\bassertThrows\b|\brequire\(|\bcheck\("
+    r"\bassertSame\b|\bassertNotEquals\b|\bassertFailsWith\b|\bassertThat\b|\bassertThrows\b|\bassert[A-Z][A-Za-z0-9_]*\b|\brequire\(|\bcheck\("
 )
 
 findings = []
