@@ -69,6 +69,16 @@ jobs:
       - name: Unit tests
         run: ./gradlew :core:test :app:testDebugUnitTest --no-daemon --stacktrace
 
+      # Release-captain gate: the verify walls must run on every landing, not only locally.
+      # They are fail-closed and need only python3 (preinstalled on ubuntu-latest).
+      - name: Verify walls
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/verify/scan-weak-tests.sh
+          scripts/verify/scan-mocks.sh
+          scripts/verify/scan-oracle-copy.sh
+
       - name: Assemble debug APK
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
