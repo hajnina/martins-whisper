@@ -11,3 +11,7 @@ logs
 .cxx
 .externalNativeBuild
 worktrees
+app/src/main/cpp/whisper.cpp
+*.bin
+*.gguf
+*.onnx
