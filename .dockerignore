@@ -1,0 +1,17 @@
+.git
+.gradle
+**/build
+local.properties
+.idea
+*.iml
+*.apk
+*.aab
+models
+logs
+.cxx
+.externalNativeBuild
+worktrees
+app/src/main/cpp/whisper.cpp
+*.bin
+*.gguf
+*.onnx

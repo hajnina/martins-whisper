@@ -1,0 +1,71 @@
+# Martins Whisper Android build image (x86_64 Linux, same as GitHub Actions).
+#
+# The official Android SDK/NDK host tools are linux-x86_64. On an aarch64 host
+# build it with the amd64 platform and QEMU binfmt support:
+#
+#   docker buildx build --platform linux/amd64 -f Dockerfile.build -t martins-whisper-build .
+#   docker run --rm --platform linux/amd64 martins-whisper-build
+#
+# On a native x86_64 machine (CI) just use `docker build`.
+# syntax=docker/dockerfile:1.7
+
+FROM eclipse-temurin:17-jdk-jammy
+
+ARG CMDLINE_TOOLS_VERSION=11076708
+ARG CMDLINE_TOOLS_SHA256=2d2d50857e4eb553af5a6dc3ad507a17adf43d115264b1afc116f95c92e5e258
+ARG PLATFORM_VERSION=35
+ARG BUILD_TOOLS_VERSION=35.0.1
+ARG AGP_BUILD_TOOLS_VERSION=34.0.0
+ARG NDK_VERSION=27.0.12077973
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    ANDROID_HOME=/opt/android-sdk \
+    ANDROID_SDK_ROOT=/opt/android-sdk \
+    GRADLE_USER_HOME=/root/.gradle \
+    JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8
+
+RUN test "$(uname -m)" = "x86_64" \
+    || (echo "error: Dockerfile.build requires --platform linux/amd64" >&2; exit 1)
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p "$ANDROID_HOME/cmdline-tools" /tmp/cmdline \
+    && curl -fsSL -o /tmp/cmdline-tools.zip \
+       "https://dl.google.com/android/repository/commandlinetools-linux-${CMDLINE_TOOLS_VERSION}_latest.zip" \
+    && echo "${CMDLINE_TOOLS_SHA256}  /tmp/cmdline-tools.zip" | sha256sum -c - \
+    && unzip -q /tmp/cmdline-tools.zip -d /tmp/cmdline \
+    && mv /tmp/cmdline/cmdline-tools "$ANDROID_HOME/cmdline-tools/latest" \
+    && rm -rf /tmp/cmdline /tmp/cmdline-tools.zip
+
+ENV PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+
+RUN yes | sdkmanager --licenses >/dev/null || true
+
+RUN sdkmanager --install \
+      "platforms;android-${PLATFORM_VERSION}" \
+      "build-tools;${AGP_BUILD_TOOLS_VERSION}" \
+      "build-tools;${BUILD_TOOLS_VERSION}" \
+      "platform-tools" \
+      "ndk;${NDK_VERSION}" \
+    && sdkmanager --list_installed
+
+WORKDIR /src
+
+COPY gradlew gradlew.bat gradle.properties build.gradle.kts settings.gradle.kts ./
+COPY gradle ./gradle
+RUN chmod +x gradlew && ./gradlew --version
+
+COPY app ./app
+COPY core ./core
+
+RUN --mount=type=cache,target=/root/.gradle \
+    ./gradlew --no-daemon :core:test :app:assembleDebug --stacktrace
+
+RUN mkdir -p /artifacts \
+    && ls -l app/build/outputs/apk/debug/ \
+    && cp app/build/outputs/apk/debug/app-debug.apk /artifacts/app-debug.apk
+
+VOLUME ["/artifacts"]
+CMD ["/bin/bash"]

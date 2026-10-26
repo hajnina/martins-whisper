@@ -3,6 +3,9 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val nativeEnabled = providers.gradleProperty("martins.native").orNull?.lowercase() == "true"
+val vulkanEnabled = providers.gradleProperty("martins.vulkan").orNull?.lowercase() == "true"
+
 android {
     namespace = "com.martins.whisper"
     compileSdk = 35
@@ -15,18 +18,65 @@ android {
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        ndk {
-            abiFilters += listOf("arm64-v8a")
+        if (nativeEnabled) {
+            ndk {
+                abiFilters += listOf("arm64-v8a")
+            }
+            externalNativeBuild {
+                cmake {
+                    arguments += listOf(
+                        "-DCMAKE_BUILD_TYPE=Release",
+                        "-DGGML_VULKAN=${if (vulkanEnabled) "ON" else "OFF"}",
+                        "-DGGML_NATIVE=OFF",
+                        "-DGGML_OPENMP=OFF",
+                        "-DWHISPER_BUILD_TESTS=OFF",
+                        "-DWHISPER_BUILD_EXAMPLES=OFF",
+                        "-DWHISPER_BUILD_SERVER=OFF",
+                    )
+                    cppFlags += listOf("-std=c++17")
+                }
+            }
         }
     }
 
     buildTypes {
+        debug {
+            if (nativeEnabled) {
+                externalNativeBuild {
+                    cmake {
+                        arguments += "-DCMAKE_BUILD_TYPE=Release"
+                    }
+                }
+            }
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            if (nativeEnabled) {
+                externalNativeBuild {
+                    cmake {
+                        arguments += "-DCMAKE_BUILD_TYPE=Release"
+                    }
+                }
+            }
+        }
+    }
+
+    if (nativeEnabled) {
+        ndkVersion = "27.0.12077973"
+        externalNativeBuild {
+            cmake {
+                path = file("src/main/cpp/CMakeLists.txt")
+                version = "3.22.1"
+            }
+        }
+        packaging {
+            jniLibs {
+                useLegacyPackaging = false
+            }
         }
     }
 
@@ -53,6 +103,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
+    testImplementation(testFixtures(project(":core")))
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("org.robolectric:robolectric:4.14.1")
