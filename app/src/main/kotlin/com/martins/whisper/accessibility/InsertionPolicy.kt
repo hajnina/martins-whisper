@@ -37,14 +37,25 @@ sealed interface InsertionRoute {
 }
 
 object InsertionPolicy {
+    /**
+     * The only production caller that sets this is the debug-only E2E target screen
+     * (app/src/debug), which must be insertable without depending on a third-party app.
+     * Release builds never contain that screen, so the flag stays false there.
+     */
+    @Volatile
+    var allowOwnPackageForE2E: Boolean = false
+
     fun route(
         node: NodeSnapshot?,
         ownPackage: String,
         text: String,
+        allowOwnPackage: Boolean = false,
     ): InsertionRoute {
         if (text.isEmpty()) return InsertionRoute.Reject("empty text")
         if (node == null) return InsertionRoute.ClipboardOnly("no focused editable field")
-        if (node.packageName == ownPackage) return InsertionRoute.Reject("own package focused")
+        if (node.packageName == ownPackage && !allowOwnPackage) {
+            return InsertionRoute.Reject("own package focused")
+        }
         if (!node.isEditable) return InsertionRoute.ClipboardOnly("focused field is not editable")
         if (!node.isEnabled) return InsertionRoute.ClipboardOnly("focused field is disabled")
         if (!node.isVisible) return InsertionRoute.ClipboardOnly("focused field is not visible")
