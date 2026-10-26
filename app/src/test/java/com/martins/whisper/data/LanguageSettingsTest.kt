@@ -115,6 +115,20 @@ class LanguageSettingsTest {
     }
 
     @Test
+    fun `changing the legacy language updates existing onboarding prefs`() {
+        val settings = SettingsStore(app)
+        settings.languagePrefs = LanguagePrefs("cs", listOf("sk"))
+
+        settings.language = SettingsStore.LANGUAGE_ENGLISH
+        assertEquals("en", SettingsStore(app).effectiveLanguage())
+        assertEquals(listOf("sk"), SettingsStore(app).languagePrefs!!.secondaryLanguages)
+
+        settings.language = SettingsStore.LANGUAGE_AUTO
+        assertNull(SettingsStore(app).languagePrefs)
+        assertNull(SettingsStore(app).effectiveLanguage())
+    }
+
+    @Test
     fun `default model stays the multilingual base model`() {
         assertEquals("base", SettingsStore.DEFAULT_MODEL_ID)
         val base = ModelCatalog.byId(SettingsStore.DEFAULT_MODEL_ID)

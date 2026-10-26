@@ -22,7 +22,20 @@ class SettingsStore(context: Context) {
             val stored = prefs.getString(KEY_LANGUAGE, DEFAULT_LANGUAGE) ?: DEFAULT_LANGUAGE
             return stored.takeIf { it in SUPPORTED_LANGUAGES } ?: DEFAULT_LANGUAGE
         }
-        set(value) = prefs.edit().putString(KEY_LANGUAGE, value).apply()
+        set(value) = prefs.edit().apply {
+            putString(KEY_LANGUAGE, value)
+            val stored = LanguagePrefs.decode(prefs.getString(KEY_LANGUAGE_PREFS, null))
+            if (stored != null) {
+                if (value == LANGUAGE_AUTO) {
+                    remove(KEY_LANGUAGE_PREFS)
+                } else {
+                    putString(
+                        KEY_LANGUAGE_PREFS,
+                        stored.copy(primaryLanguage = value).normalized().encode(),
+                    )
+                }
+            }
+        }.apply()
 
     var backend: ComputeBackend
         get() = parseBackend(prefs.getString(KEY_BACKEND, ComputeBackend.AUTO.name))
