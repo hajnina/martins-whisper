@@ -16,6 +16,11 @@
         android:theme="@style/Theme.MartinsWhisper">
 
         <activity
+            android:name=".onboarding.OnboardingActivity"
+            android:exported="true"
+            android:theme="@style/Theme.MartinsWhisper" />
+
+        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop">
