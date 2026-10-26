@@ -1,6 +1,6 @@
 # Kanban - Martins Whisper (Android)
 
-Updated: 2026-10-26T15:17Z
+Updated: 2026-10-26T15:36Z
 Columns: Backlog | Ready | In Progress | Review | Blocked | Done
 WIP limit: 6 background agents.
 
@@ -9,10 +9,7 @@ WIP limit: 6 background agents.
 | ID | Deliverable | Owner / branch | Depends on | Handoff |
 |---|---|---|---|---|
 | B1 | Android build harness: JDK 17, Gradle, SDK 35, aarch64 host workarounds, native NDK feasibility, emulator feasibility, reproducible Docker/CI. Produce build report + scripts. **Toolchain READY; `:core:test` passes; finishing app build + handoff.** | agent/b1-build | skeleton | handoffs/B1-build/HANDOFF.md |
-| C1 | Pure Kotlin core audio: EnergyVad, AudioChunker, TranscriptMerger, TextInsertionPlanner + JUnit tests. **v2 relaunched with ready toolchain (pid 7875).** | agent/c1-core-audio | skeleton/contract | handoffs/C1-core-audio/HANDOFF.md |
 | E1 | ASR/model layer: SpeechEngine contract, whisper.cpp JNI + CMake + Vulkan, ModelCatalog/Repository, ModelManager idle-unload + tests. Coordinate with R1 decision. | agent/e1-asr | R1 (partial), B1 (partial) | handoffs/E1-asr/HANDOFF.md |
-| U1 | Android overlay + foreground service + state UI + settings/onboarding shell. Uses fake engine initially. **v2 relaunched with shared SDK (pid 8102).** | agent/u1-overlay | skeleton | handoffs/U1-overlay/HANDOFF.md |
-| I1 | Accessibility insertion service: focus tracking, ACTION_SET_TEXT + paste fallback, clipboard recovery, unit/Robolectric tests. **v2 relaunched with ready toolchain (pid 8022).** | agent/i1-input | skeleton/contract | handoffs/I1-input/HANDOFF.md |
 
 ## Ready / queued (next wave)
 
@@ -49,5 +46,8 @@ WIP limit: 6 background agents.
 | P0a | Replanned from Linux desktop to Android/Kotlin. | This document, SPEC.md v2 |
 | P0b | Repo skeleton, kanban, spec, logbook, agent worktree convention. | git commit |
 | R1 | Android prior-art research + ADR-004 recommendation (whisper.cpp/GGML, insertion, model lifecycle). | `research/ANDROID_PRIOR_ART.md`, `handoffs/R1-research/`, merged `d7ce482` |
+| C1 | Core VAD/chunker/merger/normalizer + 25 tests. | merged `agent/c1-core-audio`; `:core:test` green |
+| I1 | Accessibility focus tracking + UTF-16-safe insertion + fallback + 31 tests. | merged `agent/i1-input`; APK builds |
+| U1 | Foreground service, non-focusable overlay bubble, onboarding/settings, boot receiver. | merged `agent/u1-overlay`; APK 8.4 MB |
 | ADR-004 | Accept whisper.cpp + Vulkan/CPU, GGML-only v1, CPU fallback; sherpa emergency only. | `DECISIONS.md` |
 | ADR-007 | Reboot uses tap-to-re-arm notification; no mic FGS from boot. | `DECISIONS.md` |

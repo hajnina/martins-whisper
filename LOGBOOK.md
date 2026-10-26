@@ -17,3 +17,6 @@ Chronological project log. PM owns this file; agents add entries via their hando
 - 15:23Z - C1 v2 wasted time on broad `find`; killed and relaunched v3 with a no-reconnaissance, write-first prompt (pid 11231).
 - 15:24Z - R1 delivered handoff + 456-line prior-art report. PM merged `agent/r1-research` (`d7ce482`), accepted ADR-004 Option A (whisper.cpp + Vulkan/CPU, GGML-only v1, CPU fallback) and ADR-007 (tap-to-re-arm after reboot). SPEC R4 narrowed to GGML import.
 - 15:25Z - E1 writing model layer + JNI; U1 writing overlay/service/UI; I1 writing accessibility tests; B1 still investigating aarch64 NDK after green `:core:test`.
+- 15:32Z - I1 and U1 delivered committed handoffs. PM merged both, combined manifest (mic/overlay/FGS + accessibility service) and strings, fixed accessibility settingsActivity to `MainActivity`. C1 delivered 25 tests; merged. Master now passes 74 JVM tests and assembles `app-debug.apk`.
+- 15:35Z - ADR-003 strengthened with read-back verification, password-field guard, and no clipboard auto-clear from R1/I1 findings.
+- 15:36Z - E1 core ASR unit tests are green (7 downloader tests initially failed, then fixed); still finalizing native/NDK build and handoff. B1 still on aarch64 NDK/emulator feasibility after proving APK build.
