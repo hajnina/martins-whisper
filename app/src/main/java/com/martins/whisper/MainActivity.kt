@@ -363,38 +363,42 @@ class MainActivity : ComponentActivity() {
             })
             if (spec.notes.isNotBlank()) box.addView(caption(spec.notes))
 
-            val actions = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                setPadding(0, dp(4), 0, 0)
-            }
-            if (!row.installed && spec.url != null) {
-                actions.addView(actionButton(R.string.model_download, !state.isBusy) {
-                    downloadModel(spec.id)
-                })
-            }
-            if (spec.url != null) {
-                actions.addView(actionButton(R.string.model_import, !state.isBusy) {
-                    pickImport(spec.id)
-                })
-            }
-            if (row.installed) {
-                actions.addView(actionButton(R.string.model_delete, !state.isBusy) {
-                    deleteModel(spec.id)
-                })
-            }
-            box.addView(actions)
             if (state.transfer?.modelId == spec.id) {
                 transferProgressBar = ProgressBar(
                     this,
                     null,
                     android.R.attr.progressBarStyleHorizontal,
-                ).apply { max = 100 }
+                ).apply {
+                    max = 100
+                    setPadding(0, dp(6), 0, 0)
+                }
                 box.addView(transferProgressBar, matchWidth())
                 transferProgressView = caption("").apply {
                     setPadding(0, dp(2), 0, 0)
                     setTextColor(Color.rgb(19, 93, 102))
                 }
                 box.addView(transferProgressView)
+            } else {
+                val actions = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    setPadding(0, dp(4), 0, 0)
+                }
+                if (!row.installed && spec.url != null) {
+                    actions.addView(actionButton(R.string.model_download, !state.isBusy) {
+                        downloadModel(spec.id)
+                    })
+                }
+                if (spec.url != null) {
+                    actions.addView(actionButton(R.string.model_import, !state.isBusy) {
+                        pickImport(spec.id)
+                    })
+                }
+                if (row.installed) {
+                    actions.addView(actionButton(R.string.model_delete, !state.isBusy) {
+                        deleteModel(spec.id)
+                    })
+                }
+                box.addView(actions)
             }
             modelContainer.addView(box, matchWidth())
         }
