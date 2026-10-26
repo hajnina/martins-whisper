@@ -51,8 +51,10 @@ cases above exist and pass. `git status` clean on the branch.
 
 ## Status
 
-open
+done (2026-10-26)
 
 ## Result
 
--
+Tests: `3111cf7` (4 new, 70 app tests green); handoff `befd96b`. Branch `agent/g3-download`
+(stacked on `agent/g2-engine`). No production change; detailed evidence in
+`handoffs/ASHA-3/G3a-HANDOFF.md`.

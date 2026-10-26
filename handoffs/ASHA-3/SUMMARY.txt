@@ -1,6 +1,19 @@
-G3a done: app-level HttpModelDownloaderTest proves ModelRepository -> ResumableModelDownloader ->
-HttpModelSource against a real loopback ServerSocket. Four cases pass: happy path (bytes/SHA-256/
-monotonic progress/.part removed), resume after mid-body cut (Range bytes=N-, resumed=true,
-attempts=2), bad hash (ModelVerificationException, no files), 404 (DownloadException with "404", no
-files). No production changes. Acceptance: ./gradlew :app:testDebugUnitTest --offline ->
-BUILD SUCCESSFUL; 70 tests, 0 failures, 0 errors (new class: 4 tests).
+ASHA-3: two stacked branches on agent/g2-engine, both host-JVM verified offline.
+
+G3a (agent/g3-download): app-level HttpModelDownloaderTest proves ModelRepository ->
+ResumableModelDownloader -> HttpModelSource against a real loopback ServerSocket. Four cases:
+happy path (bytes/SHA-256/monotonic progress/.part removed), resume after mid-body cut
+(Range bytes=N-, resumed=true, attempts=2), bad hash (ModelVerificationException, no files),
+404 (DownloadException with "404", no files). No production changes.
+Gate: :app:testDebugUnitTest --offline BUILD SUCCESSFUL; 70 tests, 0 failures (new class: 4).
+
+G3b (agent/g3-backend): spinner keeps AUTO/GPU/CPU persistence with labels
+Auto (Vulkan, CPU fallback) / Vulkan (GPU) / CPU. EngineFactory retries exactly once on CPU for
+non-CPU requests: GPU -> gpu-unavailable, AUTO -> auto-cpu, count+1, lastError null; explicit CPU
+never retries; double failure is exactly two calls and ENGINE_ERROR.
+Gate: :app:testDebugUnitTest --offline BUILD SUCCESSFUL; 70 tests, 0 failures
+(EngineFactoryTest 12/12, 4 new).
+
+Both branches include G2 (custom models + engine host) and are clean. Merge G2 first, then G3a/G3b
+(no file overlap). Combined integration gate: see handoffs/ASHA-3/HANDOFF.md.
+No device/GPU/network validation (host JVM + loopback only).
