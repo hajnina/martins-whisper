@@ -1,5 +1,9 @@
 # PARK-ORIN (2026-10-26 ~17:25Z)
 
+## G0 Gemma feasibility (2026-10-26 ~22:5x Z) — DONE
+- Branch `agent/gemma-research` @ `df953e1`: `docs/GEMMA-FEASIBILITY.md` (owner brief ticket G0). Verdict: GO-WITH-CAVEATS; smallest milestone = host litert-lm spike (E2B + jfk.wav + 3 Czech fixtures, RTF table) then in-app AAR behind flag. Key: 3n audio = LiteRT-LM only (Audio Scribe = code to copy, Apache-2.0); llama.cpp CANNOT run 3n audio; `google/gemma-3n-*-int4.litertlm` gated (401 anon) vs `litert-community/gemma-4-*` UNgated (206 anon, incl. Qualcomm QCS8275 NPU file).
+- Needs FROM OWNER: accept Gemma terms on HF (owner account), obtain the 3.4 GiB file. TO GEMI: copied files table is in doc §2; integration plan §6. tests: n/a (docs only).
+
 ## DONE (committed)
 - `research/model-bench` @ `4fbf306` — recovered PM bench results (`research/model-bench/results-existing.{md,json}`), analyzer (`analyze.js`), prompts/models, recovered 93 run logs under `research/model-bench/runs`.
 - `master` @ `75c8849` — `wip: park` committed the PM's pending `agents/prompts/G1-integration.md`.
