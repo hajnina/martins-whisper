@@ -57,6 +57,23 @@ class InsertionPolicyTest {
     }
 
     @Test
+    fun `own package is allowed only through the explicit e2e seam`() {
+        assertEquals(
+            InsertionRoute.SetText,
+            InsertionPolicy.route(node(packageName = own), own, "hello", allowOwnPackage = true),
+        )
+        assertEquals(
+            InsertionRoute.ClipboardOnly("password field"),
+            InsertionPolicy.route(
+                node(packageName = own, password = true, readableText = false),
+                own,
+                "hello",
+                allowOwnPackage = true,
+            ),
+        )
+    }
+
+    @Test
     fun `unknown package is allowed`() {
         assertEquals(InsertionRoute.SetText, InsertionPolicy.route(node(packageName = null), own, "hi"))
     }
