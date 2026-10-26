@@ -1,41 +1,51 @@
-# PARK-ASHA — 2026-10-26
+# PARK-ASHA — 2026-10-26 (shift 2, live)
 
-## DONE (merged on master unless noted)
+Branch `agent/u2-states`, worktree `/work/martins-whisper-worktrees/u2-states`.
+Master merged in at `fbb94d7` (master tip `636b3f9`). App gate: **97 tests / 0 failures**.
 
-- **G1 core**: merged before this session.
-- **G2 custom model import + record-while-loading / idle unload**: branch `agent/g2-engine` @ `8497d83`; merge `01fa735`; handoff `handoffs/ASHA-2/`.
-- **G3a real-HTTP downloader proof tests**: branch `agent/g3-download` @ `c207082`; merge `5bc822d`; handoff `handoffs/ASHA-3/`.
-- **G3b backend labels + CPU-retry-once engine fallback**: branch `agent/g3-backend` @ `63230d3`; merge `c53b6ef`; handoff `handoffs/ASHA-3/`.
-- **NORA-1 CI/native APK evidence**: merge `c3c45bb`; handoff `handoffs/NORA-1/`.
-- **TESS-2 T2 service lifecycle + overlay state-machine tests**: merge `25ea766`.
-- **TESS-2 T2 edge suites**: merge `ed8d96c`.
-- **Wave-4 integration**: master @ `83a65df`; `handoffs/` wave-4 note records gate **217 tests / 0 failures**.
-- **U2b overlay states/haptics/accessibility (DONE, UNMERGED)**: branch `agent/u2-states` @ `db0b5f6` (code `4763078`, handoff `db0b5f6`); 86 app tests green on its base. Handoff `handoffs/ASHA-4/U2b-HANDOFF.md`.
-- **U2a tile + notification toggle (PARKED, DO NOT MERGE)**: branch `agent/u2-tile` @ `5a84f51` (`wip: park`); no handoff; out of MFVP scope.
+## DONE (this shift, on branch unless noted)
 
-## RUNNING at park
+- **U2b merged with master** (`fbb94d7`); T2 `OverlayStateMachineRobolectricTest` expectations
+  updated deliberately to the new descriptions (Recording → "Listening; release to transcribe",
+  Error → "Error: …").
+- **U2b-2 / MFVP 4b** (`63a3d9d`): start/stop VIRTUAL_KEY ticks, inserted CONFIRM tick,
+  **error = double REJECT ~90 ms apart**, synchronous state+contentDescription (visible next
+  frame), and a focus-safety test (`FLAG_NOT_FOCUSABLE | FLAG_NOT_TOUCH_MODAL`).
+  Handoff `handoffs/ASHA-5/HANDOFF.md`.
+- **E2E-1 insert link** (`82b1a9e`): `DictationService` default inserter is now
+  `AccessibilityTextInserter` (focused-field `ACTION_SET_TEXT`/`ACTION_PASTE` via
+  `DictationAccessibilityService`) with clipboard fallback; empty text rejected. Added
+  `AccessibilityInserter.insertNow` for main-thread callers. **This was the missing
+  "text appears in the focused field" link.**
+- **MODEL-1 review**: default model `base`, `ModelRepositoryProvider` → `<filesDir>/models`,
+  `ResumableModelDownloader` SHA+resume already covered by `ModelDownloaderTest` (7) and
+  `HttpModelDownloaderTest` (4). No gap found; no change.
 
-- **U2A worker** — ticket U2a (Quick Settings tile + notification overlay toggle), branch `agent/u2-tile`, model `opencode/deepseek-v4.1-flash-free`. Reached a compiling-ish WIP (tile service, manifest, service action, Robolectric test) but **was stopped by scope order**; all files committed in `5a84f51`. Do not wait for it; do not merge it.
-- **U2B worker** — ticket U2b, branch `agent/u2-states`, same model. **Completed**: `db0b5f6`; 86 tests, 0 failures.
-- No other workers were launched by ASHA this session.
+## RUNNING at this note
 
-## NEXT (ordered; each is one small ticket)
+- **APK-1 local native build**: `./gradlew :app:assembleDebug -Pmartins.native=true
+  -Pmartins.vulkan=false --offline` in the u2-states worktree, log `/tmp/asha-native-build2.log`.
+  First attempt failed on a dangling `ninja` symlink; fixed by `nix profile install nixpkgs#ninja`.
+  Result pending; if green, inspect `app-debug.apk` for `lib/arm64-v8a/*.so`.
 
-1. **E2E-1 audit + smallest fixes**: trace bubble tap -> `DictationService.onPress` -> audio frames -> `DictationEngineHost` buffering/VAD/chunk -> engine transcribe -> `TextInserter.insert` into focused field. Read code and existing tests; fix only missing/broken links. Acceptance: existing `:app:testDebugUnitTest --offline` green + a targeted test for each link found broken. Hand off to MARA with evidence.
-2. **U2B-2 haptics/visibility refinement** (branch `agent/u2-states`): start/stop/inserted each get one tick; **error gets a distinct double tick**; bubble state visible within ~100 ms for recording/working/error; content descriptions stay; **bubble must never steal focus**. Keep Robolectric tests small; update `handoffs/ASHA-4/U2b-HANDOFF.md`; hand to MARA.
-3. **MODEL-1 verify default model path**: one default (base or tiny), one-tap download, resume, SHA check — confirm the already-built G3 path works end-to-end in code/tests; fix smallest gap.
-4. **APK-1 verify arm64 artifact**: CI-built APK actually contains the working whisper.cpp `.so` (NORA/N1). Do not add release workflow/signing ceremony; debug-signed is fine.
-5. **PHONE-1 on-device run**: install on real phone via wireless adb, grant 3 permissions, tap/speak/insert; fix real bugs found. Requires the physical phone.
-6. **README-1**: one short README: what it is, install, permissions, use. No new docs beyond this.
+## NEXT (ordered, small)
+
+1. **APK-1**: finish native build; `unzip -l` + `apksigner verify` + `aapt2 dump badging` evidence
+   for arm64 `.so`; DO NOT add release/signing workflow (NORA-1 covers CI).
+2. **README-1**: one short README (what, install, 3 grants: mic + overlay + accessibility, use).
+3. **PHONE-1**: on-device wireless adb run; needs Martin's phone (owner).
+4. Hand the branch to MARA: gate = `:core:test :app:testDebugUnitTest` green + the flow test names.
 
 ## TRAPS / NOTES
 
-- **Master moved during U2 work**: U2 branches are based on `c53b6ef`; master is `83a65df`. Merge master into each branch before final gate.
-- **T2 test conflict with U2b**: `OverlayStateMachineRobolectricTest` (master) asserts old content descriptions (`"Recording"`, raw success/error messages). U2b intentionally changes them. After merging master into `agent/u2-states`, update those expectations deliberately; do not weaken the behavior.
-- **`DictationService.onStartCommand` calls `ensureForeground()` + `startOverlay()` after action handling.** Any new action that hides the overlay must return early or it will be immediately re-shown. Relevant if tile/toggle work is ever resumed.
-- **Robolectric `ShadowTileService`** exposes `getQsTile()`, `setLocked()`; no click recording — tile click is observed via `ShadowApplication.getNextStartedService()`. Tile work is deferred anyway.
-- **Build env** (always `--offline`): `export JAVA_HOME=/work/android-toolchain/jdk ANDROID_HOME=/work/android-toolchain/sdk ANDROID_SDK_ROOT=/work/android-toolchain/sdk GRADLE_USER_HOME=<own copy>`; never share `/work/android-toolchain/gradle-home` between concurrent workers.
-- **Provider check**: `/work/.yoloseek/PROVIDER-STATUS.md` was **OK** at park.
-- **Many worktrees exist**; `/tmp/tess-master-verify` is a prunable stale worktree. Do not assume old branch tips are merged — check `git log master`.
-- **Park commits**: `m1-release` `94d76e6`, `n2-release` `f5f600e`, `t3-lint` `1e7e3fd` are `wip: park` only (release/lint work is out of MFVP scope).
-- **Scope**: MFVP is the only goal. Do not merge tile, extra overlay states beyond recording/working/error, GPU/Vulkan tuning, lint, release workflow, or new docs.
+- Build env (always `--offline`): `export JAVA_HOME=/work/android-toolchain/jdk
+  ANDROID_HOME=/work/android-toolchain/sdk ANDROID_SDK_ROOT=/work/android-toolchain/sdk
+  GRADLE_USER_HOME=/home/node/gh-asha` (copied this session; never touch the shared home).
+- `ninja` symlinks in `/work/android-toolchain/sdk/cmake/*/bin` point at
+  `/home/node/.nix-profile/bin/ninja`; a refilled container loses it → `nix profile install
+  nixpkgs#ninja` before native builds.
+- Do **not** edit `/work/martins-whisper` main checkout; it stays clean for MARA's merge.
+- `DictationService.onStartCommand` still calls `ensureForeground()` + `startOverlay()` after
+  actions; tile work remains out of scope.
+- MFVP scope: no tile, no extra states beyond recording/working/error, no GPU tuning, no lint,
+  no release ceremony, no new docs except the README.

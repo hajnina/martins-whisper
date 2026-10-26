@@ -1,40 +1,44 @@
 # Martins Whisper
 
-License: Apache-2.0 (see LICENSE)
+Local-only, hold-to-talk dictation for Android. Tap the floating bubble in any app, speak,
+tap again, and the transcript is inserted into the focused text field. Whisper runs on-device
+via whisper.cpp; audio and text never leave the phone. No account, no telemetry.
 
-A local-only, hold-to-talk dictation app for **Android**, in Kotlin. Think "Wispr Flow clone" with no cloud:
+License: Apache-2.0 (see `LICENSE`).
 
-- Always-visible floating mic overlay. Hold it, speak, release.
-- Text is inserted into whatever text field currently has focus.
-- Whisper runs on-device (GPU where available), with an idle unload after 5 minutes.
-- Models are configurable (Whisper base by default).
-- Long holds are chunked with VAD and transcribed incrementally.
+## What you need
 
-Status: **active development / replan v2 (Android)**. See `KANBAN.md`, `SPEC.md`, `LOGBOOK.md`.
+- An **arm64** Android 10+ phone.
+- An APK built with the native engine (`-Pmartins.native=true`). The default debug APK from a
+  plain `assembleDebug` has no `whisper.cpp` libraries and cannot transcribe.
+- About 250 MB free storage for the default `base` model.
 
-## Documentation
+## Install
 
-| Guide | Audience | What it covers |
-|---|---|---|
-| [docs/BUILD.md](docs/BUILD.md) | operator | Build the APK and run the JVM tests on this host, in Docker, or in CI. |
-| [docs/INSTALL.md](docs/INSTALL.md) | user + operator | Sideload the APK, first run, upgrade and uninstall. |
-| [docs/FIRST-DICTATION.md](docs/FIRST-DICTATION.md) | user + operator | Shortest path from a native APK to text in another app, including model download/import. |
-| [docs/FIRST-DICTATION.md](docs/FIRST-DICTATION.md) | user + operator | Shortest path from APK to text: native build, 3 permissions, model, overlay, first dictation. |
-| [docs/PERMISSIONS.md](docs/PERMISSIONS.md) | user | Microphone, overlay, accessibility, notifications, battery; what each is for and how to revoke it. |
-| [docs/MODELS.md](docs/MODELS.md) | user + operator | Model sizes/hashes, download/import, adb model push, storage and deletion. |
-| [docs/PRIVACY.md](docs/PRIVACY.md) | everyone | Local-only audio and transcripts, the one network use, and what is stored. |
-| [docs/DEVICE-MATRIX.md](docs/DEVICE-MATRIX.md) | operator | Supported/best-effort/unsupported devices plus the H1/H2 device tests. |
-| [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | user + operator | Permission, overlay, model, memory and insertion failures with a next step. |
-| [docs/DOCTOR.md](docs/DOCTOR.md) | user + operator | Pasteable, secret-free diagnostics for a bug report. |
+```bash
+./gradlew :app:assembleDebug -Pmartins.native=true --offline
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
 
-## Current build status (0.1.0)
+The APK is debug-signed; sideloading is expected (no Play Store build yet).
 
-The Android shell, permissions UI, overlay, settings, model catalog, in-app model
-management (installed state, download, SAF import, delete, progress) and the real
-`WhisperCppEngine` wiring are in place and pass 135 JVM tests. Diagnostics shows
-native availability, the resolved backend, fallback reason, GPU-failure count and
-the last engine error. The default APK still has **no native libraries**
-(`-Pmartins.native=false`), so real transcription needs an arm64 build with
-`-Pmartins.native=true`; no native/device run has been done yet. Everything in
-these docs that requires a physical phone is marked **UNVERIFIED** until the H1
-device run.
+## Grant access
+
+Open the app and use the **Grant** button on each row:
+
+1. **Microphone** - records only while the bubble is held.
+2. **Display over other apps** - draws the bubble above the app you are typing in.
+3. **Accessibility** (Martins Whisper text insertion) - inserts the transcript at the cursor.
+4. **Notifications** (recommended, Android 13+) - keeps the foreground service visible.
+
+Without accessibility the transcript is copied to the clipboard instead.
+
+## Use it
+
+1. In the app, download the default **Base** model (one tap, resumable, SHA-256 checked).
+2. Turn the floating bubble on.
+3. Switch to any app and focus a text field.
+4. Tap the bubble, speak, tap again. It shows recording/working/error and ticks on start, stop,
+   insert; an error is a distinct double tick. The text lands in the focused field.
+
+Deeper guides (build, models, permissions, troubleshooting) live in `docs/`.
