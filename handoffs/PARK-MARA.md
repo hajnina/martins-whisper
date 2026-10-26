@@ -58,3 +58,5 @@ NEXT (ordered, small tickets):
 4. MFVP-4 H1 device test (owner/ASKS.md has Martin's steps) - the only open critical item.
 5. KANBAN/LOGBOOK touch-up + handoffs/PM-<n> consolidation at next milestone.
 TRAPS: same as above plus: `find -newermt -15 minutes` fails here (use `-mmin`); no python3 exists (node works); awk quoting with double quotes throws runaway-string - avoid.
+
+# MARA live (owner steer 20:30): merged capture1+ui-device1+ui-device2+replay1 + own telemetry/envelope/wavdump; gate 49 suites 300 tests 0 fail 2 env-skips; walls PASS; BUILD-READY written (SHA 4fd07e6). Mutations recorded. Next: device report loop, replay pulled WAVs.
