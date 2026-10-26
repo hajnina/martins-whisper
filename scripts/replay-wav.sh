@@ -18,7 +18,7 @@ MODEL="${WHISPER_REPLAY_MODEL:-$BUILD/models/ggml-tiny.bin}"
 DEFAULT_WAV="$ROOT/app/src/main/cpp/whisper.cpp/samples/jfk.wav"
 WAV="${1:-$DEFAULT_WAV}"
 TEST_CLASS="com.martins.whisper.harness.WavReplayRobolectricTest"
-TEST_METHOD="jfkReplayAssertsLiteralWordsAndSpeakVerdict"
+TEST_METHOD="replayWavAssertsExpectedWordsAndGateVerdict"
 
 die() { echo "replay-wav: FAIL: $*" >&2; exit "${2:-1}"; }
 
@@ -38,7 +38,7 @@ if [[ -z "${CXX:-}" && -x /home/node/mamba/env/bin/aarch64-conda-linux-gnu-g++ ]
 fi
 if [[ -z "${CC:-}" && -n "${CXX:-}" ]]; then
     case "$(basename "$CXX")" in
-        *g++) CC="${CXX%++}" ;;
+        *g++) CC="${CXX%g++}gcc" ;;
         *c++) CC="${CXX%c++}cc" ;;
     esac
 fi
@@ -56,6 +56,9 @@ fi
 [[ -f "$MODEL" ]] || die "missing model: $MODEL" 2
 [[ -f "$WAV" ]] || die "WAV not found: $WAV (pass the file as the first argument)" 2
 WAV="$(readlink -f "$WAV")"
+if [[ "$(basename "$WAV")" == "jfk.wav" ]]; then
+    export WHISPER_REPLAY_EXPECT="ask not what your country can do for you;fellow americans"
+fi
 [[ "$(stat -c %s "$WAV")" -gt 44 ]] || die "WAV is empty: $WAV" 2
 
 OUT="$(mktemp)"

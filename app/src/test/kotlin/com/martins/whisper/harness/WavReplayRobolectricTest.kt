@@ -70,7 +70,7 @@ class WavReplayRobolectricTest {
     }
 
     @Test
-    fun jfkReplayAssertsLiteralWordsAndSpeakVerdict() {
+    fun replayWavAssertsExpectedWordsAndGateVerdict() {
         val wav = locateWav()
         val model = locateModel()
         assumeTrue(
@@ -99,18 +99,38 @@ class WavReplayRobolectricTest {
                 add("rms_dbfs=${format(WavFixtures.rmsDbfs(audio.samples))}")
                 add("gate=$gate")
                 add("transcript=$transcript")
-                if (outcome.inserted == null) add("reason=${outcome.state}")
+                if (outcome.inserted == null) add("reason=${(outcome.state as? DictationState.Error)?.message ?: outcome.state}")
             },
         )
 
-        assertNotNull("gate rejected jfk: ${outcome.state}", outcome.inserted)
-        val normalized = transcript.lowercase()
-            .replace(Regex("[^a-z0-9 ]"), " ")
-            .replace(Regex("\\s+"), " ")
-            .trim()
-        assertTrue("transcript missing the JFK line, got: '$transcript'", normalized.contains("ask not what your country can do for you"))
-        assertTrue("transcript missing 'fellow americans', got: '$transcript'", normalized.contains("fellow americans"))
-        assertEquals("gate verdict", "SPEAK", gate)
+        val expected = expectedWords(wav)
+        val inserted = outcome.inserted
+        if (inserted == null) {
+            val error = outcome.state as? DictationState.Error
+            assertNotNull("replay failed without a gate verdict: ${outcome.state}", error)
+            assertTrue(
+                "unexpected failure instead of a gate verdict: ${error!!.message}",
+                error.message == TranscriptGate.EMPTY_MESSAGE ||
+                    error.message == TranscriptGate.SILENT_MIC_MESSAGE,
+            )
+        } else {
+            assertTrue("inserted text must end in Success, got ${outcome.state}", outcome.state is DictationState.Success)
+        }
+        if (expected.isNotEmpty()) {
+            assertNotNull("gate rejected audio but expected speech: ${outcome.state}", inserted)
+            val normalized = inserted!!.lowercase()
+                .replace(Regex("[^a-z0-9 ]"), " ")
+                .replace(Regex("\\s+"), " ")
+                .trim()
+            expected.forEach { phrase ->
+                val wanted = phrase.lowercase()
+                    .replace(Regex("[^a-z0-9 ]"), " ")
+                    .replace(Regex("\\s+"), " ")
+                    .trim()
+                assertTrue("transcript missing '$phrase', got: '$inserted'", normalized.contains(wanted))
+            }
+            assertEquals("gate verdict", "SPEAK", gate)
+        }
     }
 
     @Test
@@ -261,6 +281,16 @@ class WavReplayRobolectricTest {
         println(text)
         System.getenv("WHISPER_REPLAY_OUT")?.takeIf { it.isNotBlank() }?.let { path ->
             File(path).apply { parentFile?.mkdirs() }.writeText(text + "\n")
+        }
+    }
+
+    private fun expectedWords(wav: File): List<String> {
+        val configured = System.getenv("WHISPER_REPLAY_EXPECT").orEmpty()
+        if (configured.isNotBlank()) return configured.split(';').map { it.trim() }.filter { it.isNotEmpty() }
+        return if (wav.name.equals("jfk.wav", ignoreCase = true)) {
+            listOf("ask not what your country can do for you", "fellow americans")
+        } else {
+            emptyList()
         }
     }
 

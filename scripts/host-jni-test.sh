@@ -32,7 +32,7 @@ CXX="${CXX:-$(command -v c++ || command -v g++ || command -v clang++ || true)}"
 [[ -n "$CXX" && -x "$CXX" ]] || die "C++ compiler not found (set CXX)" 2
 if [[ -z "${CC:-}" ]]; then
     case "$(basename "$CXX")" in
-        *g++) CC="${CXX%++}" ;;
+        *g++) CC="${CXX%g++}gcc" ;;
         *c++) CC="${CXX%c++}cc" ;;
         *) CC="$(command -v gcc || command -v clang || true)" ;;
     esac
