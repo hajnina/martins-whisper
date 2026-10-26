@@ -50,7 +50,7 @@ class SoundOrbRenderer {
             fill.alpha = (70f + 80f * motion.radius).toInt().coerceIn(0, 255)
             canvas.drawCircle(
                 cx + (cos(angle) * distance).toFloat(),
-                cy + (sin(angle) * distance).toFloat(),
+                cy + (sin(angle) * distance).toFloat() + (motion.hue - 0.5f) * core * 0.28f,
                 lobeRadius,
                 fill,
             )
@@ -62,11 +62,16 @@ class SoundOrbRenderer {
             cy - core * 0.28f,
             core * 1.25f,
             intArrayOf(light, deep, edge),
-            floatArrayOf(0f, 0.7f, 1f),
+            floatArrayOf(0f, (0.45f + 0.4f * motion.edgeCrispness).coerceAtMost(0.9f), 1f),
             Shader.TileMode.CLAMP,
         )
         canvas.drawCircle(cx, cy, core, fill)
         fill.shader = null
+
+        stroke.color = light
+        stroke.alpha = (30f + 190f * motion.edgeCrispness).toInt().coerceIn(0, 255)
+        stroke.strokeWidth = (base * (0.015f + 0.045f * motion.edgeCrispness)).coerceAtLeast(1f)
+        canvas.drawCircle(cx, cy, core, stroke)
 
         if (motion.wobble > 0.08f) {
             fill.color = edge

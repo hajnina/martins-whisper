@@ -20,6 +20,8 @@ data class OrbMotion(
     val hue: Float,
     /** Number of lobes, 3..7; driven by spectral brightness. */
     val lobes: Int,
+    /** Edge crispness 0..1 (soft haze .. sharp rim); driven by spectral brightness. */
+    val edgeCrispness: Float,
     /** Grainy surface 0..1 when the frame is unvoiced or noisy. */
     val wobble: Float,
     /** Slow idle breathing, -1..1. */
@@ -41,6 +43,7 @@ class OrbDynamics(
     private var ripple = 0f
     private var hue = 0.5f
     private var lobes = 4
+    private var edge = 0.5f
     private var wobble = 0f
     private var phase = 0f
 
@@ -62,8 +65,9 @@ class OrbDynamics(
             hue += (pitchNorm.coerceIn(0f, 1f) - hue) * (1f - exp(-10f * dt))
         }
         if (brightness != null) {
-            val targetLobes = (3f + brightness.coerceIn(0f, 1f) * 4f).roundToInt()
-            lobes = targetLobes.coerceIn(3, 7)
+            val measured = brightness.coerceIn(0f, 1f)
+            lobes = (3f + measured * 4f).roundToInt().coerceIn(3, 7)
+            edge += (measured - edge) * (1f - exp(-8f * dt))
         }
         val targetWobble = if (voicedProb < 0.5f) target else 0f
         wobble += (targetWobble - wobble) * (1f - exp(-8f * dt))
@@ -77,6 +81,7 @@ class OrbDynamics(
             ripple = ripple.coerceIn(0f, 1f),
             hue = hue.coerceIn(0f, 1f),
             lobes = lobes,
+            edgeCrispness = edge.coerceIn(0f, 1f),
             wobble = wobble.coerceIn(0f, 1f),
             breathe = sin(2.0 * PI * phase / breathPeriodSeconds).toFloat(),
         )
@@ -95,6 +100,7 @@ class OrbDynamics(
             ripple = ripple.coerceIn(0f, 1f),
             hue = hue,
             lobes = lobes,
+            edgeCrispness = edge.coerceIn(0f, 1f),
             wobble = wobble.coerceIn(0f, 1f),
             breathe = sin(2.0 * PI * phase / breathPeriodSeconds).toFloat(),
         )
