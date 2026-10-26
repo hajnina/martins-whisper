@@ -16,16 +16,20 @@ object OverlayGeometry {
         return x.coerceIn(margin, maxX) to y.coerceIn(margin, maxY)
     }
 
-    fun defaultBottomEnd(
+    /**
+     * Default spot on the right edge, vertically centred. The bottom edge is deliberately avoided:
+     * on the real phone the bubble covered Gboard's Enter key and Messages' mic/send button.
+     */
+    fun defaultSide(
         width: Int,
         height: Int,
         screenWidth: Int,
         screenHeight: Int,
         margin: Int,
-        bottomInset: Int,
     ): Pair<Int, Int> {
         val x = (screenWidth - width - margin).coerceAtLeast(margin)
-        val y = (screenHeight - height - margin - bottomInset).coerceAtLeast(margin)
+        val maxY = (screenHeight - height - margin).coerceAtLeast(margin)
+        val y = ((screenHeight - height) / 2).coerceIn(margin, maxY)
         return x to y
     }
 

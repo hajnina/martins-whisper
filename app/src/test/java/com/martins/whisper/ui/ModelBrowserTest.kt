@@ -35,8 +35,11 @@ class ModelBrowserTest {
         assertEquals(specs[1].id, browser.state.transfer?.modelId)
         assertNull((browser.state.transfer as ModelTransfer.Download).fraction)
 
-        browser.progress(0.42f)
-        assertEquals(0.42f, (browser.state.transfer as ModelTransfer.Download).fraction)
+        browser.progress(0.42f, bytesDownloaded = 62_000_000L, totalBytes = 147_951_465L)
+        val progress = browser.state.transfer as ModelTransfer.Download
+        assertEquals(0.42f, progress.fraction)
+        assertEquals(62_000_000L, progress.bytesDownloaded)
+        assertEquals(147_951_465L, progress.totalBytes)
 
         browser.completeInstalled(specs[1].id)
         assertNull(browser.state.transfer)
@@ -142,9 +145,30 @@ class ModelBrowserTest {
         assertEquals("none", ModelPresentation.fallbackLabel(null))
         assertEquals("148 MB", ModelPresentation.sizeLabel(147_951_465L))
         assertEquals("unknown size", ModelPresentation.sizeLabel(null))
+        assertEquals("512 B", ModelPresentation.byteCount(512))
+        assertEquals("2 KB", ModelPresentation.byteCount(2_400))
         assertEquals(
             "Downloading Base\u2026 50%",
             ModelPresentation.transferLabel(ModelTransfer.Download("base", 0.5f), "Base"),
+        )
+        assertEquals(
+            "Downloading Base\u2026 45% \u00b7 66 MB / 148 MB",
+            ModelPresentation.transferLabel(
+                ModelTransfer.Download(
+                    modelId = "base",
+                    fraction = 0.45f,
+                    bytesDownloaded = 66_000_000L,
+                    totalBytes = 147_951_465L,
+                ),
+                "Base",
+            ),
+        )
+        assertEquals(
+            "Downloading Base\u2026 66 MB",
+            ModelPresentation.transferLabel(
+                ModelTransfer.Download(modelId = "base", bytesDownloaded = 66_000_000L),
+                "Base",
+            ),
         )
     }
 }

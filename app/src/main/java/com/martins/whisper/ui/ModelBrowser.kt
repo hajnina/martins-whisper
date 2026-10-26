@@ -15,8 +15,20 @@ data class ModelRow(
 sealed interface ModelTransfer {
     val modelId: String
 
-    data class Download(override val modelId: String, val fraction: Float? = null) : ModelTransfer
-    data class Import(override val modelId: String, val fraction: Float? = null) : ModelTransfer
+    data class Download(
+        override val modelId: String,
+        val fraction: Float? = null,
+        val bytesDownloaded: Long? = null,
+        val totalBytes: Long? = null,
+    ) : ModelTransfer
+
+    data class Import(
+        override val modelId: String,
+        val fraction: Float? = null,
+        val bytesDownloaded: Long? = null,
+        val totalBytes: Long? = null,
+    ) : ModelTransfer
+
     data class Delete(override val modelId: String) : ModelTransfer
 }
 
@@ -90,11 +102,23 @@ class ModelBrowser(
         return true
     }
 
-    fun progress(fraction: Float?) {
+    fun progress(fraction: Float?, bytesDownloaded: Long? = null, totalBytes: Long? = null) {
         val clamped = fraction?.coerceIn(0f, 1f)
         state = when (val transfer = state.transfer) {
-            is ModelTransfer.Download -> state.copy(transfer = transfer.copy(fraction = clamped))
-            is ModelTransfer.Import -> state.copy(transfer = transfer.copy(fraction = clamped))
+            is ModelTransfer.Download -> state.copy(
+                transfer = transfer.copy(
+                    fraction = clamped,
+                    bytesDownloaded = bytesDownloaded,
+                    totalBytes = totalBytes,
+                ),
+            )
+            is ModelTransfer.Import -> state.copy(
+                transfer = transfer.copy(
+                    fraction = clamped,
+                    bytesDownloaded = bytesDownloaded,
+                    totalBytes = totalBytes,
+                ),
+            )
             else -> state
         }
     }
@@ -132,10 +156,14 @@ class ModelBrowser(
 }
 
 object ModelPresentation {
-    fun sizeLabel(bytes: Long?): String = when {
-        bytes == null || bytes <= 0 -> "unknown size"
+    fun sizeLabel(bytes: Long?): String =
+        if (bytes == null || bytes <= 0) "unknown size" else byteCount(bytes)
+
+    fun byteCount(bytes: Long): String = when {
         bytes >= 1_000_000_000L -> String.format(Locale.US, "%.1f GB", bytes / 1_000_000_000.0)
-        else -> String.format(Locale.US, "%.0f MB", bytes / 1_000_000.0)
+        bytes >= 1_000_000L -> String.format(Locale.US, "%.0f MB", bytes / 1_000_000.0)
+        bytes >= 1_000L -> String.format(Locale.US, "%.0f KB", bytes / 1_000.0)
+        else -> "$bytes B"
     }
 
     fun statusLabel(installed: Boolean, selected: Boolean): String = when {
@@ -146,8 +174,20 @@ object ModelPresentation {
     }
 
     fun transferLabel(transfer: ModelTransfer, displayName: String): String = when (transfer) {
-        is ModelTransfer.Download -> progressText("Downloading", displayName, transfer.fraction)
-        is ModelTransfer.Import -> progressText("Importing", displayName, transfer.fraction)
+        is ModelTransfer.Download -> progressText(
+            "Downloading",
+            displayName,
+            transfer.fraction,
+            transfer.bytesDownloaded,
+            transfer.totalBytes,
+        )
+        is ModelTransfer.Import -> progressText(
+            "Importing",
+            displayName,
+            transfer.fraction,
+            transfer.bytesDownloaded,
+            transfer.totalBytes,
+        )
         is ModelTransfer.Delete -> "Deleting $displayName\u2026"
     }
 
@@ -161,10 +201,29 @@ object ModelPresentation {
         else -> reason
     }
 
-    private fun progressText(verb: String, displayName: String, fraction: Float?): String =
-        if (fraction == null) {
+    private fun progressText(
+        verb: String,
+        displayName: String,
+        fraction: Float?,
+        bytesDownloaded: Long?,
+        totalBytes: Long?,
+    ): String {
+        val details = buildList {
+            if (fraction != null) add("${(fraction * 100).toInt()}%")
+            if (bytesDownloaded != null && bytesDownloaded >= 0) {
+                add(
+                    if (totalBytes != null && totalBytes > 0) {
+                        "${byteCount(bytesDownloaded)} / ${byteCount(totalBytes)}"
+                    } else {
+                        byteCount(bytesDownloaded)
+                    },
+                )
+            }
+        }
+        return if (details.isEmpty()) {
             "$verb $displayName\u2026"
         } else {
-            "$verb $displayName\u2026 ${(fraction * 100).toInt()}%"
+            "$verb $displayName\u2026 ${details.joinToString(" \u00b7 ")}"
         }
+    }
 }

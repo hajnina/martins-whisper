@@ -33,13 +33,12 @@ class OverlayController(context: Context) {
         val (screenWidth, screenHeight) = screenSize()
         val bubble = dp(56f)
         val margin = dp(12f)
-        val default = OverlayGeometry.defaultBottomEnd(
+        val default = OverlayGeometry.defaultSide(
             width = bubble,
             height = bubble,
             screenWidth = screenWidth,
             screenHeight = screenHeight,
             margin = margin,
-            bottomInset = dp(72f),
         )
         val x: Int
         val y: Int

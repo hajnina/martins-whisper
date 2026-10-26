@@ -1,0 +1,7 @@
+ASHA UI device fixes (DEVICE-REPORT 2,3,4,5), branch agent/ui-device1, HEAD 0a9b7d3+.
+2: edge-to-edge systemBars+displayCutout padding for the settings ScrollView.
+3: accessibility status from Settings.Secure with ContentObserver, refreshed on resume and live changes.
+4: per-row inline progress bar + "45% · 66 MB / 148 MB" for download/import, 100 ms throttle.
+5: bubble default right edge vertically centred (away from Enter/send); drag uses raw touch deltas.
+Gate: :core:test :app:testDebugUnitTest :app:assembleDebug --offline -> SUCCESS (core 157, app 114, 0 failures).
+No capture/gate/telemetry code touched. Overlaps agent/mara-ui (2-4 only, no item 5): prefer this branch.

@@ -2,13 +2,18 @@ package com.martins.whisper
 
 import android.Manifest
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.database.ContentObserver
 import android.graphics.Color
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.provider.Settings
 import android.view.Gravity
 import android.view.View
@@ -26,8 +31,12 @@ import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
+import com.martins.whisper.accessibility.DictationAccessibilityService
 import com.martins.whisper.asr.ModelRepositoryProvider
 import com.martins.whisper.asr.WhisperCppEngine
 import com.martins.whisper.core.ComputeBackend
@@ -61,9 +70,11 @@ class MainActivity : ComponentActivity() {
     private lateinit var notificationsStatus: TextView
     private lateinit var overlayButton: Button
     private lateinit var modelContainer: LinearLayout
-    private lateinit var modelProgressBar: ProgressBar
-    private lateinit var modelTransferView: TextView
     private lateinit var diagnosticsView: TextView
+    private var transferProgressBar: ProgressBar? = null
+    private var transferProgressView: TextView? = null
+    private var lastTransferUiAt = 0L
+    private var accessibilityObserverRegistered = false
     private lateinit var modelBrowser: ModelBrowser
     private var bootSwitch: Switch? = null
     private var pendingImportId: String? = null
@@ -85,6 +96,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         settings = SettingsStore(this)
         setContentView(buildContent())
         observeService()
@@ -92,10 +104,44 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        registerAccessibilityObserver()
         refresh()
         if (intent?.getBooleanExtra(EXTRA_OPEN_SETTINGS, false) == true) {
             intent?.removeExtra(EXTRA_OPEN_SETTINGS)
         }
+    }
+
+    override fun onPause() {
+        unregisterAccessibilityObserver()
+        super.onPause()
+    }
+
+    private val accessibilityObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean, uri: Uri?) {
+            refresh()
+        }
+    }
+
+    private fun registerAccessibilityObserver() {
+        if (accessibilityObserverRegistered) return
+        val resolver = contentResolver
+        resolver.registerContentObserver(
+            Settings.Secure.getUriFor(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES),
+            false,
+            accessibilityObserver,
+        )
+        resolver.registerContentObserver(
+            Settings.Secure.getUriFor(Settings.Secure.ACCESSIBILITY_ENABLED),
+            false,
+            accessibilityObserver,
+        )
+        accessibilityObserverRegistered = true
+    }
+
+    private fun unregisterAccessibilityObserver() {
+        if (!accessibilityObserverRegistered) return
+        runCatching { contentResolver.unregisterContentObserver(accessibilityObserver) }
+        accessibilityObserverRegistered = false
     }
 
     override fun onRequestPermissionsResult(
@@ -108,7 +154,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun buildContent(): View {
-        val scroll = ScrollView(this)
+        val scroll = ScrollView(this).apply {
+            clipToPadding = true
+            ViewCompat.setOnApplyWindowInsetsListener(this) { view, insets ->
+                val bars = insets.getInsets(
+                    WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
+                )
+                view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+                insets
+            }
+        }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(22), dp(28), dp(22), dp(40))
@@ -182,16 +237,6 @@ class MainActivity : ComponentActivity() {
         modelBrowser = ModelBrowser(modelSpecs(), installedModelIds(), settings.modelId)
         modelContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(modelContainer, matchWidth())
-        modelProgressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
-            max = 100
-            visibility = View.GONE
-        }
-        root.addView(modelProgressBar, matchWidth())
-        modelTransferView = caption("").apply {
-            visibility = View.GONE
-            setPadding(0, dp(4), 0, dp(4))
-        }
-        root.addView(modelTransferView)
         root.addView(caption(getString(R.string.model_note)).apply {
             setPadding(0, dp(4), 0, dp(10))
         })
@@ -289,6 +334,8 @@ class MainActivity : ComponentActivity() {
     private fun renderModels() {
         if (!::modelContainer.isInitialized) return
         modelContainer.removeAllViews()
+        transferProgressBar = null
+        transferProgressView = null
         val state = modelBrowser.state
         for (row in state.rows) {
             val spec = row.spec
@@ -316,26 +363,43 @@ class MainActivity : ComponentActivity() {
             })
             if (spec.notes.isNotBlank()) box.addView(caption(spec.notes))
 
-            val actions = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                setPadding(0, dp(4), 0, 0)
+            if (state.transfer?.modelId == spec.id) {
+                transferProgressBar = ProgressBar(
+                    this,
+                    null,
+                    android.R.attr.progressBarStyleHorizontal,
+                ).apply {
+                    max = 100
+                    setPadding(0, dp(6), 0, 0)
+                }
+                box.addView(transferProgressBar, matchWidth())
+                transferProgressView = caption("").apply {
+                    setPadding(0, dp(2), 0, 0)
+                    setTextColor(Color.rgb(19, 93, 102))
+                }
+                box.addView(transferProgressView)
+            } else {
+                val actions = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    setPadding(0, dp(4), 0, 0)
+                }
+                if (!row.installed && spec.url != null) {
+                    actions.addView(actionButton(R.string.model_download, !state.isBusy) {
+                        downloadModel(spec.id)
+                    })
+                }
+                if (spec.url != null) {
+                    actions.addView(actionButton(R.string.model_import, !state.isBusy) {
+                        pickImport(spec.id)
+                    })
+                }
+                if (row.installed) {
+                    actions.addView(actionButton(R.string.model_delete, !state.isBusy) {
+                        deleteModel(spec.id)
+                    })
+                }
+                box.addView(actions)
             }
-            if (!row.installed && spec.url != null) {
-                actions.addView(actionButton(R.string.model_download, !state.isBusy) {
-                    downloadModel(spec.id)
-                })
-            }
-            if (spec.url != null) {
-                actions.addView(actionButton(R.string.model_import, !state.isBusy) {
-                    pickImport(spec.id)
-                })
-            }
-            if (row.installed) {
-                actions.addView(actionButton(R.string.model_delete, !state.isBusy) {
-                    deleteModel(spec.id)
-                })
-            }
-            box.addView(actions)
             modelContainer.addView(box, matchWidth())
         }
         state.error?.let {
@@ -348,11 +412,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun renderTransfer() {
-        if (!::modelProgressBar.isInitialized) return
+        val bar = transferProgressBar ?: return
+        val label = transferProgressView ?: return
         val transfer = modelBrowser.state.transfer
         if (transfer == null) {
-            modelProgressBar.visibility = View.GONE
-            modelTransferView.visibility = View.GONE
+            bar.visibility = View.GONE
+            label.visibility = View.GONE
             return
         }
         val displayName = modelBrowser.state.row(transfer.modelId)?.spec?.displayName
@@ -363,11 +428,11 @@ class MainActivity : ComponentActivity() {
             is ModelTransfer.Import -> transfer.fraction
             is ModelTransfer.Delete -> null
         }
-        modelProgressBar.visibility = View.VISIBLE
-        modelProgressBar.isIndeterminate = fraction == null
-        if (fraction != null) modelProgressBar.progress = (fraction * 100).roundToInt()
-        modelTransferView.visibility = View.VISIBLE
-        modelTransferView.text = ModelPresentation.transferLabel(transfer, displayName)
+        bar.visibility = View.VISIBLE
+        bar.isIndeterminate = fraction == null
+        if (fraction != null) bar.progress = (fraction * 100).roundToInt()
+        label.visibility = View.VISIBLE
+        label.text = ModelPresentation.transferLabel(transfer, displayName)
     }
 
     private fun actionButton(label: Int, enabled: Boolean, onClick: () -> Unit): Button =
@@ -567,10 +632,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun publishProgress(progress: DownloadProgress) {
-        val fraction = progress.fraction
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastTransferUiAt < PROGRESS_UI_INTERVAL_MS) return
+        lastTransferUiAt = now
         runOnUiThread {
             if (isFinishing || isDestroyed) return@runOnUiThread
-            modelBrowser.progress(fraction)
+            modelBrowser.progress(
+                fraction = progress.fraction,
+                bytesDownloaded = progress.bytesDownloaded,
+                totalBytes = progress.totalBytes,
+            )
             renderTransfer()
         }
     }
@@ -684,6 +755,14 @@ class MainActivity : ComponentActivity() {
     )
 
     private fun isAccessibilityEnabled(): Boolean {
+        val component = ComponentName(this, DictationAccessibilityService::class.java)
+        val enabled = Settings.Secure.getString(
+            contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+        )
+        if (PermissionGate.accessibilityServiceEnabled(enabled, component.packageName, component.className)) {
+            return true
+        }
         val manager = getSystemService(ACCESSIBILITY_SERVICE) as AccessibilityManager
         return manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
             .any { it.resolveInfo.serviceInfo.packageName == packageName }
@@ -788,5 +867,6 @@ class MainActivity : ComponentActivity() {
         const val EXTRA_OPEN_SETTINGS = "open_settings"
         private const val REQUEST_MIC = 100
         private const val REQUEST_NOTIFICATIONS = 101
+        private const val PROGRESS_UI_INTERVAL_MS = 100L
     }
 }
