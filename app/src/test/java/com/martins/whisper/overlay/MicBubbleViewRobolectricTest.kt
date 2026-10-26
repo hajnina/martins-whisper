@@ -29,6 +29,7 @@ class MicBubbleViewRobolectricTest {
         view = MicBubbleView(RuntimeEnvironment.getApplication())
         haptics.clear()
         view.hapticFeedback = { haptics += it }
+        view.scheduleHaptic = { _, action -> action() }
     }
 
     @Test
@@ -53,15 +54,51 @@ class MicBubbleViewRobolectricTest {
     }
 
     @Test
-    fun `success and error use confirm and reject haptics through the seam`() {
+    fun `success ticks once and error ticks twice through the seam`() {
         view.state = DictationState.Success("Inserted")
         assertEquals(listOf(HapticFeedbackConstants.CONFIRM), haptics)
 
         view.state = DictationState.Error("No microphone")
         assertEquals(
-            listOf(HapticFeedbackConstants.CONFIRM, HapticFeedbackConstants.REJECT),
+            listOf(
+                HapticFeedbackConstants.CONFIRM,
+                HapticFeedbackConstants.REJECT,
+                HapticFeedbackConstants.REJECT,
+            ),
             haptics,
         )
+    }
+
+    @Test
+    fun `error double tick schedules the second pulse briefly after the first`() {
+        val delays = mutableListOf<Long>()
+        view.scheduleHaptic = { delayMs, action ->
+            delays += delayMs
+            action()
+        }
+
+        view.state = DictationState.Error("No microphone")
+
+        assertEquals(listOf(MicBubbleView.ERROR_DOUBLE_TICK_MS), delays)
+        assertTrue(delays.single() in 1..150)
+        assertEquals(
+            listOf(HapticFeedbackConstants.REJECT, HapticFeedbackConstants.REJECT),
+            haptics,
+        )
+    }
+
+    @Test
+    fun `state, content description and haptics apply synchronously`() {
+        val recording = DictationState.Recording(0L, 0f, false)
+        view.state = recording
+        assertEquals(recording, view.state)
+        assertEquals("Listening; release to transcribe", view.contentDescription)
+
+        view.state = DictationState.Processing()
+        assertEquals("Transcribing\u2026", view.contentDescription)
+
+        view.state = DictationState.Error("boom")
+        assertEquals("Error: boom", view.contentDescription)
     }
 
     @Test

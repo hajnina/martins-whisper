@@ -38,7 +38,7 @@ object BubblePresentation {
         is DictationState.Loading -> BubbleVisual(
             accent = LOADING_ACCENT,
             icon = BubbleIcon.SPINNER,
-            contentDescription = joinDistinct("Loading model\u2026", state.label),
+            contentDescription = state.label.ifBlank { "Loading model\u2026" },
             label = state.label,
         )
 
@@ -70,7 +70,4 @@ object BubblePresentation {
             label = state.message,
         )
     }
-
-    private fun joinDistinct(vararg parts: String): String =
-        parts.filter { it.isNotBlank() }.distinct().joinToString(" ")
 }

@@ -13,7 +13,6 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
-import android.view.animation.AnimationUtils
 import com.martins.whisper.service.DictationState
 import kotlin.math.abs
 import kotlin.math.min
@@ -33,6 +32,8 @@ class MicBubbleView(context: Context) : View(context) {
     var listener: Listener? = null
 
     internal var hapticFeedback: (Int) -> Unit = { performHapticFeedback(it) }
+    internal var scheduleHaptic: (delayMs: Long, action: () -> Unit) -> Unit =
+        { delayMs, action -> postDelayed(action, delayMs) }
 
     var state: DictationState = DictationState.Idle
         set(value) {
@@ -46,7 +47,12 @@ class MicBubbleView(context: Context) : View(context) {
             if (previous::class != value::class) {
                 when (value) {
                     is DictationState.Success -> hapticFeedback(HapticFeedbackConstants.CONFIRM)
-                    is DictationState.Error -> hapticFeedback(HapticFeedbackConstants.REJECT)
+                    is DictationState.Error -> {
+                        hapticFeedback(HapticFeedbackConstants.REJECT)
+                        scheduleHaptic(ERROR_DOUBLE_TICK_MS) {
+                            hapticFeedback(HapticFeedbackConstants.REJECT)
+                        }
+                    }
                     else -> Unit
                 }
             }
@@ -419,6 +425,7 @@ class MicBubbleView(context: Context) : View(context) {
 
     private fun sp(value: Float): Float = value * resources.displayMetrics.scaledDensity
 
-    @Suppress("unused")
-    private fun unusedAnimation() = AnimationUtils.currentAnimationTimeMillis()
+    companion object {
+        internal const val ERROR_DOUBLE_TICK_MS = 90L
+    }
 }

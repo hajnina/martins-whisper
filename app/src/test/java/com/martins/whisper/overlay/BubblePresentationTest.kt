@@ -27,9 +27,9 @@ class BubblePresentationTest {
         assertEquals("Loading model\u2026", visual.label)
 
         val custom = BubblePresentation.of(DictationState.Loading("Downloading weights"))
-        assertTrue(custom.contentDescription.contains("Loading model"))
-        assertTrue(custom.contentDescription.contains("Downloading weights"))
+        assertEquals("Downloading weights", custom.contentDescription)
         assertEquals("Downloading weights", custom.label)
+        assertEquals("Loading model\u2026", BubblePresentation.of(DictationState.Loading("")).contentDescription)
     }
 
     @Test
