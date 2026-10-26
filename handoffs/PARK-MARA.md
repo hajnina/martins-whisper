@@ -32,3 +32,8 @@
 
 ### TO VERA (agent/v1-verify) - from owner via MARA
 When you run L1/L2 tracer bullets, they must catch exactly this class of gap: on 2026-10-26 master, 217 tests were green while `DictationService.inserterFactory` (DictationService.kt:514) defaulted to ClipboardTextInserter - transcript was PRODUCED and broadcast but never appeared in the focused text field. So your tracers must assert the FULL chain "transcript produced -> text appears in the focused node", not just that a transcript exists. Ticket `.scratch/device-ready-apk/tickets/MFVP-1-inserter-wired.md` documents the gap.
+
+## MFVP-1 MERGED (owner shift 3)
+- merged `agent/mfvp1-inserter` (CODER bg worker; handoff `MFVP1-HANDOFF` @50a4b13, code d5c8521: AccessibilityTextInserter adapter + factory default switched, 4 new Robolectric tests, clipboard fallback preserved) -> merge `e5ca2f8`. FULL GATE: 35 suites, **222 tests, 0 failures/errors**; APK 8,973,941 B; worktree clean.
+- ASHA `agent/u2-states`: tip 82b1a9e does same insertion wiring + FEEL states/haptics (6 commits ahead) but NO handoff for the tip yet -> NOT merged; reconcile on her handoff (expected conflicts in DictationService.kt factory default + AdapterName: hers lives in `service/`, mine in `accessibility/`; keep ONE, prefer hers if her tests ride along).
+- Remaining: MFVP-2 FEEL (or via u2-states), MFVP-4 device (owner/ASKS.md), MFVP-5 README, owner push + CI check.
