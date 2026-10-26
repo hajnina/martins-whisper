@@ -1,0 +1,28 @@
+# PARK-ORIN (2026-10-26 ~17:25Z)
+
+## DONE (committed)
+- `research/model-bench` @ `4fbf306` — recovered PM bench results (`research/model-bench/results-existing.{md,json}`), analyzer (`analyze.js`), prompts/models, recovered 93 run logs under `research/model-bench/runs`.
+- `master` @ `75c8849` — `wip: park` committed the PM's pending `agents/prompts/G1-integration.md`.
+- Outside git (persists in `/work/orin`): full bench harness `bench/` (200-file ~139k-token pile, A repo with planted bug, `run_one.sh`, `verify_A.sh`, `drive-missing.sh`), own gradle home `gh/`, `specs.tsv`, `REFERENCES.md`, `NOTES.md`.
+- Measured (recovered, PM runs): deepseek-v4.1-flash-free 4/4 pass; glm-5.3-flash-free 4/4; big-pickle 4/4; mimo-v2.6-flash-free A/B/D pass, C disputed (PM says pass, naive analyzer says 5/8 headings — manual check needed); flint-40b-free A pass, B/C/D incomplete or provider-failed; nemotron-3-ultra-free A `Model is unavailable` (400), B/C/D unrun; lightning/super-vl/beam A pass, B/C/D unrun.
+- Specs + web research captured (`/work/orin/specs.tsv`, `REFERENCES.md`).
+
+## RUNNING at park (killed, no scorable output)
+- Ticket 2 (free-model bench), branch `research/model-bench`, B-research task for: `beam-free`, `nemotron-3.5-lightning-free`, `nemotron-3.5-super-vl-free`, `flint-40b-free`.
+- Started 17:23:06Z, killed ~17:24Z; their `*-B.jsonl` are 0 bytes. Do not score.
+
+## NEXT (ordered, small)
+1. PARK-2.1: when `/work/.yoloseek/PROVIDER-STATUS.md` = OK, run `/work/orin/bench/drive-missing.sh` (16 cells: beam/lightning/super-vl/flint B,C,D; nemotron-3-ultra A,B,C,D). Max 4 concurrent; re-check gate before each batch.
+2. PARK-2.2: verify nemotron A with `bench/verify_A.sh nemotron-3-ultra-free` (own `GRADLE_USER_HOME=/work/orin/gh`; retry cap 2).
+3. PARK-2.3: analyze new logs; manually grade C headings and D canary; classify provider 503 / `Model is unavailable` as blocked, not model failure.
+4. PARK-2.4: write `/work/martins-whisper/research/MODEL-BENCH.md` with **proposed mix first**, evidence table, per-model strengths/weaknesses + sources, blocked cells; commit on `research/model-bench`.
+5. PARK-2.5: send owner 5-line status; append short lessons to `MODEL-BENCH.md`.
+
+## Traps learned
+- Free tier is session/account-limited: gate every launch on `PROVIDER-STATUS.md`; 4 workers max; `Free usage exceeded` is provider, not model.
+- Never `pkill -f 'opencode run ...'` (matches own shell). Use `ps -eo pid,args` then `kill <pid>`.
+- C grading by exact heading strings gives false negatives (mimo wrote all 8 sections with variant headings). Read final HANDOFF content manually.
+- flint C was provider 503; nemotron-3-ultra A was `Model is unavailable` (400) — both retryable/infra.
+- Shared gradle cache lacks `gson:2.8.9` for offline: use own `/work/orin/gh` and run once without `--offline`.
+- D pile is `/work/orin/bench/pile` (not PM's dead `/home/node/bench`); canary is in `repo-dump-0147.txt`; no python3 installed.
+- Do not modify app code, `KANBAN.md`, `master`, or `/work/android-toolchain/gradle-home`.
