@@ -5,8 +5,8 @@ suites for `TextInsertionPlanner`, `TextNormalizer`, `TranscriptMerger`, and `Au
 No production code, app code, scripts, or dependencies were changed. Acceptance is green:
 core 15 suites / 133 tests (was 11 / 85), app 14 / 56 (unchanged), 0 failures. Probing the
 chunker for a mid-chunk MAX_LENGTH cut exposed a real sample-duplication bug; it is recorded
-below and deliberately not fixed. Three smaller limitations/findings in the normalizer and
-merger are also recorded.
+below and deliberately not fixed. Five smaller findings/limitations in the chunker cap,
+merger, normalizer, and planner are also recorded.
 
 ## Goal
 
