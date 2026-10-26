@@ -430,7 +430,7 @@ class DictationService : Service() {
     }
 
     private fun wavDumpEnabled(): Boolean =
-        DictationService.wavDumpEnabled && BuildConfig.DEBUG
+        DictationService.wavDumpEnabled && debugVariant
 
     private fun timestampedName(): String = DebugWavDump.stamp(System.currentTimeMillis())
 
@@ -724,6 +724,10 @@ class DictationService : Service() {
         @Volatile
         internal var targetCapture: () -> Unit = { AccessibilityInserter.captureTargetAtStart() }
 
+        /** True only on debug builds; a JVM seam so the release path can be exercised. */
+        @Volatile
+        internal var debugVariant: Boolean = BuildConfig.DEBUG
+
         /** Release guard for the debug WAV dump; tests override it. */
         @Volatile
         internal var wavDumpEnabled: Boolean = BuildConfig.DEBUG
@@ -731,7 +735,7 @@ class DictationService : Service() {
         /** Per-session telemetry builder; null on release builds. */
         @Volatile
         internal var telemetryFactory: (Context) -> DictationTelemetry? =
-            { if (BuildConfig.DEBUG) DictationTelemetry(TelemetryRecorder.forContext(it)) else null }
+            { if (debugVariant) DictationTelemetry(TelemetryRecorder.forContext(it)) else null }
 
         fun start(context: Context) {
             val intent = Intent(context, DictationService::class.java).setAction(ACTION_START)
