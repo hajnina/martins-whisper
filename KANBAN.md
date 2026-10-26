@@ -37,6 +37,7 @@ Map: `.scratch/device-ready-apk/map.md` (10 decision tickets; local markdown). K
 | ID | Reason | Unblock |
 |---|---|---|
 | G1 | blocked: provider since 2026-10-26 18:26:42 (ratewatch: 2 sessions hit free-tier limit; relaunch burst exhausted glm-5.3/big-pickle/deepseek; inotify ENOSPC with 4 simultaneous sessions). | Wait for a successful provider probe (not a manual clear), then resume with at most 2 workers. |
+| D1 | blocked: provider since 2026-10-26 18:26:42 (worker `agent/d1-docs`, model deepseek-v4.1-flash-free). | Wait for PROVIDER-STATUS ok, then relaunch D1. |
 | H1/H2 | No physical Android device in sandbox. | User supplies device/ADB access later. |
 | EMU1 | Android emulator requires KVM/x86_64 typically; sandbox is aarch64 with no /dev/kvm. | Provide x86_64 KVM runner or accept JVM/Robolectric only. |
 | GPU1 | No Android GPU available in sandbox. | Real device or GPU-capable emulator. |
