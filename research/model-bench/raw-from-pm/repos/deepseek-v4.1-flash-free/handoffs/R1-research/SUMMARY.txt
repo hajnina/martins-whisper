@@ -1,8 +1,0 @@
-R1 recommends ADR-004 Option A: vendor MIT whisper.cpp, build one arm64-v8a library with Vulkan + CPU, default auto with CPU fallback, and surface the backend in doctor/settings.
-Keep SPEC overlay shape: TYPE_APPLICATION_OVERLAY + microphone FGS + separate AccessibilityService; TYPE_ACCESSIBILITY_OVERLAY is only a no-SAW fallback.
-Insert direct-first (ACTION_SET_TEXT + read-back), then custom paste/ACTION_PASTE, then clipboard + notification; never write password fields; do not auto-clear clipboard.
-Implement 300 s idle unload with a single ASR dispatcher, leases, off-main free, and trim handling; accessibility-bound processes may never get onTrimMemory(BACKGROUND).
-Vulkan is buildable but device-dependent (Pixel 8 73->67 s/30 s; Adreno 640 16-bit storage failure; Adreno 840+Turnip 4.3x); do not block v1 on GPU.
-Sherpa-onnx AAR is the emergency fallback, not primary: NNAPI is deprecated in Android 15 and there is no Vulkan provider in the AAR.
-PM decisions needed: accept Option A; GGML-only vs GGML+ONNX for v1; reboot re-arm behavior; target device/SoC for GPU validation.
-No APK/device tests were possible here; report is in research/ANDROID_PRIOR_ART.md, report commit a44964f.

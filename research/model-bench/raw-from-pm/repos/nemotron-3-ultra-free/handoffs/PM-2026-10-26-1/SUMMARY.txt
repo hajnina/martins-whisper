@@ -1,1 +1,0 @@
-master is clean and green: 74 JVM tests, 0 failures, app-debug.apk builds (8.8 MB). Includes R1/C1/I1/U1; agent prompt committed; .gitignore gaps closed; no secrets. B1/E1 still unmerged on agent branches; T1/D1/G1 queued; H1/H2 blocked on device.

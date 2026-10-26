@@ -33,3 +33,6 @@ e1-models/
 
 # Pinned whisper.cpp checkout (run scripts/fetch-whisper-cpp.sh)
 app/src/main/cpp/whisper.cpp/
+
+# Raw benchmark workspace clones/build outputs (archived logs/runs/meta only)
+research/model-bench/raw-from-pm/repos/
