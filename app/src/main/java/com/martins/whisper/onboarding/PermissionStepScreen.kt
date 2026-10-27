@@ -1,9 +1,12 @@
 package com.martins.whisper.onboarding
 
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.*
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -12,18 +15,18 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.*
-import androidx.compose.ui.graphics.*
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.*
+import androidx.compose.ui.unit.dp
 import com.martins.whisper.ui.PermissionItem
 
 internal val OnboardingAccent = Color(0xFF5EEAD4)
 internal val OnboardingInk = Color(0xFFF3FAFA)
 private val DeepTop = Color(0xFF06363B)
 private val DeepBottom = Color(0xFF071012)
-private val GrantedGreen = Color(0xFF6EE7B7)
 
 object PermissionCopy {
     fun title(item: PermissionItem): String = when (item) {
@@ -100,43 +103,60 @@ fun PermissionStepScreen(
     onBack: () -> Unit,
 ) {
     HapticOnGrant(granted)
-    OnboardingBackdrop {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 40.dp),
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text(PermissionCopy.title(item), color = OnboardingInk, fontSize = 34.sp, lineHeight = 42.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(28.dp))
-            GlassCard {
-                Text(PermissionCopy.why(item), color = OnboardingInk.copy(alpha = 0.86f), fontSize = 17.sp, lineHeight = 26.sp)
+    Column(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 40.dp),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            PermissionCopy.title(item),
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(28.dp))
+        Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large) {
+            Column(Modifier.padding(24.dp)) {
+                Text(
+                    PermissionCopy.why(item),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Spacer(Modifier.height(24.dp))
                 if (granted) {
-                    val check by animateFloatAsState(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy), label = "granted")
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Check, contentDescription = null, tint = GrantedGreen, modifier = Modifier.size(30.dp).scale(check))
+                        Icon(
+                            Icons.Filled.Check,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(30.dp),
+                        )
                         Spacer(Modifier.size(12.dp))
-                        Text("Granted", color = GrantedGreen, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Granted",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
                     }
                 } else {
-                    Button(onClick = onOpen, shape = RoundedCornerShape(28.dp), colors = ButtonDefaults.buttonColors(containerColor = OnboardingAccent, contentColor = DeepBottom)) {
-                        Text(PermissionCopy.action(item), fontWeight = FontWeight.SemiBold)
+                    Button(
+                        onClick = onOpen,
+                        modifier = Modifier.height(56.dp),
+                        shape = MaterialTheme.shapes.large,
+                    ) {
+                        Text(PermissionCopy.action(item), style = MaterialTheme.typography.labelLarge)
                     }
                 }
             }
-            Spacer(Modifier.height(36.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onBack) { Text("Back", color = OnboardingInk.copy(alpha = 0.7f)) }
-                Spacer(Modifier.weight(1f))
-                SpringyContainer {
-                    Button(
-                        onClick = onNext,
-                        shape = RoundedCornerShape(28.dp),
-                        colors = if (granted) ButtonDefaults.buttonColors(containerColor = OnboardingAccent, contentColor = DeepBottom)
-                        else ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.14f), contentColor = OnboardingInk),
-                    ) {
-                        Text(if (granted) "Next" else "Skip for now", fontWeight = FontWeight.SemiBold)
-                    }
-                }
+        }
+        Spacer(Modifier.height(36.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBack) { Text("Back") }
+            Spacer(Modifier.weight(1f))
+            Button(
+                onClick = onNext,
+                modifier = Modifier.height(56.dp),
+                shape = MaterialTheme.shapes.large,
+            ) {
+                Text(if (granted) "Next" else "Skip for now", style = MaterialTheme.typography.labelLarge)
             }
         }
     }
