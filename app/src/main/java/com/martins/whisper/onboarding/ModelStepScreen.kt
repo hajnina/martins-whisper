@@ -2,29 +2,19 @@ package com.martins.whisper.onboarding
 
 import android.content.Context
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.martins.whisper.asr.ModelRepositoryProvider
-import com.martins.whisper.core.asr.DownloadProgress
 import com.martins.whisper.core.asr.ModelCatalog
 import com.martins.whisper.data.SettingsStore
 import kotlinx.coroutines.Dispatchers
@@ -47,7 +37,7 @@ internal fun defaultInstaller(
                     Result.success(Unit)
                 } else {
                     runCatching {
-                        repo.install(spec) { p: DownloadProgress ->
+                        repo.install(spec) { p ->
                             onProgress(p.fraction, p.bytesDownloaded, p.totalBytes)
                         }
                     }.fold({ Result.success(Unit) }, { Result.failure(it) })
@@ -80,57 +70,85 @@ fun ModelStepScreen(
     LaunchedEffect(machine) { machine.start() }
     val feedback = LocalHapticFeedback.current
     val installed = phase is ModelStepPhase.Installed
+    val progress = (phase as? ModelStepPhase.Downloading)?.fraction
     LaunchedEffect(installed) {
         if (installed) feedback.performHapticFeedback(HapticFeedbackType.LongPress)
     }
-    OnboardingBackdrop {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 40.dp),
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text("Choose your model", color = OnboardingInk, fontSize = 34.sp, lineHeight = 42.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(28.dp))
-            GlassCard {
-                Text(
-                    "A model downloads once, then every word stays on your phone.",
-                    color = OnboardingInk.copy(alpha = 0.86f),
-                    fontSize = 17.sp,
-                    lineHeight = 26.sp,
-                )
+    Column(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 40.dp),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            "Choose your model",
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(28.dp))
+        Text(
+            "A model downloads once, then every word stays on your phone.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(36.dp))
+        Card(shape = MaterialTheme.shapes.large) {
+            Column(Modifier.fillMaxWidth().padding(24.dp)) {
                 when (val p = phase) {
-                    is ModelStepPhase.Downloading, is ModelStepPhase.Failed -> {
-                        Spacer(Modifier.height(20.dp))
-                        Text(statusText(p), color = OnboardingInk, fontSize = 15.sp, lineHeight = 22.sp)
-                        if (p is ModelStepPhase.Failed) {
-                            TextButton(onClick = { scope.launch { machine.retry() } }) {
-                                Text("Retry", color = OnboardingInk, fontWeight = FontWeight.SemiBold)
-                            }
-                        }
+                    ModelStepPhase.Idle -> {
+                        Text(
+                            "Waiting to download…",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    is ModelStepPhase.Downloading -> {
+                        Text(
+                            statusText(p),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        LinearProgressIndicator(
+                            progress = { progress ?: 0f },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                     }
                     ModelStepPhase.Installed -> {
-                        Spacer(Modifier.height(20.dp))
-                        Text(statusText(p), color = OnboardingInk, fontSize = 15.sp)
+                        Icon(
+                            Icons.Filled.Check,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            statusText(p),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
                     }
-                    ModelStepPhase.Idle -> Unit
+                    is ModelStepPhase.Failed -> {
+                        Text(
+                            statusText(p),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        TextButton(onClick = { scope.launch { machine.retry() } }) {
+                            Text("Retry", style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
                 }
             }
-            Spacer(Modifier.height(36.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onBack) { Text("Back", color = OnboardingInk.copy(alpha = 0.7f)) }
-                Spacer(Modifier.weight(1f))
-                SpringyContainer {
-                    Button(
-                        onClick = onNext,
-                        enabled = installed,
-                        shape = RoundedCornerShape(28.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = OnboardingAccent,
-                            contentColor = MaterialTheme.colorScheme.onPrimary,
-                        ),
-                    ) {
-                        Text("Continue", fontWeight = FontWeight.SemiBold)
-                    }
-                }
+        }
+        Spacer(Modifier.height(36.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBack) { Text("Back") }
+            Spacer(Modifier.weight(1f))
+            Button(
+                onClick = onNext,
+                enabled = installed,
+                modifier = Modifier.height(56.dp),
+                shape = MaterialTheme.shapes.large,
+            ) {
+                Text("Continue", style = MaterialTheme.typography.labelLarge)
             }
         }
     }
