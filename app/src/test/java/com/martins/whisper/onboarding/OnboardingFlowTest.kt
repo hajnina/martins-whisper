@@ -22,10 +22,11 @@ class OnboardingFlowTest {
     @Test
     fun `steps follow the documented order`() {
         assertEquals(
-            listOf(OnboardingStep.WELCOME, OnboardingStep.MIC, OnboardingStep.OVERLAY, OnboardingStep.ACCESSIBILITY,
-                OnboardingStep.NOTIFICATIONS, OnboardingStep.LANGUAGE, OnboardingStep.DONE),
+            listOf(OnboardingStep.WELCOME, OnboardingStep.LANGUAGE, OnboardingStep.MIC, OnboardingStep.OVERLAY,
+                OnboardingStep.ACCESSIBILITY, OnboardingStep.NOTIFICATIONS, OnboardingStep.MODEL,
+                OnboardingStep.FIRST_DICTATION, OnboardingStep.DONE),
             OnboardingStep.entries,
         )
-        assertEquals("1/7", OnboardingRules.progressLabel(OnboardingStep.WELCOME))
+        assertEquals("1/9", OnboardingRules.progressLabel(OnboardingStep.WELCOME))
     }
 }

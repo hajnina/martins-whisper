@@ -9,11 +9,13 @@ import com.martins.whisper.data.SettingsStore
  */
 enum class OnboardingStep {
     WELCOME,
+    LANGUAGE,
     MIC,
     OVERLAY,
     ACCESSIBILITY,
     NOTIFICATIONS,
-    LANGUAGE,
+    MODEL,
+    FIRST_DICTATION,
     DONE,
     ;
 

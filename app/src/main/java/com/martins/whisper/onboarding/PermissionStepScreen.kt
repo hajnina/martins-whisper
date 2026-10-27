@@ -99,6 +99,7 @@ fun PermissionStepScreen(
     onNext: () -> Unit,
     onBack: () -> Unit,
 ) {
+    HapticOnGrant(granted)
     OnboardingBackdrop {
         Column(
             modifier = Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 40.dp),

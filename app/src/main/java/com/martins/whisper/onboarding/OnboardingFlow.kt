@@ -15,6 +15,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -29,10 +30,6 @@ import com.martins.whisper.ui.PermissionGate
 import com.martins.whisper.ui.PermissionItem
 import com.martins.whisper.ui.PermissionSnapshot
 import kotlinx.coroutines.delay
-private val Accent = Color(0xFF7FE3D4)
-private val GradientTop = Color(0xFF04181A)
-private val GradientMid = Color(0xFF0B2B2E)
-private val GradientBottom = Color(0xFF061014)
 private fun permissionItemFor(step: OnboardingStep): PermissionItem? = when (step) {
     OnboardingStep.MIC -> PermissionItem.MICROPHONE
     OnboardingStep.OVERLAY -> PermissionItem.OVERLAY
@@ -89,6 +86,7 @@ private fun openPermission(activity: ComponentActivity, item: PermissionItem) {
 @Composable
 fun OnboardingFlow(activity: ComponentActivity, onFinished: () -> Unit) {
     MartinsOnboardingTheme {
+        val scheme = MaterialTheme.colorScheme
         val context = LocalContext.current
         val settings = remember { SettingsStore(context) }
         var step by rememberSaveable { mutableStateOf<OnboardingStep>(OnboardingStep.WELCOME) }
@@ -112,25 +110,29 @@ fun OnboardingFlow(activity: ComponentActivity, onFinished: () -> Unit) {
         }
         val progress by animateFloatAsState(
             targetValue = step.index.toFloat() / (OnboardingStep.total - 1).toFloat(),
-            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy),
+            animationSpec = Motion.defaultSpatialSpec(),
             label = "progress",
         )
         Box(
             Modifier.fillMaxSize()
-                .background(Brush.verticalGradient(listOf(GradientTop, GradientMid, GradientBottom))),
+                .background(
+                    Brush.verticalGradient(
+                        listOf(scheme.surface, scheme.primaryContainer, scheme.surface),
+                    ),
+                ),
         ) {
             Column(Modifier.fillMaxSize()) {
                 LinearProgressIndicator(
                     progress = { progress },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp).height(3.dp),
-                    color = Accent,
-                    trackColor = Color.White.copy(alpha = 0.12f),
+                    color = scheme.primary,
+                    trackColor = scheme.onSurface.copy(alpha = 0.12f),
                 )
                 AnimatedContent(
                     targetState = step,
                     transitionSpec = {
                         val direction = if (forward) 1 else -1
-                        val spec = spring<IntOffset>(dampingRatio = Spring.DampingRatioMediumBouncy)
+                        val spec = Motion.defaultSpatialSpec<IntOffset>()
                         (slideInHorizontally(spec) { width -> direction * width / 3 } + fadeIn())
                             .togetherWith(
                                 slideOutHorizontally(spec) { width -> -direction * width / 3 } + fadeOut(),
@@ -138,46 +140,47 @@ fun OnboardingFlow(activity: ComponentActivity, onFinished: () -> Unit) {
                     },
                     label = "step",
                 ) { target ->
+                    val next: () -> Unit = {
+                        forward = true
+                        OnboardingRules.stepAfter(target)?.let { step = it }
+                    }
+                    val back: () -> Unit = {
+                        forward = false
+                        OnboardingRules.stepBefore(target)?.let { step = it }
+                    }
                     when (target) {
-                        OnboardingStep.WELCOME -> WelcomeScreen(onStart = {
-                            forward = true
-                            OnboardingRules.stepAfter(target)?.let { step = it }
+                        OnboardingStep.WELCOME -> WelcomeScreen(onStart = hapticClick(next))
+                        OnboardingStep.LANGUAGE -> LanguageStepScreen(
+                            selected = language,
+                            onSelect = { language = it },
+                            onNext = hapticClick {
+                                settings.language = language
+                                next()
+                            },
+                            onBack = back,
+                        )
+                        OnboardingStep.MODEL -> ModelStepScreen(
+                            onNext = hapticClick(next),
+                            onBack = back,
+                        )
+                        OnboardingStep.FIRST_DICTATION -> FirstDictationScreen(
+                            onNext = hapticClick(next),
+                            onBack = back,
+                        )
+                        OnboardingStep.DONE -> DoneStepScreen(onFinish = hapticClick {
+                            settings.language = language
+                            OnboardingStore(context).markCompleted()
+                            onFinished()
                         })
                         else -> {
-                            val item = permissionItemFor(target)
-                            when {
-                                item != null -> PermissionStepScreen(
-                                    item = item,
-                                    granted = isGranted(snapshot, item),
-                                    onOpen = { openPermission(activity, item) },
-                                    onNext = {
-                                        forward = true
-                                        OnboardingRules.stepAfter(target)?.let { step = it }
-                                    },
-                                    onBack = {
-                                        forward = false
-                                        OnboardingRules.stepBefore(target)?.let { step = it }
-                                    },
-                                )
-                                target == OnboardingStep.LANGUAGE -> LanguageStepScreen(
-                                    selected = language,
-                                    onSelect = { language = it },
-                                    onNext = {
-                                        forward = true
-                                        settings.language = language
-                                        OnboardingRules.stepAfter(target)?.let { step = it }
-                                    },
-                                    onBack = {
-                                        forward = false
-                                        OnboardingRules.stepBefore(target)?.let { step = it }
-                                    },
-                                )
-                                else -> DoneStepScreen(onFinish = {
-                                    settings.language = language
-                                    OnboardingStore(context).markCompleted()
-                                    onFinished()
-                                })
-                            }
+                            val item = permissionItemFor(target)!!
+                            PermissionStepScreen(
+                                item = item,
+                                granted = isGranted(snapshot, item),
+                                onOpen = hapticClick { openPermission(activity, item) },
+                                onNext = hapticClick(next),
+                                onBack = back,
+                            )
                         }
                     }
                 }
