@@ -1,6 +1,5 @@
 package com.martins.whisper.onboarding
 
-import android.os.Build
 import android.provider.Settings
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -8,8 +7,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -21,68 +18,85 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val CalmTeal = Color(0xFF135D66)
-private val CalmTealNight = Color(0xFF8FD3DC)
-private val TrueDark = Color(0xFF0B0F10)
-private val TrueDarkSurface = Color(0xFF121719)
-private val LightSurface = Color(0xFFFFFBF7)
-
 private val LightScheme = lightColorScheme(
-    primary = CalmTeal,
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFD3ECEF),
-    onPrimaryContainer = Color(0xFF00363C),
-    secondaryContainer = Color(0xFFCCE8EA),
-    onSecondaryContainer = Color(0xFF051F21),
-    background = LightSurface,
-    onBackground = Color(0xFF1A1C1E),
-    surface = LightSurface,
-    onSurface = Color(0xFF1A1C1E),
-    surfaceVariant = Color(0xFFEDF3F4),
-    onSurfaceVariant = Color(0xFF43474B),
-    surfaceContainer = Color(0xFFF4F0EC),
-    surfaceContainerHigh = Color(0xFFEEE9E4),
-    outline = Color(0xFF73777A),
-    outlineVariant = Color(0xFFC4C7C5),
-    error = Color(0xFFB3261E),
+    primary = Color(0xFF4A46FF),
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFECEBFF),
+    onPrimaryContainer = Color(0xFF1C1D38),
+    background = Color(0xFFF6F6F4),
+    onBackground = Color(0xFF17172A),
+    surface = Color(0xFFF6F6F4),
+    onSurface = Color(0xFF17172A),
+    surfaceVariant = Color(0xFFEDEDF3),
+    onSurfaceVariant = Color(0xFF494A57),
+    surfaceContainer = Color(0xFFF1F1EE),
+    surfaceContainerHigh = Color(0xFFEBEBF3),
+    surfaceContainerHighest = Color(0xFFE4E4EE),
+    secondaryContainer = Color(0xFFD7D7FF),
+    onSecondaryContainer = Color(0xFF17172A),
+    outline = Color(0xFF747588),
+    outlineVariant = Color(0xFFC9C9D4),
 )
 
 private val DarkScheme = darkColorScheme(
-    primary = CalmTealNight,
-    onPrimary = Color(0xFF00363C),
-    primaryContainer = Color(0xFF004F56),
-    onPrimaryContainer = Color(0xFFA8EDF3),
-    secondaryContainer = Color(0xFF324B4D),
-    onSecondaryContainer = Color(0xFFCCE8EA),
-    background = TrueDark,
-    onBackground = Color(0xFFE2E3E5),
-    surface = TrueDark,
-    onSurface = Color(0xFFE2E3E5),
-    surfaceVariant = Color(0xFF1B2225),
-    onSurfaceVariant = Color(0xFFC2C7CB),
-    surfaceContainer = TrueDarkSurface,
-    surfaceContainerHigh = Color(0xFF1B2225),
-    outline = Color(0xFF8D9194),
-    outlineVariant = Color(0xFF3F484A),
-    error = Color(0xFFFFB4AB),
+    primary = Color(0xFF8C89FF),
+    onPrimary = Color(0xFF0C0D16),
+    primaryContainer = Color(0xFF1C1D38),
+    onPrimaryContainer = Color(0xFFD8D7FF),
+    background = Color(0xFF0C0D16),
+    onBackground = Color(0xFFDCDCE6),
+    surface = Color(0xFF0C0D16),
+    onSurface = Color(0xFFDCDCE6),
+    surfaceVariant = Color(0xFF1F2033),
+    onSurfaceVariant = Color(0xFFB9B9C8),
+    surfaceContainer = Color(0xFF171826),
+    surfaceContainerHigh = Color(0xFF1F2033),
+    surfaceContainerHighest = Color(0xFF26273B),
+    secondaryContainer = Color(0xFF26273B),
+    onSecondaryContainer = Color(0xFFD8D7FF),
+    outline = Color(0xFF747588),
+    outlineVariant = Color(0xFF33344A),
 )
 
-private fun bold(size: Int, height: Int) =
-    TextStyle(fontWeight = FontWeight.SemiBold, fontSize = size.sp, lineHeight = height.sp)
-
 private val OnboardingTypography = Typography(
-    displaySmall = bold(36, 44),
-    headlineMedium = bold(28, 36),
-    titleMedium = bold(18, 24),
-    bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 24.sp),
-    bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
-    labelLarge = bold(14, 20),
+    displaySmall = TextStyle(
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 46.sp,
+        lineHeight = 50.sp,
+        letterSpacing = (-0.5).sp,
+    ),
+    headlineMedium = TextStyle(
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = 30.sp,
+        lineHeight = 36.sp,
+        letterSpacing = (-0.3).sp,
+    ),
+    titleMedium = TextStyle(
+        fontWeight = FontWeight.Bold,
+        fontSize = 18.sp,
+        lineHeight = 24.sp,
+    ),
+    bodyLarge = TextStyle(
+        fontWeight = FontWeight.Normal,
+        fontSize = 16.sp,
+        lineHeight = 24.sp,
+    ),
+    bodyMedium = TextStyle(
+        fontWeight = FontWeight.Medium,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+    ),
+    labelLarge = TextStyle(
+        fontWeight = FontWeight.Bold,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+    ),
 )
 
 private val OnboardingShapes = Shapes(
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(18.dp),
-    large = RoundedCornerShape(24.dp),
+    small = RoundedCornerShape(16.dp),
+    medium = RoundedCornerShape(24.dp),
+    large = RoundedCornerShape(32.dp),
 )
 
 /** Motion durations in ms; 0 when the system "remove animations" setting is on. */
@@ -100,12 +114,7 @@ val LocalMotionDurations = staticCompositionLocalOf { MotionDurations() }
 fun MartinsOnboardingTheme(content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
     val context = LocalContext.current
-    val scheme = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && dark -> dynamicDarkColorScheme(context)
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> dynamicLightColorScheme(context)
-        dark -> DarkScheme
-        else -> LightScheme
-    }
+    val scheme = if (dark) DarkScheme else LightScheme
     val animationsOn = runCatching {
         Settings.Global.getFloat(
             context.contentResolver,
