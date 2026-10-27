@@ -41,7 +41,7 @@ internal fun defaultInstaller(
         val repo = ModelRepositoryProvider.forContext(context)
         val spec = ModelCatalog.specs.firstOrNull { it.id == SettingsStore(context).modelId }
             ?: ModelCatalog.specs.first()
-        { onProgress ->
+        val install: suspend ((Float?, Long, Long?) -> Unit) -> Result<Unit> = { onProgress ->
             withContext(Dispatchers.IO) {
                 if (repo.isInstalled(spec)) {
                     Result.success(Unit)
@@ -54,6 +54,7 @@ internal fun defaultInstaller(
                 }
             }
         }
+        install
     }
     return installer
 }
