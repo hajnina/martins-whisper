@@ -1,18 +1,15 @@
 package com.martins.whisper.onboarding
 
-import android.provider.Settings
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -99,36 +96,14 @@ private val OnboardingShapes = Shapes(
     large = RoundedCornerShape(32.dp),
 )
 
-/** Motion durations in ms; 0 when the system "remove animations" setting is on. */
-data class MotionDurations(
-    val enter: Int = 300,
-    val exit: Int = 200,
-    val state: Int = 200,
-    val press: Int = 120,
-    val ring: Int = 1_800,
-)
-
-val LocalMotionDurations = staticCompositionLocalOf { MotionDurations() }
-
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MartinsOnboardingTheme(content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
-    val context = LocalContext.current
-    val scheme = if (dark) DarkScheme else LightScheme
-    val animationsOn = runCatching {
-        Settings.Global.getFloat(
-            context.contentResolver,
-            Settings.Global.ANIMATOR_DURATION_SCALE,
-            1f,
-        ) > 0f
-    }.getOrDefault(true)
-    val durations = if (animationsOn) MotionDurations() else MotionDurations(0, 0, 0, 0, 0)
-    CompositionLocalProvider(LocalMotionDurations provides durations) {
-        MaterialTheme(
-            colorScheme = scheme,
-            typography = OnboardingTypography,
-            shapes = OnboardingShapes,
-            content = content,
-        )
-    }
+    MaterialExpressiveTheme(
+        colorScheme = if (dark) DarkScheme else LightScheme,
+        typography = OnboardingTypography,
+        shapes = OnboardingShapes,
+        content = content,
+    )
 }

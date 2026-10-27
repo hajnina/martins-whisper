@@ -149,7 +149,9 @@ dependencies {
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
-    implementation("androidx.compose.material3:material3")
+    // Expressive API access: overrides the BOM pin (decentralized per DESIGN-DIRECTION D0).
+    // Expressive APIs: 1.4.0 ships them stable/public; 1.5.0-beta02 needs compileSdk 37 + AGP 9.1 (AAR metadata), which this toolchain cannot compile against yet.
+    implementation("androidx.compose.material3:material3:1.4.0")
     implementation("androidx.compose.material:material-icons-core")
 
     testImplementation(testFixtures(project(":core")))

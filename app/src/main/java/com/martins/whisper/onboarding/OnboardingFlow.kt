@@ -110,7 +110,7 @@ fun OnboardingFlow(activity: ComponentActivity, onFinished: () -> Unit) {
         }
         val progress by animateFloatAsState(
             targetValue = step.index.toFloat() / (OnboardingStep.total - 1).toFloat(),
-            animationSpec = Motion.defaultSpatialSpec(),
+            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
             label = "progress",
         )
         Box(
@@ -132,7 +132,7 @@ fun OnboardingFlow(activity: ComponentActivity, onFinished: () -> Unit) {
                     targetState = step,
                     transitionSpec = {
                         val direction = if (forward) 1 else -1
-                        val spec = Motion.defaultSpatialSpec<IntOffset>()
+                        val spec = MaterialTheme.motionScheme.defaultSpatialSpec<IntOffset>()
                         (slideInHorizontally(spec) { width -> direction * width / 3 } + fadeIn())
                             .togetherWith(
                                 slideOutHorizontally(spec) { width -> -direction * width / 3 } + fadeOut(),
