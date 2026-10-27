@@ -31,9 +31,16 @@ import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
@@ -51,6 +58,7 @@ import com.martins.whisper.onboarding.OnboardingFlow
 import com.martins.whisper.onboarding.OnboardingStore
 import com.martins.whisper.service.DictationService
 import com.martins.whisper.service.DictationState
+import com.martins.whisper.ui.HomeScreen
 import com.martins.whisper.ui.ModelAction
 import com.martins.whisper.ui.ModelBrowser
 import com.martins.whisper.ui.ModelPresentation
@@ -80,12 +88,17 @@ class MainActivity : ComponentActivity() {
     private var lastTransferUiAt = 0L
     private var accessibilityObserverRegistered = false
     private var legacyUiBuilt = false
+    private var serviceObserved = false
     private lateinit var modelBrowser: ModelBrowser
     private var bootSwitch: Switch? = null
     private var pendingImportId: String? = null
     private var pendingCustomImport = false
 
     private val repository: ModelRepository by lazy { ModelRepositoryProvider.forContext(this) }
+
+    private val backToHome = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() = showHome()
+    }
 
     private val importDocument = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         val id = pendingImportId
@@ -102,7 +115,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Flags.onboardingV2 = true
-        if (Flags.onboardingV2 && !OnboardingStore(this).isCompleted()) {
+        val onboarded = OnboardingStore(this).isCompleted()
+        if (Flags.onboardingV2 && !onboarded) {
             try {
                 setContent {
                     OnboardingFlow(this, onFinished = {
@@ -117,9 +131,13 @@ class MainActivity : ComponentActivity() {
         }
         enableEdgeToEdge()
         settings = SettingsStore(this)
-        setContentView(buildContent())
-        legacyUiBuilt = true
-        observeService()
+        onBackPressedDispatcher.addCallback(this, backToHome)
+        if (!onboarded || intent?.getBooleanExtra(EXTRA_OPEN_SETTINGS, false) == true) {
+            intent?.removeExtra(EXTRA_OPEN_SETTINGS)
+            showLegacySettings()
+        } else {
+            showHome()
+        }
     }
 
     override fun onResume() {
@@ -707,17 +725,62 @@ class MainActivity : ComponentActivity() {
     private fun spinnerAdapter(items: List<String>): ArrayAdapter<String> =
         ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, items)
 
-    private fun toggleOverlay() {
-        if (settings.overlayEnabled) {
-            settings.overlayEnabled = false
-            DictationService.stop(this)
-        } else {
-            settings.overlayEnabled = true
+    private fun showHome() {
+        legacyUiBuilt = false
+        unregisterAccessibilityObserver()
+        backToHome.isEnabled = false
+        setContent {
+            var serviceOn by remember { mutableStateOf(settings.overlayEnabled) }
+            var lastTranscript by remember { mutableStateOf<String?>(null) }
+            val dictation by DictationService.state.collectAsState()
+            LaunchedEffect(dictation) {
+                (dictation as? DictationState.Success)?.let { lastTranscript = it.message }
+            }
+            HomeScreen(
+                serviceOn = serviceOn,
+                lastTranscript = lastTranscript,
+                onToggleService = { enabled ->
+                    serviceOn = enabled
+                    setServiceEnabled(enabled)
+                },
+                onOpenSettings = ::showLegacySettings,
+                onRestartOnboarding = ::restartOnboarding,
+            )
+        }
+    }
+
+    private fun showLegacySettings() {
+        legacyUiBuilt = false
+        setContentView(buildContent())
+        legacyUiBuilt = true
+        backToHome.isEnabled = true
+        registerAccessibilityObserver()
+        refresh()
+        if (!serviceObserved) {
+            serviceObserved = true
+            observeService()
+        }
+    }
+
+    private fun restartOnboarding() {
+        OnboardingStore(this).reset()
+        recreate()
+    }
+
+    private fun setServiceEnabled(enabled: Boolean) {
+        settings.overlayEnabled = enabled
+        if (enabled) {
             DictationService.start(this)
             if (!Settings.canDrawOverlays(this)) {
                 Toast.makeText(this, R.string.error_overlay, Toast.LENGTH_LONG).show()
             }
+        } else {
+            DictationService.stop(this)
         }
+    }
+
+    private fun toggleOverlay() {
+        setServiceEnabled(!settings.overlayEnabled)
         rootView?.postDelayed({ refresh() }, 250)
     }
 
@@ -749,6 +812,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun updateServiceStatus(state: DictationState) {
+        if (!legacyUiBuilt) return
         val label = when (state) {
             is DictationState.Idle -> "idle"
             is DictationState.Loading -> state.label

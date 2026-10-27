@@ -1,5 +1,7 @@
 package com.martins.whisper.ui
 
+import android.content.Context
+import android.content.Intent
 import android.os.Looper
 import android.provider.Settings
 import android.view.View
@@ -21,6 +23,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.android.controller.ActivityController
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.ConscryptMode
@@ -35,9 +38,16 @@ class MainActivityDeviceFixTest {
         OnboardingStore(ApplicationProvider.getApplicationContext()).markCompleted()
     }
 
+    private fun launchSettings(): ActivityController<MainActivity> {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val intent = Intent(context, MainActivity::class.java)
+            .putExtra(MainActivity.EXTRA_OPEN_SETTINGS, true)
+        return Robolectric.buildActivity(MainActivity::class.java, intent).setup()
+    }
+
     @Test
     fun `system bar insets are applied as scroll padding`() {
-        val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+        val activity = launchSettings().get()
         val scroll = contentScroll(activity)
 
         val insets = WindowInsetsCompat.Builder()
@@ -51,7 +61,7 @@ class MainActivityDeviceFixTest {
 
     @Test
     fun `accessibility status refreshes on resume after the setting changes`() {
-        val controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val controller = launchSettings()
         val activity = controller.get()
         val status = accessibilityStatusView(activity)
         assertEquals("Not granted", status.text.toString())
@@ -68,7 +78,7 @@ class MainActivityDeviceFixTest {
 
     @Test
     fun `accessibility status refreshes when the setting changes while visible`() {
-        val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+        val activity = launchSettings().get()
         val status = accessibilityStatusView(activity)
         assertEquals("Not granted", status.text.toString())
 
@@ -88,7 +98,7 @@ class MainActivityDeviceFixTest {
 
     @Test
     fun `language spinner offers Auto English Czech and defaults to English`() {
-        val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+        val activity = launchSettings().get()
         val spinner = languageSpinner(activity.window.decorView)
             ?: error("language spinner not found")
 
