@@ -128,6 +128,9 @@ class OverlayStateMachineRobolectricTest {
         controller.update(DictationState.Idle)
         val before = controller.positionForTest()
         val sizeBefore = controller.sizeForTest()
+        val density = context.resources.displayMetrics.density
+        val expectedSize = (72f * density).toInt()
+        assertEquals(expectedSize to expectedSize, sizeBefore)
 
         controller.update(DictationState.Loading("Loading\u2026"))
         controller.update(DictationState.Recording(1_000L, 0.4f, true))

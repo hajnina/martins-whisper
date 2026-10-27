@@ -34,7 +34,7 @@ class OverlayController(context: Context) {
 
         val bubbleView = MicBubbleView(appContext).apply { this.listener = listener }
         val (screenWidth, screenHeight) = screenSize()
-        val bubble = dp(56f)
+        val bubble = dp(72f)
         val margin = dp(12f)
         val default = OverlayGeometry.defaultSide(
             width = bubble,
@@ -93,7 +93,7 @@ class OverlayController(context: Context) {
         val bubbleView = view ?: return
         // The bubble never resizes or moves on a state change: growing it to a 240 dp pill made it
         // jump sideways on the first tap (and the second tap then missed it, DEVICE-REPORT #2).
-        // State is shown inside the fixed 56 dp circle (colour, icon, content description).
+        // State is shown inside the fixed 72 dp circle (colour, icon, content description).
         bubbleView.state = state
     }
 
