@@ -1,54 +1,33 @@
 # Agent Rules - Martins Whisper
 
-You are a background work-package agent for an Android/Kotlin project. The PM (orchestrator) owns merge/integration.
+Trunk-based development by a small agent swarm. The REVIEW/INTEGRATION PM owns all landings on master; you own one short-lived worktree and one small slice.
 
-## Read first
-1. `/work/martins-whisper/SPEC.md`
-2. `/work/martins-whisper/KANBAN.md`
-3. `/work/martins-whisper/DECISIONS.md`
-4. `/work/martins-whisper/AGENTS.md` (this file)
+## Process (current, 2026-10)
+- Work ONLY in your assigned worktree `/work/martins-whisper-worktrees/<task>` on a short branch, created from master. Never edit the main checkout `/work/martins-whisper`, except the PM landing.
+- Commit wip at least every 10 minutes with clear messages.
+- Landing is the PM's job, via `owner/tools/land.sh --cloud` (fast-forward only, gate = the "Android CI" workflow). Do NOT push to GitHub; do not merge/rebase into master yourself.
+- No handoff documents, no KANBAN tickets, no coordination docs. Your final message is your report: files changed (relative paths), the acceptance command with its real output pasted, and any leftovers.
+- Keep slices <= 300 changed lines. One vertical behaviour per slice; do not rename/move shared contract files without the PM's say-so. If an interface change is needed, report it, do not edit the shared contract silently.
+- Hard scope rule: only onboarding, model download, first dictation, home screen, theme/redesign work. Anything else is scope creep; refuse and report.
 
-## Worktree discipline
-- Work ONLY in your assigned git worktree: `/work/martins-whisper-worktrees/<work-id>` on branch `agent/<work-id>`.
-- Do not edit `/work/martins-whisper` main checkout (except the PM).
-- Do not touch files owned by another work package unless the PM says so. If you need an interface change, document it in your handoff and add a TODO; do not edit the shared contract silently.
-- Commit your work with clear messages. Do not merge or rebase onto main unless instructed.
-- The repo may start nearly empty; create the minimum skeleton you need. Prefer pure Kotlin/JVM for testable logic.
+## Build and test
+```
+. /work/android-toolchain/scripts/env.sh
+export GRADLE_USER_HOME=/work/.gradle-home
+/work/owner/tools/gradle-slot.sh :core:test :app:testDebugUnitTest --offline
+/work/owner/tools/gradle-slot.sh :app:compileDebugKotlin --offline   # when you only need a compile check
+```
+- Gradle only through `owner/tools/gradle-slot.sh` (never plain `gradle`): it caps RAM and never leaves a daemon. Robolectric is pinned to SDK 34; do not change test pins or budgets without PM approval.
+- Include one fresh-state launch test when you touch a launch entry point (a fresh install must not crash).
+- If blocked by environment (no SDK/KVM, network), still deliver code + a precise blocked report + exact unblock steps. Never fake test output. Run the tests you create and paste counts.
 
-## Handoff (mandatory)
-Write `/work/martins-whisper-worktrees/<work-id>/handoffs/<ID>-<slug>/HANDOFF.md` containing:
-- Executive summary (<= 10 lines) at the top.
-- What was built / changed, exact file list.
-- How to run tests/build; copy-paste commands and results.
-- Interfaces exposed, invariants, and any contract changes.
-- Evidence: commands, test counts, screenshots/log excerpts (no secrets).
-- Known limitations, blockers, and what the next agent should do.
-- References used (URLs/repos + what was copied/adapted).
-- Commit SHA(s).
+## Code style
+- Kotlin idiomatic, no comments except non-obvious constraints.
+- No secrets, no telemetry, no cloud inference.
+- UI work is Material 3 Expressive: colours only from `MaterialTheme.colorScheme`, motion only from theme motion (`MaterialTheme.motionScheme` / onboarding `Motion.kt` tokens while material3 stays on 1.4.x), haptics via `LocalHapticFeedback`. Copy official examples; do not invent components.
+- Keep dependencies minimal; justify any new dependency in your final message.
 
-Also write a short `SUMMARY.txt` next to it with the executive summary only. Your final message must repeat the executive summary.
-
-## Quality bar
-- Run the tests you create. Do not claim success without command output.
-- No cloud inference, no telemetry, no secrets in repo.
-- No comments unless they explain non-obvious constraints. Keep Kotlin idiomatic.
-- Keep dependencies minimal; justify any new dependency in the handoff.
-- If blocked by environment (e.g., no Android SDK/KVM), still deliver code + a precise blocked report + exact unblock steps. Do not fake test results.
-
-## Time / scope
-- Stay within your assigned deliverable. Do not start other packages.
-- If you finish early, harden tests/docs for your package, then stop.
-
-## Agent skills
-
-### Issue tracker
-
-Issues live as local markdown under `.scratch/` (no GitHub credentials in the PM container). See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Single-context: `GLOSSARY.md` + `DECISIONS.md` / `docs/adr/`. See `docs/agents/domain.md`.
+## Domain
+- App id `com.martins.whisper`; onboarding is a Compose flow in `app/src/main/java/com/martins/whisper/onboarding/`; legacy settings UI stays behind a gear.
+- Terminology and standing decisions: `DECISIONS.md`, `SPEC.md`. `KANBAN.md` is historical; ignore it.
+- Never touch the adb serial `R3CW40M8PLZ` (infra phone).
