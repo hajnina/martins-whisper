@@ -121,7 +121,8 @@ class DictationAccessibilityService : AccessibilityService(), TextInserter {
                     live,
                     packageName,
                     text,
-                    allowOwnPackage = InsertionPolicy.allowOwnPackageForE2E,
+                    allowOwnPackage = InsertionPolicy.allowOwnPackageForE2E ||
+                        InsertionPolicy.allowOwnPackageForOnboardingTest,
                 )
             ) {
                 InsertionRoute.SetText -> setText(node, live, text)
