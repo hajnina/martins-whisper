@@ -230,7 +230,7 @@ jobs:
 
   release:
     name: Release latest native APK
-    needs: apk
+    needs: [apk, tests]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -254,12 +254,13 @@ jobs:
           set -euo pipefail
           mv apk/app-debug.apk martins-whisper-native-debug.apk
           gh auth status
-          if gh release view latest --json tagName >/dev/null 2>&1; then
-            gh release delete latest --cleanup-tag -y
+          if ! gh release view latest --json tagName >/dev/null 2>&1; then
+            gh release create latest \
+              --title "Martins Whisper · latest" \
+              --prerelease \
+              --target "$GITHUB_SHA"
           fi
-          gh release create latest \
-            --title "Martins Whisper · latest" \
-            --notes "Rolling build from the default branch at ${{ github.sha }}. Debug-signed (sideload), bundled whisper.cpp engine (arm64-v8a)." \
+          gh release edit latest \
             --prerelease \
-            --target "${{ github.sha }}" \
-            martins-whisper-native-debug.apk
+            --notes "Rolling build from the default branch at $GITHUB_SHA. martins-whisper-native-debug.apk bundles the whisper.cpp engine (arm64-v8a) — the installable one."
+          gh release upload latest martins-whisper-native-debug.apk --clobber

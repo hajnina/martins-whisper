@@ -118,12 +118,13 @@ jobs:
           set -euo pipefail
           mv apk/app-debug.apk martins-whisper-debug.apk
           gh auth status
-          if gh release view latest --json tagName >/dev/null 2>&1; then
-            gh release delete latest --cleanup-tag -y
+          if ! gh release view latest --json tagName >/dev/null 2>&1; then
+            gh release create latest \
+              --title "Martins Whisper · latest" \
+              --prerelease \
+              --target "$GITHUB_SHA"
           fi
-          gh release create latest \
-            --title "Martins Whisper · latest" \
-            --notes "Rolling build from the default branch at ${{ github.sha }}. Debug-signed (sideload). This APK contains no on-device engine; use martins-whisper-native-debug.apk from the native build for dictation." \
+          gh release edit latest \
             --prerelease \
-            --target "${{ github.sha }}" \
-            martins-whisper-debug.apk
+            --notes "Rolling build from the default branch at $GITHUB_SHA. martins-whisper-debug.apk ships without the engine; use martins-whisper-native-debug.apk for dictation."
+          gh release upload latest martins-whisper-debug.apk --clobber
