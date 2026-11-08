@@ -227,3 +227,39 @@ jobs:
 
       - name: Host JNI tracer (whisper.cpp + JNI on the build host)
         run: scripts/host-jni-test.sh
+
+  release:
+    name: Release latest native APK
+    needs: apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency:
+      group: martins-whisper-release
+      cancel-in-progress: false
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    steps:
+      - name: Download native APK
+        uses: actions/download-artifact@v4
+        with:
+          name: martins-whisper-native-debug-${{ github.sha }}
+          path: apk
+
+      - name: Publish rolling "latest" release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mv apk/app-debug.apk martins-whisper-native-debug.apk
+          gh auth status
+          if gh release view latest --json tagName >/dev/null 2>&1; then
+            gh release delete latest --cleanup-tag -y
+          fi
+          gh release create latest \
+            --title "Martins Whisper · latest" \
+            --notes "Rolling build from the default branch at ${{ github.sha }}. Debug-signed (sideload), bundled whisper.cpp engine (arm64-v8a)." \
+            --prerelease \
+            --target "${{ github.sha }}" \
+            martins-whisper-native-debug.apk
