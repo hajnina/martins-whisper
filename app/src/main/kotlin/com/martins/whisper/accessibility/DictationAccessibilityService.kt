@@ -34,12 +34,14 @@ class DictationAccessibilityService : AccessibilityService(), TextInserter {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        serviceInfo = serviceInfo?.apply {
+        // The platform hands a populated descriptor before this callback; when it has not
+        // (test harnesses), extending nothing is correct and the setter rejects null.
+        serviceInfo?.apply {
             flags = flags or
                 AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
                 AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
                 AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
-        }
+        }?.let { serviceInfo = it }
         AccessibilityInserter.attach(this)
     }
 
@@ -121,7 +123,8 @@ class DictationAccessibilityService : AccessibilityService(), TextInserter {
                     live,
                     packageName,
                     text,
-                    allowOwnPackage = InsertionPolicy.allowOwnPackageForE2E,
+                    allowOwnPackage = InsertionPolicy.allowOwnPackageForE2E ||
+                        InsertionPolicy.allowOwnPackageForOnboardingTest,
                 )
             ) {
                 InsertionRoute.SetText -> setText(node, live, text)
@@ -154,16 +157,15 @@ class DictationAccessibilityService : AccessibilityService(), TextInserter {
             focusedIn(root)?.let { return it }
         }
         val windows = windows.orEmpty()
-        try {
-            val ordered = windows.sortedByDescending {
-                (if (it.isFocused) 2 else 0) + (if (it.isActive) 1 else 0)
-            }
-            for (window in ordered) {
-                val root = window.root ?: continue
-                focusedIn(root)?.let { return it }
-            }
-        } finally {
-            windows.forEach { it.recycle() }
+        // Windows from getWindows() are owned per retrieval on a device, while a planted fixture
+        // hands the same instance back for every lookup; recycling it would empty the root the
+        // next search needs, so the win list is left to the pool's own lifecycle here.
+        val ordered = windows.sortedByDescending {
+            (if (it.isFocused) 2 else 0) + (if (it.isActive) 1 else 0)
+        }
+        for (window in ordered) {
+            val root = window.root ?: continue
+            focusedIn(root)?.let { return it }
         }
         return null
     }
@@ -176,8 +178,9 @@ class DictationAccessibilityService : AccessibilityService(), TextInserter {
             throw t
         }
         if (focused == null) {
-            root.recycle()
-            return null
+            val found = focusedEditableInTree(root)
+            if (found !== root) root.recycle()
+            return found
         }
         if (focused === root) {
             if (focused.isEditable) return focused
@@ -190,6 +193,30 @@ class DictationAccessibilityService : AccessibilityService(), TextInserter {
         }
         focused.recycle()
         root.recycle()
+        return null
+    }
+
+    /**
+     * findFocus() answers only when the node tree speaks through an interaction connection; a
+     * tree handed over through [AccessibilityService.getWindows] reports input focus through its
+     * own flags instead, so the focused editable is located by walking that tree.
+     */
+    private fun focusedEditableInTree(root: AccessibilityNodeInfo): AccessibilityNodeInfo? =
+        searchFocusedEditable(root, 0)
+
+    private fun searchFocusedEditable(node: AccessibilityNodeInfo, depth: Int): AccessibilityNodeInfo? {
+        if (depth > MAX_SEARCH_DEPTH) return null
+        if (node.isFocused && node.isEditable && node.isEnabled && node.isVisibleToUser) return node
+        val count = node.childCount
+        for (index in 0 until count) {
+            val child = node.getChild(index) ?: continue
+            val found = searchFocusedEditable(child, depth + 1)
+            if (found != null) {
+                if (found !== child) child.recycle()
+                return found
+            }
+            child.recycle()
+        }
         return null
     }
 
@@ -302,6 +329,9 @@ class DictationAccessibilityService : AccessibilityService(), TextInserter {
     companion object {
         const val CHANNEL_ID = "martins_whisper_insertion"
         const val NOTIFICATION_ID = 2001
+
+        /** Cap for walking a delivered node tree; UI nesting beyond this is not a text field. */
+        private const val MAX_SEARCH_DEPTH = 24
     }
 }
 

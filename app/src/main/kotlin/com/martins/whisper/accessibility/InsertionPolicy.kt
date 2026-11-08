@@ -45,6 +45,14 @@ object InsertionPolicy {
     @Volatile
     var allowOwnPackageForE2E: Boolean = false
 
+    /**
+     * The onboarding first-dictation step sets this while its live test session is on screen,
+     * so the transcript can land in the step's own practice field. Set at the start of the
+     * session and unset the moment it ends (leave, continue, stop), never a standing default.
+     */
+    @Volatile
+    var allowOwnPackageForOnboardingTest: Boolean = false
+
     fun route(
         node: NodeSnapshot?,
         ownPackage: String,
