@@ -1,29 +1,48 @@
 package com.martins.whisper.onboarding
 
-import androidx.compose.animation.core.*
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.*
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.*
-import androidx.compose.ui.graphics.*
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.*
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import com.martins.whisper.ui.PermissionItem
-
-internal val OnboardingAccent = Color(0xFF5EEAD4)
-internal val OnboardingInk = Color(0xFFF3FAFA)
-private val DeepTop = Color(0xFF06363B)
-private val DeepBottom = Color(0xFF071012)
-private val GrantedGreen = Color(0xFF6EE7B7)
+import com.martins.whisper.ui.theme.WhisperPillShape
 
 object PermissionCopy {
     fun title(item: PermissionItem): String = when (item) {
@@ -50,17 +69,25 @@ object PermissionCopy {
 
 @Composable
 internal fun OnboardingBackdrop(content: @Composable BoxScope.() -> Unit) {
-    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(DeepTop, DeepBottom))), content = content)
+    val scheme = MaterialTheme.colorScheme
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(scheme.surfaceContainer, scheme.surface))),
+        content = content,
+    )
 }
 
 @Composable
 internal fun GlassCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val scheme = MaterialTheme.colorScheme
     Column(
-        modifier = modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(28.dp))
-            .background(Color.White.copy(alpha = 0.12f))
-            .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(28.dp))
-            .padding(24.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.large)
+            .background(scheme.surfaceContainerHigh)
+            .border(1.dp, scheme.outlineVariant, MaterialTheme.shapes.large)
+            .padding(28.dp),
         content = content,
     )
 }
@@ -69,7 +96,7 @@ internal fun GlassCard(modifier: Modifier = Modifier, content: @Composable Colum
 internal fun rememberPressScale(pressed: Boolean): Float {
     val scale by animateFloatAsState(
         targetValue = if (pressed) 0.94f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
+        animationSpec = Motion.fastEffectsSpec(),
         label = "press",
     )
     return scale
@@ -79,15 +106,27 @@ internal fun rememberPressScale(pressed: Boolean): Float {
 internal fun SpringyContainer(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
     var pressed by remember { mutableStateOf(false) }
     Box(
-        modifier = modifier.scale(rememberPressScale(pressed)).pointerInput(Unit) {
-            awaitEachGesture {
-                awaitFirstDown(requireUnconsumed = false)
-                pressed = true
-                waitForUpOrCancellation()
-                pressed = false
-            }
-        },
+        modifier = modifier
+            .scale(rememberPressScale(pressed))
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    pressed = true
+                    waitForUpOrCancellation()
+                    pressed = false
+                }
+            },
         content = content,
+    )
+}
+
+@Composable
+internal fun ScreenTitle(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.headlineMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+        textAlign = TextAlign.Center,
     )
 }
 
@@ -101,40 +140,58 @@ fun PermissionStepScreen(
 ) {
     HapticOnGrant(granted)
     OnboardingBackdrop {
+        val scheme = MaterialTheme.colorScheme
+        val check by animateFloatAsState(
+            targetValue = if (granted) 1f else 0f,
+            animationSpec = Motion.defaultSpatialSpec(),
+            label = "granted",
+        )
         Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 40.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 28.dp, vertical = 40.dp),
             verticalArrangement = Arrangement.Center,
         ) {
-            Text(PermissionCopy.title(item), color = OnboardingInk, fontSize = 34.sp, lineHeight = 42.sp, fontWeight = FontWeight.SemiBold)
+            ScreenTitle(PermissionCopy.title(item))
             Spacer(Modifier.height(28.dp))
             GlassCard {
-                Text(PermissionCopy.why(item), color = OnboardingInk.copy(alpha = 0.86f), fontSize = 17.sp, lineHeight = 26.sp)
+                Text(
+                    PermissionCopy.why(item),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = scheme.onSurfaceVariant,
+                )
                 Spacer(Modifier.height(24.dp))
                 if (granted) {
-                    val check by animateFloatAsState(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy), label = "granted")
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Check, contentDescription = null, tint = GrantedGreen, modifier = Modifier.size(30.dp).scale(check))
-                        Spacer(Modifier.size(12.dp))
-                        Text("Granted", color = GrantedGreen, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                        Icon(
+                            Icons.Filled.Check,
+                            contentDescription = null,
+                            tint = scheme.tertiary,
+                            modifier = Modifier
+                                .size(30.dp)
+                                .graphicsLayer {
+                                    scaleX = check
+                                    scaleY = check
+                                },
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text("Granted", style = MaterialTheme.typography.titleMedium, color = scheme.tertiary)
                     }
                 } else {
-                    Button(onClick = onOpen, shape = RoundedCornerShape(28.dp), colors = ButtonDefaults.buttonColors(containerColor = OnboardingAccent, contentColor = DeepBottom)) {
-                        Text(PermissionCopy.action(item), fontWeight = FontWeight.SemiBold)
+                    Button(onClick = onOpen, shape = WhisperPillShape) {
+                        Text(PermissionCopy.action(item))
                     }
                 }
             }
             Spacer(Modifier.height(36.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onBack) { Text("Back", color = OnboardingInk.copy(alpha = 0.7f)) }
+                TextButton(onClick = onBack) {
+                    Text("Back", color = scheme.onSurfaceVariant)
+                }
                 Spacer(Modifier.weight(1f))
                 SpringyContainer {
-                    Button(
-                        onClick = onNext,
-                        shape = RoundedCornerShape(28.dp),
-                        colors = if (granted) ButtonDefaults.buttonColors(containerColor = OnboardingAccent, contentColor = DeepBottom)
-                        else ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.14f), contentColor = OnboardingInk),
-                    ) {
-                        Text(if (granted) "Next" else "Skip for now", fontWeight = FontWeight.SemiBold)
+                    Button(onClick = onNext, shape = WhisperPillShape) {
+                        Text(if (granted) "Next" else "Skip for now")
                     }
                 }
             }

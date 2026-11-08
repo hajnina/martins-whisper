@@ -1,11 +1,7 @@
 package com.martins.whisper.ui
 
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.interaction.InteractionSource
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -15,7 +11,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextOverflow
@@ -23,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.martins.whisper.onboarding.MartinsOnboardingTheme
 import com.martins.whisper.onboarding.Motion
 import com.martins.whisper.onboarding.hapticClick
+import com.martins.whisper.ui.theme.WhisperPillShape
 
 @Composable
 fun HomeScreen(
@@ -35,10 +31,6 @@ fun HomeScreen(
     MartinsOnboardingTheme {
         val scheme = MaterialTheme.colorScheme
         val haptics = LocalHapticFeedback.current
-        val gearInteraction = remember { MutableInteractionSource() }
-        val restartInteraction = remember { MutableInteractionSource() }
-        val gearScale by rememberTapScale(gearInteraction)
-        val restartScale by rememberTapScale(restartInteraction)
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -56,11 +48,6 @@ fun HomeScreen(
                 )
                 IconButton(
                     onClick = hapticClick(onOpenSettings),
-                    interactionSource = gearInteraction,
-                    modifier = Modifier.graphicsLayer {
-                        scaleX = gearScale
-                        scaleY = gearScale
-                    },
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Settings,
@@ -72,7 +59,7 @@ fun HomeScreen(
             Spacer(Modifier.height(40.dp))
             Surface(
                 color = scheme.primaryContainer,
-                shape = MaterialTheme.shapes.large,
+                shape = WhisperPillShape,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(Modifier.padding(28.dp)) {
@@ -101,8 +88,8 @@ fun HomeScreen(
             }
             Spacer(Modifier.height(20.dp))
             Surface(
-                color = scheme.surfaceContainer,
-                shape = MaterialTheme.shapes.medium,
+                color = scheme.surfaceContainerHighest,
+                shape = MaterialTheme.shapes.large,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Row(
@@ -134,7 +121,7 @@ fun HomeScreen(
                 Spacer(Modifier.height(16.dp))
                 Surface(
                     color = scheme.surfaceContainerHigh,
-                    shape = MaterialTheme.shapes.medium,
+                    shape = MaterialTheme.shapes.large,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(Modifier.padding(20.dp)) {
@@ -158,11 +145,7 @@ fun HomeScreen(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                 TextButton(
                     onClick = hapticClick(onRestartOnboarding),
-                    interactionSource = restartInteraction,
-                    modifier = Modifier.graphicsLayer {
-                        scaleX = restartScale
-                        scaleY = restartScale
-                    },
+                    shape = WhisperPillShape,
                 ) {
                     Text("Restart onboarding", color = scheme.onSurfaceVariant)
                 }
@@ -170,11 +153,3 @@ fun HomeScreen(
         }
     }
 }
-
-@Composable
-private fun rememberTapScale(interaction: InteractionSource) =
-    animateFloatAsState(
-        targetValue = if (interaction.collectIsPressedAsState().value) 0.9f else 1f,
-        animationSpec = Motion.fastSpatialSpec(),
-        label = "tapScale",
-    )
