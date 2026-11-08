@@ -240,28 +240,19 @@ jobs:
       cancel-in-progress: false
     if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download native APK
         uses: actions/download-artifact@v4
         with:
           name: martins-whisper-native-debug-${{ github.sha }}
           path: apk
 
-      - name: Publish rolling "latest" release
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
+      - name: Publish rolling "latest" release (release/publish.sh in Docker)
         run: |
-          set -euo pipefail
-          mv apk/app-debug.apk martins-whisper-native-debug.apk
-          gh auth status
-          if ! gh release view latest --json tagName >/dev/null 2>&1; then
-            gh release create latest \
-              --title "Martins Whisper · latest" \
-              --prerelease \
-              --target "$GITHUB_SHA"
-          fi
-          gh release edit latest \
-            --prerelease \
-            --notes "Rolling build from the default branch at $GITHUB_SHA. martins-whisper-native-debug.apk bundles the whisper.cpp engine (arm64-v8a) — the installable one."
-          gh release upload latest martins-whisper-native-debug.apk --clobber
+          docker build -t mw-release release
+          docker run --rm \
+            -e GH_TOKEN="${{ secrets.GITHUB_TOKEN }}" \
+            -e GH_REPO="${{ github.repository }}" \
+            -e GITHUB_SHA="${{ github.sha }}" \
+            -v "$PWD:/work" mw-release native /work/apk
