@@ -3,6 +3,7 @@ package com.martins.whisper.ui.theme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 
 private val Black = Color(0xFF07070F)
 private val White = Color(0xFFFFFFFF)
@@ -33,6 +34,8 @@ private val NeutralLightInk = Color(0xFFDCDCE6)
 private val SecondaryIndigoLight = Color(0xFF4B4E9B)
 private val SecondaryIndigoDark = Color(0xFFB3B4FF)
 private val TertiaryTealLight = Color(0xFF008A80)
+
+private val OutlineVariantDark = Color(0xFF33344A)
 
 val WhisperLightColorScheme = lightColorScheme(
     primary = IndigoBrand,
@@ -100,7 +103,7 @@ val WhisperDarkColorScheme = darkColorScheme(
     surfaceContainerHigh = Color(0xFF1F2033),
     surfaceContainerHighest = Color(0xFF26273B),
     outline = Color(0xFF747588),
-    outlineVariant = Color(0xFF33344A),
+    outlineVariant = OutlineVariantDark,
     error = ErrorDark,
     onError = ErrorOnDark,
     errorContainer = ErrorContainerDark,
@@ -109,3 +112,20 @@ val WhisperDarkColorScheme = darkColorScheme(
     inverseOnSurface = Color(0xFF0C0D16),
     scrim = Color(0xFF000000),
 )
+
+/**
+ * The floating bubble is painted with android.graphics, not Compose, so it reads its colors from
+ * here instead of inventing its own palette: every entry is one of the scheme constants in this
+ * file, which keeps the overlay on the app's indigo/lavender brand.
+ */
+object WhisperOverlayPalette {
+    val IdleAccent: Int = IndigoBright.toArgb()
+    val LoadingAccent: Int = IndigoLavender.toArgb()
+    val RecordingAccent: Int = TealAccent.toArgb()
+    val ProcessingAccent: Int = SecondaryIndigoDark.toArgb()
+    val SuccessAccent: Int = TertiaryTealLight.toArgb()
+    val ErrorAccent: Int = ErrorDark.toArgb()
+    val BubbleSurface: Int = IndigoDeep.toArgb()
+    val BubbleRing: Int = OutlineVariantDark.toArgb()
+    val OnBubble: Int = White.toArgb()
+}

@@ -1,6 +1,7 @@
 package com.martins.whisper.overlay
 
 import com.martins.whisper.service.DictationState
+import com.martins.whisper.ui.theme.WhisperOverlayPalette
 
 enum class BubbleIcon {
     MIC,
@@ -20,12 +21,12 @@ data class BubbleVisual(
 
 object BubblePresentation {
 
-    val IDLE_ACCENT: Int = 0xFF135D66.toInt()
-    val LOADING_ACCENT: Int = 0xFFB26A00.toInt()
-    val LISTENING_ACCENT: Int = 0xFFC62828.toInt()
-    val TRANSCRIBING_ACCENT: Int = 0xFF1565C0.toInt()
-    val SUCCESS_ACCENT: Int = 0xFF2E7D32.toInt()
-    val ERROR_ACCENT: Int = 0xFFB00020.toInt()
+    val IDLE_ACCENT: Int = WhisperOverlayPalette.IdleAccent
+    val LOADING_ACCENT: Int = WhisperOverlayPalette.LoadingAccent
+    val RECORDING_ACCENT: Int = WhisperOverlayPalette.RecordingAccent
+    val PROCESSING_ACCENT: Int = WhisperOverlayPalette.ProcessingAccent
+    val SUCCESS_ACCENT: Int = WhisperOverlayPalette.SuccessAccent
+    val ERROR_ACCENT: Int = WhisperOverlayPalette.ErrorAccent
 
     fun of(state: DictationState): BubbleVisual = when (state) {
         is DictationState.Idle -> BubbleVisual(

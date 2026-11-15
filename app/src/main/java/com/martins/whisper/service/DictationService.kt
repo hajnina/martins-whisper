@@ -33,6 +33,7 @@ import com.martins.whisper.audio.AudioSource
 import com.martins.whisper.core.AudioEnergy
 import com.martins.whisper.core.TranscriptGate
 import com.martins.whisper.core.asr.ModelManager
+import com.martins.whisper.core.voice.VoiceFeatureExtractor
 import com.martins.whisper.data.SettingsStore
 import com.martins.whisper.overlay.MicBubbleView
 import com.martins.whisper.overlay.OverlayController
@@ -66,6 +67,7 @@ class DictationService : Service() {
     private var pressed = false
     private var sessionActive = false
     private var speechDetected = false
+    private val voiceExtractor = VoiceFeatureExtractor()
     @Volatile
     private var currentLevel = 0f
     private var sessionStartElapsed = 0L
@@ -155,6 +157,7 @@ class DictationService : Service() {
         sessionStartElapsed = SystemClock.elapsedRealtime()
         speechDetected = false
         currentLevel = 0f
+        voiceExtractor.reset()
         engineHost.beginSession()
         engineReady = false
         resetSessionAudio()
@@ -210,6 +213,7 @@ class DictationService : Service() {
             audioSource.start(
                 onFrame = { samples, capturedAt ->
                     if (!sessionActive || id != sessionId) return@start
+                    overlay.onVoiceFeatures(voiceExtractor.process(samples, capturedAt))
                     if (!engineHost.addFrame(samples)) {
                         if (sessionActive && id == sessionId) {
                             scope.launch { fail("Audio buffer overflow; dictation aborted") }

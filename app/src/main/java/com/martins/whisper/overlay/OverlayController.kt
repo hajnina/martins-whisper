@@ -6,6 +6,7 @@ import android.os.Build
 import android.provider.Settings
 import android.view.Gravity
 import android.view.WindowManager
+import com.martins.whisper.core.voice.VoiceFeatures
 import com.martins.whisper.data.SettingsStore
 import com.martins.whisper.service.DictationState
 
@@ -16,6 +17,7 @@ class OverlayController(context: Context) {
         appContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val settings = SettingsStore(appContext)
 
+    @Volatile
     private var view: MicBubbleView? = null
     private var params: WindowManager.LayoutParams? = null
     private var dragStartX = 0
@@ -95,6 +97,14 @@ class OverlayController(context: Context) {
         // jump sideways on the first tap (and the second tap then missed it, DEVICE-REPORT #2).
         // State is shown inside the fixed 72 dp circle (colour, icon, content description).
         bubbleView.state = state
+    }
+
+    /**
+     * Measured voice features from the capture thread. Safe to call from any thread: the bubble
+     * posts its own state changes onto the main looper.
+     */
+    fun onVoiceFeatures(features: VoiceFeatures) {
+        view?.onVoiceFeatures(features)
     }
 
     fun beginDrag() {
