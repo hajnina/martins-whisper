@@ -215,13 +215,14 @@ class MicBubbleViewRobolectricTest {
     }
 
     private fun drawFor(state: DictationState) {
+        val size = 168
         view.state = state
         view.measure(
-            View.MeasureSpec.makeMeasureSpec(view.expandedWidthPx, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(view.expandedHeightPx, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY),
         )
-        view.layout(0, 0, view.expandedWidthPx, view.expandedHeightPx)
-        val bitmap = Bitmap.createBitmap(view.expandedWidthPx, view.expandedHeightPx, Bitmap.Config.ARGB_8888)
+        view.layout(0, 0, size, size)
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         view.draw(Canvas(bitmap))
         bitmap.recycle()
     }
