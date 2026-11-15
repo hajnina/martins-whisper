@@ -23,7 +23,15 @@ case "$kind" in
   *) echo "unknown kind: $kind" >&2; exit 2 ;;
 esac
 
-cp "$dir/app-debug.apk" "/tmp/$asset"
+# upload-artifact@v4 roots the artifact at the least-common ancestor of the uploaded
+# paths, so the APK's depth differs per workflow (android.yml flat, native-build.yml
+# nested under app/build/outputs/apk/debug/) — search for it instead of assuming.
+apk_file="$(find "$dir" -type f -name app-debug.apk -print -quit 2>/dev/null || true)"
+if [ -z "$apk_file" ]; then
+  echo "error: app-debug.apk not found under '$dir' (empty artifact or unexpected layout)" >&2
+  exit 1
+fi
+cp "$apk_file" "/tmp/$asset"
 run() { if [ "${DRY_RUN:-}" = 1 ]; then echo "DRY: $*"; else "$@"; fi; }
 
 # --- hooks: add checksums, extra assets, release-note sections here -------------------
