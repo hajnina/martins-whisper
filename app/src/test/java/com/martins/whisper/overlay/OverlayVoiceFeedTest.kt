@@ -1,17 +1,17 @@
 package com.martins.whisper.overlay
 
-import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Looper
 import android.view.View
 import com.martins.whisper.core.voice.VoiceFeatureExtractor
 import com.martins.whisper.service.DictationState
+import kotlin.math.PI
+import kotlin.math.sin
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
@@ -40,9 +40,6 @@ class OverlayVoiceFeedTest {
         controller = OverlayController(context)
         assertTrue(controller.show(overlayListener))
         bubble = controller.bubbleForTest()!!
-        // Robolectric never attaches overlay windows, so the bubble's internal posts would sit
-        // in its pending queue; give it a real window like the phone's bubble has.
-        Robolectric.buildActivity(Activity::class.java).setup().get().setContentView(bubble)
         bubble.measure(
             View.MeasureSpec.makeMeasureSpec(SIZE_PX, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(SIZE_PX, View.MeasureSpec.EXACTLY),
@@ -61,9 +58,12 @@ class OverlayVoiceFeedTest {
         val fallback = bubble.lastOrbMotion!!
 
         val extractor = VoiceFeatureExtractor()
-        val frame = ShortArray(FRAME_SAMPLES) { SPEECH_LEVEL }
-        repeat(FRAMES_FED) { index ->
-            controller.onVoiceFeatures(extractor.process(frame, index * FRAME_MS))
+        repeat(FRAMES_FED) { frameIndex ->
+            val frame = ShortArray(FRAME_SAMPLES) { index ->
+                val sample = frameIndex * FRAME_SAMPLES + index
+                (SPEECH_LEVEL * sin(2.0 * PI * PITCH_HZ * sample / SAMPLE_RATE)).toInt().toShort()
+            }
+            controller.onVoiceFeatures(extractor.process(frame, frameIndex * FRAME_MS))
         }
         shadowOf(Looper.getMainLooper()).idle()
         settleAndDraw()
@@ -98,7 +98,9 @@ class OverlayVoiceFeedTest {
         const val FRAME_SAMPLES = 320
         const val FRAME_MS = 20L
         const val FRAMES_FED = 40
-        const val SPEECH_LEVEL = 6_000.toShort()
+        const val SAMPLE_RATE = 16_000
+        const val PITCH_HZ = 440.0
+        const val SPEECH_LEVEL = 6_000.0
         const val QUIET_STATE_LEVEL = 0.05f
     }
 }

@@ -44,14 +44,14 @@ object BubblePresentation {
         )
 
         is DictationState.Recording -> BubbleVisual(
-            accent = LISTENING_ACCENT,
+            accent = RECORDING_ACCENT,
             icon = BubbleIcon.MIC_LEVELS,
             contentDescription = "Listening; tap to stop",
             label = null,
         )
 
         is DictationState.Processing -> BubbleVisual(
-            accent = TRANSCRIBING_ACCENT,
+            accent = PROCESSING_ACCENT,
             icon = BubbleIcon.TRANSCRIBING,
             contentDescription = "Transcribing\u2026",
             label = state.label,

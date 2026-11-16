@@ -1,6 +1,7 @@
 package com.martins.whisper.overlay
 
 import com.martins.whisper.service.DictationState
+import com.martins.whisper.ui.theme.WhisperOverlayPalette
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
