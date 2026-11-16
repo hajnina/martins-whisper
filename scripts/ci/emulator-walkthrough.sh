@@ -218,7 +218,15 @@ tap_by text "Next" exact
 echo "-- model step (real ggml-tiny download, checksum verified by the app)"
 wait_for text "Choose your model" contains 30 model-step
 shot 07-model-step "Onboarding: model download" "real ggml-tiny download started"
-wait_for text "Model ready." contains 900 model-ready
+model_deadline=$((SECONDS + 900))
+until present text "Model ready." contains; do
+    if present text "Retry" exact; then
+        tap_by text "Retry" exact || true
+        echo "model download retry tapped ($(date -u +%H:%M:%SZ))"
+    fi
+    (( SECONDS < model_deadline )) || fail "model download did not finish within 900s (retry loop exhausted)"
+    sleep 10
+done
 shot 07b-model-ready "Onboarding: model download" "ggml-tiny installed ('Model ready.')"
 tap_by text "Continue" contains
 

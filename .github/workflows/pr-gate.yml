@@ -1,0 +1,316 @@
+name: PR Gate - Emulator Walkthrough
+
+# Fail-closed CI gate: unit tests, verify walls, then a real emulator boot that walks
+# every screen, screenshots each state and attaches the gallery to the PR chat.
+# The build/test duplication is kept lean on purpose: Android CI already builds and
+# publishes APKs; this workflow's unique value is the emulator job.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+  DEBIAN_FRONTEND: noninteractive
+  # Matches native-build.yml: runner-preinstalled NDK/CMake and the pinned whisper.cpp.
+  NDK_VERSION: "27.3.13750724"
+  CMAKE_VERSION: "3.31.5"
+  WHISPER_CPP_REF: "231638a0717b7822784297e5980965ffcec05810"
+
+jobs:
+  build-test:
+    name: build-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle (with cache)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Configure preinstalled Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="$ANDROID_HOME"
+          SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            SDKMANAGER="$(find "$SDK/cmdline-tools" -maxdepth 3 -path '*/bin/sdkmanager' 2>/dev/null | sort -V | tail -1)"
+          fi
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            echo "::error::No preinstalled Android sdkmanager under $SDK"
+            ls -la /usr/local/lib/android 2>/dev/null || true
+            exit 1
+          fi
+          dirname "$SDKMANAGER" >> "$GITHUB_PATH"
+          # Accept licences non-interactively. `yes` exits 141 on SIGPIPE, hence `|| true`.
+          yes | "$SDKMANAGER" --sdk_root="$SDK" --licenses >/dev/null 2>&1 || true
+          # No-op when the runner image already has them; keeps the build reproducible.
+          "$SDKMANAGER" --sdk_root="$SDK" --install \
+            "platforms;android-35" \
+            "build-tools;34.0.0" \
+            "build-tools;35.0.1" \
+            "platform-tools" >/dev/null
+          "$SDKMANAGER" --sdk_root="$SDK" --list_installed | head -30
+
+      - name: Unit tests
+        run: ./gradlew :core:test :app:testDebugUnitTest --no-daemon --stacktrace
+
+      - name: Verify walls
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/verify/scan-weak-tests.sh
+          scripts/verify/scan-mocks.sh
+          scripts/verify/scan-oracle-copy.sh
+
+  emulator-walkthrough:
+    name: emulator-walkthrough
+    needs: build-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle (with cache)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Configure preinstalled Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="$ANDROID_HOME"
+          SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            SDKMANAGER="$(find "$SDK/cmdline-tools" -maxdepth 3 -path '*/bin/sdkmanager' 2>/dev/null | sort -V | tail -1)"
+          fi
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            echo "::error::No preinstalled Android sdkmanager under $SDK"
+            exit 1
+          fi
+          dirname "$SDKMANAGER" >> "$GITHUB_PATH"
+          yes | "$SDKMANAGER" --sdk_root="$SDK" --licenses >/dev/null 2>&1 || true
+          need=()
+          [ -d "$SDK/platforms/android-35" ] || need+=("platforms;android-35")
+          [ -d "$SDK/build-tools/35.0.1" ] || need+=("build-tools;35.0.1")
+          [ -d "$SDK/platform-tools" ] || need+=("platform-tools")
+          [ -x "$SDK/emulator/emulator" ] || need+=("emulator")
+          "$SDKMANAGER" --sdk_root="$SDK" --list_installed | grep -q "system-images;android-34;google_apis;x86_64;" \
+            || need+=("system-images;android-34;google_apis;x86_64")
+          if ((${#need[@]})); then
+            echo "installing: ${need[*]}"
+            "$SDKMANAGER" --sdk_root="$SDK" --install "${need[@]}" >/dev/null
+          fi
+          "$SDKMANAGER" --sdk_root="$SDK" --list_installed | grep -E "emulator|system-images;android-34;google_apis;x86_64"
+
+      - name: Fail closed without KVM
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -e /dev/kvm ]]; then
+            echo "::error::/dev/kvm is not available; software emulation is not allowed on this gate"
+            exit 1
+          fi
+          ls -l /dev/kvm
+
+      - name: NDK + CMake (runner-preinstalled, fail closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="$ANDROID_HOME"
+          SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          need=()
+          [ -d "$SDK/ndk/$NDK_VERSION" ] || need+=("ndk;$NDK_VERSION")
+          [ -x "$SDK/cmake/$CMAKE_VERSION/bin/cmake" ] || need+=("cmake;$CMAKE_VERSION")
+          if ((${#need[@]})); then
+            "$SDKMANAGER" --sdk_root="$SDK" --install "${need[@]}" >/dev/null
+          fi
+          echo "ANDROID_NDK_HOME=$SDK/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+          "$SDK/cmake/$CMAKE_VERSION/bin/cmake" --version | head -1
+
+      - name: Cache pinned whisper.cpp checkout
+        uses: actions/cache@v4
+        with:
+          path: app/src/main/cpp/whisper.cpp
+          key: whisper-cpp-${{ runner.os }}-${{ env.WHISPER_CPP_REF }}
+
+      - name: Fetch pinned whisper.cpp
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=""
+          for attempt in 1 2 3; do
+            scripts/fetch-whisper-cpp.sh && ok=1 && break
+            echo "fetch attempt $attempt failed; retrying" >&2
+            sleep $((attempt * 5))
+          done
+          [[ -n "$ok" ]] || { echo "::error::could not fetch whisper.cpp after 3 attempts"; exit 1; }
+          test -f app/src/main/cpp/whisper.cpp/samples/jfk.wav
+
+      - name: Build x86_64 debug APK
+        run: ./gradlew :app:assembleDebug -Pmartins.native=true -PwhisperAbis=x86_64 --no-daemon --stacktrace
+
+      - name: Create AVD
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "no" | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
+            -n gate -k "system-images;android-34;google_apis;x86_64" -d pixel_6 --force \
+            || echo "no" | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
+              -n gate -k "system-images;android-34;google_apis;x86_64" --force
+          "$ANDROID_HOME/emulator/emulator" -list-avds
+
+      - name: Boot emulator (poll sys.boot_completed, 15 min, fail closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK="$ANDROID_HOME"
+          boot() {
+            "$SDK/emulator/emulator" -avd gate -no-window -no-audio -gpu swiftshader_indirect \
+              -no-boot-anim -accel on -camera-back none -memory 3072 \
+              > /tmp/emulator.log 2>&1 &
+            echo $! > /tmp/emulator.pid
+            adb wait-for-device || return 1
+            local deadline=$((SECONDS + 900))
+            while (( SECONDS < deadline )); do
+              [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]] && return 0
+              sleep 5
+            done
+            return 1
+          }
+          if ! boot; then
+            echo "::warning::first boot attempt failed; relaunching once"
+            adb emu kill 2>/dev/null || true
+            kill "$(cat /tmp/emulator.pid)" 2>/dev/null || true
+            sleep 15
+            adb kill-server; adb start-server >/dev/null 2>&1 || true
+            if ! boot; then
+              echo "::error::emulator did not reach sys.boot_completed within 900s"
+              tail -60 /tmp/emulator.log || true
+              adb devices
+              exit 1
+            fi
+          fi
+          sleep 15
+          adb shell getprop sys.boot_completed
+
+      - name: Device setup (animations off, install APK)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for scale in window_animation_scale window_transition_scale window_animator_scale; do
+            adb shell settings put global "$scale" 0.0
+          done
+          adb install -r -t app/build/outputs/apk/debug/app-debug.apk \
+            || { echo "::error::adb install failed"; adb logcat -d | tail -40; exit 1; }
+          adb shell pm list packages | grep com.martins.whisper
+
+      - name: Walk every screen (fail closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export APP_ID=com.martins.whisper
+          export GATE_SHOTS=shots
+          export GATE_WAV="$PWD/app/src/main/cpp/whisper.cpp/samples/jfk.wav"
+          scripts/ci/emulator-walkthrough.sh
+
+      - name: Upload screenshots artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 30
+          path: shots/
+
+      - name: Attach gallery to the chat (gist, release fallback, summary, PR comment)
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PYEOF'
+          import pathlib
+          lines = pathlib.Path("shots/manifest.tsv").read_text().splitlines()
+          rows = [line.split("\t") for line in lines if line.strip()]
+          assert rows, "manifest.tsv is empty"
+          markdown = ["## PR Gate emulator walkthrough", "",
+                      "| Screenshot | Screen | Verification |", "|---|---|---|"]
+          for shot, screen, verify in rows:
+              markdown.append(f"| ![{shot}]({shot}) | {screen} | {verify} |")
+          pathlib.Path("gallery.md").write_text("\n".join(markdown) + "\n")
+          PYEOF
+          base_url=""
+          gist_out="$(gh gist create --desc "PR Gate emulator walkthrough ${{ github.run_id }}" \
+            shots/*.png gallery.md 2>/tmp/gist.err || true)"
+          gist_url="$(printf '%s\n' "$gist_out" | tail -1 | tr -d '[:space:]')"
+          if [[ "$gist_url" == https://gist.github.com/* ]]; then
+            base_url="$(python3 -c "import sys; print(sys.argv[1].rstrip('/').replace('gist.github.com','gist.githubusercontent.com')+'/raw')" "$gist_url")"
+          else
+            echo "::warning::gist creation failed: $(tail -1 /tmp/gist.err 2>/dev/null || echo unknown); using release assets instead"
+          fi
+          if [[ -z "$base_url" ]]; then
+            gh release delete pr-gate-shots --cleanup-tag --yes >/dev/null 2>&1 || true
+            if gh release create pr-gate-shots \
+                --title "PR Gate walkthrough screenshots" \
+                --notes "Rolling screenshot assets for the emulator gate." \
+                shots/*.png gallery.md >/dev/null 2>/tmp/release.err; then
+              base_url="https://github.com/${{ github.repository }}/releases/download/pr-gate-shots"
+            else
+              echo "::warning::release asset fallback failed: $(tail -1 /tmp/release.err 2>/dev/null || echo unknown)"
+            fi
+          fi
+          python3 - "$base_url" <<'PYEOF'
+          import pathlib, sys, re
+          base, text = sys.argv[1], pathlib.Path("gallery.md").read_text()
+          pathlib.Path("gallery-linked.md").write_text(
+              re.sub(r"\]\((?!http)", f"]({base}/", text))
+          PYEOF
+          cat gallery-linked.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment on the PR
+        if: always() && github.event_name == 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gallery="$(cat gallery-linked.md 2>/dev/null || echo 'Walkthrough failed; see the screenshots artifact.')"
+          if [[ "$(wc -c <<<"$gallery")" -gt 60000 ]]; then
+            gallery="Walkthrough gallery exceeds the comment size limit; open the step summary or gist/release.\n$(head -40 <<<"$gallery")"
+          fi
+          printf '%s\n' "$gallery" > comment.md
+          gh pr comment "${{ github.event.number }}" --body-file comment.md \
+            || echo "::warning::could not comment on the PR (fork restrictions?)"
