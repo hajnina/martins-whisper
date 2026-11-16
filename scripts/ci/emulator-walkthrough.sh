@@ -126,23 +126,45 @@ scroll_to() {
 seed_fixture() {
     [[ -f "$WAV_SRC" ]] || fail "fixture WAV missing: $WAV_SRC"
     adb push "$WAV_SRC" /data/local/tmp/gate-jfk.wav >/dev/null || fail "push fixture failed"
-    adb shell run-as "$APP_ID" mkdir -p files/inject || fail "run-as mkdir failed"
-    adb shell run-as "$APP_ID" cp /data/local/tmp/gate-jfk.wav files/inject/jfk.wav \
+    # Absolute paths: run-as cwd/relative-path handling has bitten us once already
+    # (mkdir+cp exited 0, then the selected.txt write said "No such file or
+    # directory"). Verify each stage so the true state is visible on failure.
+    local inject_dir="/data/data/$APP_ID/files/inject"
+    adb shell run-as "$APP_ID" mkdir -p "$inject_dir" || fail "run-as mkdir failed"
+    adb shell run-as "$APP_ID" cp /data/local/tmp/gate-jfk.wav "$inject_dir/jfk.wav" \
         || fail "run-as cp failed"
-    printf 'jfk.wav' | adb shell run-as "$APP_ID" sh -c 'cat > files/inject/selected.txt' \
+    # Write via push+cp: the piped "sh -c 'cat > ...'" variant failed with
+    # "can't create files/inject/selected.txt" even after mkdir+cp succeeded,
+    # so no shell redirection is trusted here. cp from /data/local/tmp is the
+    # one run-as write path that provably worked on the runner.
+    printf 'jfk.wav' > /tmp/gate-selected.txt
+    adb push /tmp/gate-selected.txt /data/local/tmp/gate-selected.txt >/dev/null \
+        || fail "push selected.txt failed"
+    adb shell run-as "$APP_ID" cp /data/local/tmp/gate-selected.txt "$inject_dir/selected.txt" \
         || fail "run-as fixture selection failed"
-    adb shell run-as "$APP_ID" sh -c 'ls -la files/inject' || fail "fixture listing failed"
+    local selected
+    selected="$(adb shell run-as "$APP_ID" cat "$inject_dir/selected.txt" \
+        || fail "fixture verification failed")"
+    if [[ "$(printf '%s' "$selected" | tr -d '\r\n')" != "jfk.wav" ]]; then
+        fail "fixture selection content mismatch: got '$selected'"
+    fi
 }
 
 seed_prefs() {
     # model_id=tiny -> onboarding downloads ggml-tiny (77 MB), not the 141 MB default base.
-    adb shell run-as "$APP_ID" mkdir -p shared_prefs || fail "run-as shared_prefs failed"
+    local prefs="/tmp/gate-prefs.xml"
     printf '%s' "<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
 <map>
     <string name=\"model_id\">tiny</string>
-</map>" | adb shell run-as "$APP_ID" sh -c 'cat > shared_prefs/martins_whisper_settings.xml' \
+</map>" > "$prefs"
+    adb push "$prefs" /data/local/tmp/gate-prefs.xml >/dev/null || fail "push prefs failed"
+    local prefs_path="/data/data/$APP_ID/shared_prefs"
+    adb shell run-as "$APP_ID" mkdir -p "$prefs_path" || fail "run-as shared_prefs failed"
+    adb shell run-as "$APP_ID" cp /data/local/tmp/gate-prefs.xml "$prefs_path/martins_whisper_settings.xml" \
         || fail "run-as prefs seed failed"
-    adb shell run-as "$APP_ID" sh -c 'cat shared_prefs/martins_whisper_settings.xml'
+    adb shell run-as "$APP_ID" cat "$prefs_path/martins_whisper_settings.xml" \
+        || fail "prefs verification failed"
+    rm -f "$prefs"
 }
 
 provision() {
