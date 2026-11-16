@@ -224,6 +224,9 @@ shot 03b-mic-system-dialog "System permission dialog" "RECORD_AUDIO dialog visib
 tap_by text "While using the app" contains
 wait_for text "Granted" contains 30 perm-mic-granted
 shot 03c-mic-granted "Onboarding: mic permission" "mic Granted after dialog"
+# Permission steps do not auto-advance after granting; the mic screen keeps its
+# own Next button (proven by FAIL-perm-overlay.png from run 43796605989).
+tap_by text "Next" exact
 
 wait_for text "Show the mic bubble" contains 30 perm-overlay
 shot 04-permission-overlay "Onboarding: overlay permission" "overlay Granted via appops"
