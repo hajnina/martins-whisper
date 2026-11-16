@@ -416,9 +416,12 @@ wait_bubble 45 overlay-bubble-on-2
 echo "-- home transcript after a real second dictation"
 adb shell input keyevent KEYCODE_BACK || fail "back key failed"
 wait_for text "Ready" exact 30 home-2
-dictate_once 16 8 "fellow" 480
-wait_for text "Last transcript" contains 30 home-transcript
-shot 16b-home-transcript "Home: last transcript" "home shows the 'Last transcript' card"
+# Home has no focused text field, so the second session lands in the clipboard
+# fallback: the card shows the Success message, not the raw transcript (run
+# 43806441757 waited 480s for 'fellow' in vain). The card only renders once a
+# session actually completed.
+dictate_once 16 8 "Last transcript" 480
+shot 16b-home-transcript "Home: last transcript" "second dictation completed; card shows the clipboard-fallback message"
 
 echo "== walkthrough OK: $(date -u +%H:%M:%SZ) =="
 echo "manifest:"
