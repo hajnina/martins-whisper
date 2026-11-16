@@ -125,6 +125,67 @@ scroll_to() {
     fail "could not scroll to $1 '$2'"
 }
 
+bubble_present() {
+    # uiautomator dump only captures the focused window on this platform, so the
+    # TYPE_APPLICATION_OVERLAY bubble is invisible to it (proven by
+    # FAIL-first-dictation-bubble.xml, run 43802314363). Presence comes from the
+    # window list instead; the window is titled "Martins Whisper bubble".
+    adb shell dumpsys window windows 2>/dev/null | grep -q "Martins Whisper bubble"
+}
+
+wait_bubble() {
+    # $1 timeout_s ; $2 step name
+    local deadline=$((SECONDS + $1))
+    LAST_STEP="$2"
+    while (( SECONDS < deadline )); do
+        if bubble_present; then return 0; fi
+        sleep 2
+    done
+    fail "timeout ${1}s waiting for the overlay bubble window on step $2"
+}
+
+wait_bubble_gone() {
+    # $1 timeout_s ; $2 step name
+    local deadline=$((SECONDS + $1))
+    LAST_STEP="$2"
+    while (( SECONDS < deadline )); do
+        if ! bubble_present; then return 0; fi
+        sleep 2
+    done
+    fail "timeout ${1}s waiting for the overlay bubble window to disappear on step $2"
+}
+
+bubble_tap() {
+    # Fresh install keeps the deterministic default spot: right edge, vertically
+    # centred (72dp bubble, 12dp margin); taps never persist a position.
+    local size density bubble margin cx
+    size="$(adb shell wm size | tr -d '\r' | grep -o '[0-9][0-9]*x[0-9][0-9]*' | tail -1)" \
+        || fail "wm size failed"
+    density="$(adb shell wm density | tr -d '\r' | grep -o '[0-9][0-9]*' | tail -1)" \
+        || fail "wm density failed"
+    bubble="$(awk -v d="$density" 'BEGIN{printf "%.0f", 72*d/160}')"
+    margin="$(awk -v d="$density" 'BEGIN{printf "%.0f", 12*d/160}')"
+    cx="$(awk -v w="${size%%x*}" -v m="$margin" -v b="$bubble" 'BEGIN{printf "%d", w-m-b/2}')"
+    tap_at "$cx" "$(( ${size#*x} / 2 ))"
+}
+
+bubble_state_count() {
+    adb logcat -d 2>/dev/null | grep -c "MartinsWhisperState.*$1" || true
+}
+
+wait_state_beyond() {
+    # $1 state-log event ; $2 baseline count ; $3 timeout_s ; $4 step name
+    local deadline=$((SECONDS + $3))
+    LAST_STEP="$4"
+    local count
+    while (( SECONDS < deadline )); do
+        count="$(bubble_state_count "$1")"
+        if (( count > $2 )); then return 0; fi
+        sleep 2
+    done
+    fail "timeout ${3}s waiting for state '$1' on step $4"
+}
+
 seed_fixture() {
     [[ -f "$WAV_SRC" ]] || fail "fixture WAV missing: $WAV_SRC"
     adb push "$WAV_SRC" /data/local/tmp/gate-jfk.wav >/dev/null || fail "push fixture failed"
@@ -189,17 +250,23 @@ provision() {
     sleep 5
 }
 
-# Full tap -> inject -> hold -> stop -> transcript cycle.
+# Full tap -> inject -> hold -> stop -> transcript cycle. Bubble interactions
+# are geometric (dump-invisible overlay); state comes from the app's own
+# MartinsWhisperState log, so a missed tap fails loud in seconds, not minutes.
 dictate_once() {
-    # $1 step name ; $2 hold seconds after Recording ; $3 transcript probe ; $4 infer timeout
+    # $1 step name ; $2 hold seconds after capture-start ; $3 transcript probe ; $4 infer timeout
     local step="$1" hold="$2" probe="$3" timeout_infer="$4"
     echo "dictate_once: $step"
-    tap_by desc "Tap to dictate" exact
-    wait_for desc "Listening; tap to stop" exact 180 "$step-recording"
+    local n0 s0
+    n0="$(bubble_state_count 'capture-start')"
+    bubble_tap
+    wait_state_beyond 'capture-start' "$n0" 30 "$step-recording"
     shot "${step}-bubble-listening" "Overlay bubble dictating" \
-        "desc 'Listening; tap to stop' visible over $step"
+        "overlay session recording over $step (capture-start logged)"
     sleep "$hold"
-    tap_by desc "Listening; tap to stop" exact
+    s0="$(bubble_state_count 'tap-stop')"
+    bubble_tap
+    wait_state_beyond 'tap-stop' "$s0" 20 "$step-stop"
     wait_for text "$probe" contains "$timeout_infer" "$step-transcript"
 }
 
@@ -293,8 +360,8 @@ echo "-- first dictation"
 wait_for text "Try your first dictation" contains 30 first-dictation
 shot 08-first-dictation "Onboarding: first dictation" "practice field + 'Try it now'"
 tap_by text "Try it now" contains
-wait_for desc "Tap to dictate" exact 45 first-dictation-bubble
-shot 08b-bubble-idle "Overlay bubble" "bubble visible with desc 'Tap to dictate'"
+wait_bubble 45 first-dictation-bubble
+shot 08b-bubble-idle "Overlay bubble" "bubble window present (dumpsys)"
 dictate_once 08 8 "fellow" 480
 shot 08c-transcript-result "Onboarding: first dictation" \
     "transcript containing 'fellow' in the practice field"
@@ -325,12 +392,12 @@ shot 14-settings-diagnostics "Settings: diagnostics" "Diagnostics section visibl
 
 echo "-- overlay toggle round trip"
 tap_by text "Start overlay" contains overlay-on
-wait_for desc "Tap to dictate" exact 45 overlay-bubble-on
+wait_bubble 45 overlay-bubble-on
 tap_by text "Stop overlay" contains overlay-off
-wait_gone desc "Tap to dictate" exact 30 overlay-bubble-off
+wait_bubble_gone 30 overlay-bubble-off
 shot 15-overlay-toggle "Overlay bubble round trip" "bubble stopped then restarted via toggle"
 tap_by text "Start overlay" contains overlay-on-2
-wait_for desc "Tap to dictate" exact 45 overlay-bubble-on-2
+wait_bubble 45 overlay-bubble-on-2
 
 echo "-- home transcript after a real second dictation"
 adb shell input keyevent KEYCODE_BACK || fail "back key failed"
