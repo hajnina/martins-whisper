@@ -402,6 +402,9 @@ scroll_to text "Diagnostics" contains 8
 shot 14-settings-diagnostics "Settings: diagnostics" "Diagnostics section visible"
 
 echo "-- overlay toggle round trip"
+# The toggle sits near the top of settings; the Diagnostics step above left us
+# at the bottom, so walk back up first (blind tap failed in run 43805327052).
+scroll_to text "Start overlay" contains 12
 tap_by text "Start overlay" contains overlay-on
 wait_bubble 45 overlay-bubble-on
 tap_by text "Stop overlay" contains overlay-off
