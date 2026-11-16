@@ -266,6 +266,9 @@ jobs:
           rows = [line.split("\t") for line in lines if line.strip()]
           assert rows, "manifest.tsv is empty"
           markdown = ["## PR Gate emulator walkthrough", "",
+                      "Engine: real ggml-tiny (app-checksummed download) on whisper.cpp x86_64; "
+                      "mic input is the public whisper.cpp jfk.wav fixture replayed by the "
+                      "debug-only InjectAudioSource seam.", "",
                       "| Screenshot | Screen | Verification |", "|---|---|---|"]
           for shot, screen, verify in rows:
               markdown.append(f"| ![{shot}]({shot}) | {screen} | {verify} |")
