@@ -175,6 +175,9 @@ provision() {
     adb shell appops set "$APP_ID" SYSTEM_ALERT_WINDOW allow || fail "appops overlay grant failed"
     adb shell pm grant "$APP_ID" android.permission.POST_NOTIFICATIONS \
         || fail "POST_NOTIFICATIONS grant failed"
+    # Direct settings put may be ignored/reverted for adb-installed apps on
+    # Android 13+ ("restricted settings"); the walkthrough branches on what the
+    # app actually shows and falls back to the real system UI when needed.
     adb shell settings put secure enabled_accessibility_services \
         "$APP_ID/com.martins.whisper.accessibility.DictationAccessibilityService" \
         || fail "accessibility enable failed"
@@ -233,8 +236,34 @@ shot 04-permission-overlay "Onboarding: overlay permission" "overlay Granted via
 tap_by text "Next" exact
 
 wait_for text "Type for you" contains 30 perm-accessibility
-shot 05-permission-accessibility "Onboarding: accessibility permission" "accessibility Granted"
-tap_by text "Next" exact
+sleep 1
+if present text "Next" exact; then
+    echo "accessibility: granted via settings put (fast path)"
+    shot 05-permission-accessibility "Onboarding: accessibility permission" "accessibility Granted"
+    tap_by text "Next" exact
+else
+    # The app still sees the service disabled; grant it the way a user does.
+    # The emulator image is pinned (API 34), so the system screens are stable.
+    echo "accessibility: settings put not visible to the app; granting via system UI"
+    tap_by text "Open accessibility" contains
+    scroll_to text "Martins Whisper text insertion" contains 10
+    tap_by text "Martins Whisper text insertion" contains
+    wait_for class android.widget.Switch exact 15 accessibility-detail
+    sleep 1
+    tap_by class android.widget.Switch exact
+    sleep 1
+    if present text "Allow" exact; then
+        tap_by text "Allow" exact
+    elif present text "OK" exact; then
+        tap_by text "OK" exact
+    fi
+    sleep 2
+    adb shell input keyevent KEYCODE_BACK || fail "back key failed"
+    adb shell input keyevent KEYCODE_BACK || fail "back key failed"
+    wait_for text "Granted" contains 60 perm-accessibility-granted
+    shot 05-permission-accessibility "Onboarding: accessibility permission" "accessibility Granted via system UI"
+    tap_by text "Next" exact
+fi
 
 wait_for text "Stay informed" contains 30 perm-notifications
 shot 06-permission-notifications "Onboarding: notifications permission" "notifications Granted"
