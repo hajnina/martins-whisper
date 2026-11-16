@@ -121,6 +121,9 @@ jobs:
           # adb/emulator must be on PATH for the boot/walkthrough steps below.
           echo "$SDK/platform-tools" >> "$GITHUB_PATH"
           echo "$SDK/emulator" >> "$GITHUB_PATH"
+          # Pin the AVD home so avdmanager and the emulator resolve the same
+          # location (on runners they can diverge and the AVD becomes invisible).
+          echo "ANDROID_AVD_HOME=$HOME/.android/avd" >> "$GITHUB_ENV"
           yes | "$SDKMANAGER" --sdk_root="$SDK" --licenses >/dev/null 2>&1 || true
           need=()
           [ -d "$SDK/platforms/android-35" ] || need+=("platforms;android-35")
@@ -186,10 +189,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p "$ANDROID_AVD_HOME"
           echo "no" | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
             -n gate -k "system-images;android-34;google_apis;x86_64" -d pixel_6 --force \
             || echo "no" | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
               -n gate -k "system-images;android-34;google_apis;x86_64" --force
+          # Fail-closed: the AVD must be discoverable by the emulator itself.
+          if ! "$ANDROID_HOME/emulator/emulator" -list-avds | grep -qx gate; then
+            ini="$(find /home/runner -name gate.ini 2>/dev/null | head -1 || true)"
+            if [[ -n "$ini" ]]; then
+              echo "::warning::avdmanager wrote the AVD to $ini; copying into ANDROID_AVD_HOME"
+              cp -r "$(dirname "$ini")/." "$ANDROID_AVD_HOME/"
+            fi
+          fi
+          if ! test -f "$ANDROID_AVD_HOME/gate.ini"; then
+            echo "::error::gate.ini missing from ANDROID_AVD_HOME=$ANDROID_AVD_HOME"
+            find /home/runner -name 'gate.ini' 2>/dev/null | head -5
+            exit 1
+          fi
           "$ANDROID_HOME/emulator/emulator" -list-avds
 
       - name: Boot emulator (poll sys.boot_completed, 15 min, fail closed)
