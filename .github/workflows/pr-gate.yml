@@ -146,6 +146,18 @@ jobs:
             echo "::error::/dev/kvm is not available; software emulation is not allowed on this gate"
             exit 1
           fi
+          # Hosted runners ship /dev/kvm but not always with the runner user in
+          # the kvm group; the udev rule grants access without a re-login.
+          if [[ ! -w /dev/kvm ]]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+              | sudo tee /etc/udev/rules.d/99-kvm.rules >/dev/null
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+          fi
+          if [[ ! -w /dev/kvm ]]; then
+            echo "::error::/dev/kvm exists but is not writable even after the udev fix"
+            exit 1
+          fi
           ls -l /dev/kvm
 
       - name: NDK + CMake (runner-preinstalled, fail closed)
