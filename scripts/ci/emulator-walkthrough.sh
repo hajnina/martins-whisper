@@ -117,7 +117,9 @@ scroll_to() {
     local n
     for (( n = 0; n < ${4:-8}; n++ )); do
         if present "$1" "$2" "$3"; then return 0; fi
-        adb shell input swipe 540 1400 540 500 250 || fail "swipe failed"
+        # Small drag, not a fling: a 900px fling can jump past a row between
+        # presence checks (system accessibility list, run 43800136422).
+        adb shell input swipe 540 1500 540 1000 300 || fail "swipe failed"
         sleep 1
     done
     fail "could not scroll to $1 '$2'"
@@ -246,8 +248,11 @@ else
     # The emulator image is pinned (API 34), so the system screens are stable.
     echo "accessibility: settings put not visible to the app; granting via system UI"
     tap_by text "Open accessibility" contains
-    scroll_to text "Martins Whisper text insertion" contains 10
-    tap_by text "Martins Whisper text insertion" contains
+    wait_for text "Accessibility" contains 20 accessibility-settings
+    # Row sits at the top under "Downloaded apps"; probe the app name so it
+    # matches whichever label the settings list exposes.
+    scroll_to text "Martins Whisper" contains 10
+    tap_by text "Martins Whisper" contains
     wait_for class android.widget.Switch exact 15 accessibility-detail
     sleep 1
     tap_by class android.widget.Switch exact
