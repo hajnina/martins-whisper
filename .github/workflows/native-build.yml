@@ -238,7 +238,12 @@ jobs:
     concurrency:
       group: martins-whisper-release
       cancel-in-progress: false
-    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    # push: every push to the default branch rolls "latest". workflow_dispatch: lets an
+    # operator publish on demand (gh workflow run) — pushes touching only release/** don't
+    # match the workflow's paths filter, so a publish-only landing must be triggered by hand.
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     steps:
       - uses: actions/checkout@v4
 
