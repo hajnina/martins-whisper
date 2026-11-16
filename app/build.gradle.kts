@@ -6,6 +6,14 @@ plugins {
 
 val nativeEnabled = providers.gradleProperty("martins.native").orNull?.lowercase() == "true"
 val vulkanEnabled = providers.gradleProperty("martins.vulkan").orNull?.lowercase() == "true"
+// ABIs for the bundled whisper.cpp. Default keeps the release APK arm64-v8a only;
+// the CI emulator gate overrides it (-PwhisperAbis=x86_64) for x86_64 system images.
+val nativeAbis = providers.gradleProperty("whisperAbis").orNull
+    ?.split(',')
+    ?.map { it.trim() }
+    ?.filter { it.isNotEmpty() }
+    ?.takeIf { it.isNotEmpty() }
+    ?: listOf("arm64-v8a")
 // NDK used only by native builds. CI pins the official r27; the aarch64 sandbox can
 // override it to the community r30 package installed by scripts/bootstrap-build.sh --with-ndk.
 val nativeNdkVersion = providers.gradleProperty("martins.ndkVersion").orNull
@@ -50,7 +58,7 @@ android {
 
         if (nativeEnabled) {
             ndk {
-                abiFilters += listOf("arm64-v8a")
+                abiFilters += nativeAbis
             }
             externalNativeBuild {
                 cmake {
