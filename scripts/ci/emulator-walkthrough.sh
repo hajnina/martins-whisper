@@ -113,13 +113,21 @@ wait_gone() {
 }
 
 scroll_to() {
-    # $1 attr ; $2 value ; $3 mode ; $4 attempts (default 8)
+    # $1 attr ; $2 value ; $3 mode ; $4 attempts (default 12)
     local n
-    for (( n = 0; n < ${4:-8}; n++ )); do
+    for (( n = 0; n < ${4:-12}; n++ )); do
         if present "$1" "$2" "$3"; then return 0; fi
         # Small drag, not a fling: a 900px fling can jump past a row between
         # presence checks (system accessibility list, run 43800136422).
         adb shell input swipe 540 1500 540 1000 300 || fail "swipe failed"
+        sleep 1
+    done
+    # The content may sit above the current position after earlier steps
+    # scrolled down (model rows vs the Import row, run 43804123640); walk back
+    # up the same range before giving up.
+    for (( n = 0; n < ${4:-12}; n++ )); do
+        if present "$1" "$2" "$3"; then return 0; fi
+        adb shell input swipe 540 1000 540 1500 300 || fail "swipe failed"
         sleep 1
     done
     fail "could not scroll to $1 '$2'"
@@ -383,6 +391,9 @@ wait_for text "Permissions" contains 45 settings
 shot 11-settings "Settings (gear)" "permission rows + overlay toggle visible"
 scroll_to text "Import custom model" contains 8
 shot 12-settings-models "Settings: model browser" "model rows with Download/Import/Delete actions"
+# Tiny rows sit above the Import row this step just scrolled to; walk back up
+# to them before tapping.
+scroll_to text "Tiny (multilingual)" contains 12
 tap_by text "Tiny (multilingual)" contains
 shot 12b-model-selected "Settings: model selection" "Tiny row selected ('Installed and ready.')"
 scroll_to text "Compute backend" contains 8
