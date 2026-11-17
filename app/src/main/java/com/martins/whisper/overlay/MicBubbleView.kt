@@ -16,8 +16,10 @@ import com.martins.whisper.core.voice.VoiceFeatures
 import com.martins.whisper.service.DictationState
 import com.martins.whisper.ui.orb.AnimationPolicy
 import com.martins.whisper.ui.theme.WhisperOverlayPalette
+import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.min
+import kotlin.math.sin
 
 class MicBubbleView(context: Context) : View(context) {
 
@@ -60,6 +62,7 @@ class MicBubbleView(context: Context) : View(context) {
                 }
             }
             updateOrbAnimation(value)
+            startExpressiveMotion(previous, value)
             contentDescription = BubblePresentation.of(value).contentDescription
             invalidate()
         }
@@ -99,6 +102,35 @@ class MicBubbleView(context: Context) : View(context) {
             spinnerAngle = (spinnerAngle + 12f) % 360f
             invalidate()
             postDelayed(this, 16)
+        }
+    }
+
+    private var scaleSpring = SpringValue(1f)
+    private var scaleTarget = 1f
+    private var shakeSpring = SpringValue(0f)
+    private var shakeTarget = 0f
+    private var popSettleAt = 0L
+    private var popPending = false
+    private var lastSpringFrameAt = 0L
+    private var expressiveRunning = false
+    private var breathRunning = false
+    private var cachedSquircle: Path? = null
+    private var cachedGlyph: Path? = null
+    private var cachedSize = -1
+
+    private val expressiveTick = object : Runnable {
+        override fun run() {
+            if (!expressiveRunning) return
+            invalidate()
+            postDelayed(this, 16)
+        }
+    }
+
+    private val breathTick = object : Runnable {
+        override fun run() {
+            if (!breathRunning) return
+            invalidate()
+            postDelayed(this, 100)
         }
     }
 
@@ -253,61 +285,67 @@ class MicBubbleView(context: Context) : View(context) {
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val visual = BubblePresentation.of(state)
-        val circleCenter = min(width, height) / 2f
-        val circleRadius = min(width, height) / 2f - dp(1f)
-        val circleRect = RectF(
-            circleCenter - circleRadius,
-            circleCenter - circleRadius,
-            circleCenter + circleRadius,
-            circleCenter + circleRadius,
-        )
+        val centerX = width / 2f
+        val centerY = height / 2f
+        val radius = min(width, height) / 2f - dp(1f)
+        ensureShapeCache(centerX, centerY, radius)
+        val shape = cachedSquircle
+
+        val scale = expressiveScale()
+        val shake = if (AnimationPolicy.enabled()) shakeSpring.position else 0f
+        canvas.save()
+        canvas.translate(centerX + shake, centerY)
+        canvas.scale(scale, scale)
+        canvas.translate(-centerX, -centerY)
+
         surfacePaint.color = WhisperOverlayPalette.BubbleSurface
-        canvas.drawCircle(circleCenter, circleCenter, circleRadius, surfacePaint)
-        ringPaint.color = WhisperOverlayPalette.BubbleRing
-        ringPaint.strokeWidth = dp(1f)
-        canvas.drawCircle(circleCenter, circleCenter, circleRadius - dp(0.5f), ringPaint)
+        if (shape != null) canvas.drawPath(shape, surfacePaint)
         val orbMotion = motionForDraw()
         lastOrbMotion = orbMotion
-        orbRenderer.draw(canvas, circleRect, orbMotion, visual.accent)
+        val orbRect = RectF(
+            centerX - radius,
+            centerY - radius,
+            centerX + radius,
+            centerY + radius,
+        )
+        if (shape != null) {
+            canvas.save()
+            canvas.clipPath(shape)
+        }
+        orbRenderer.draw(canvas, orbRect, orbMotion, visual.accent)
+        if (shape != null) canvas.restore()
+
+        ringPaint.color = WhisperOverlayPalette.BubbleRing
+        ringPaint.strokeWidth = dp(1f)
+        if (shape != null) canvas.drawPath(shape, ringPaint)
 
         when (visual.icon) {
-            BubbleIcon.SPINNER -> drawSpinner(canvas, circleRect)
-            BubbleIcon.TRANSCRIBING -> drawTranscribing(canvas, circleCenter)
-            BubbleIcon.CHECK -> drawCheck(canvas, circleCenter)
-            BubbleIcon.CROSS -> drawCross(canvas, circleCenter)
-            BubbleIcon.MIC, BubbleIcon.MIC_LEVELS -> drawMic(canvas, circleCenter, circleRadius)
+            BubbleIcon.SPINNER -> drawSpinner(canvas, orbRect)
+            BubbleIcon.TRANSCRIBING -> drawTranscribing(canvas, centerY)
+            BubbleIcon.CHECK -> drawCheck(canvas, centerX)
+            BubbleIcon.CROSS -> drawCross(canvas, centerX)
+            BubbleIcon.MIC, BubbleIcon.MIC_LEVELS -> drawGlyph(canvas, centerX, centerY)
         }
+        canvas.restore()
     }
 
-    private fun drawMic(canvas: Canvas, center: Float, radius: Float) {
-        iconPaint.color = WhisperOverlayPalette.OnBubble
-        iconPaint.strokeWidth = dp(2.2f)
-        iconPaint.strokeCap = Paint.Cap.ROUND
-        val bodyWidth = radius * 0.44f
-        val bodyHeight = radius * 0.58f
-        val bodyTop = center - radius * 0.42f
-        val bodyRect = RectF(
-            center - bodyWidth / 2f,
-            bodyTop,
-            center + bodyWidth / 2f,
-            bodyTop + bodyHeight,
+    private fun drawGlyph(canvas: Canvas, centerX: Float, centerY: Float) {
+        val glyph = cachedGlyph ?: return
+        fillPaint.style = Paint.Style.FILL
+        fillPaint.shader = null
+        fillPaint.alpha = 255
+        fillPaint.color = WhisperOverlayPalette.BubbleGlyph
+        canvas.drawPath(glyph, fillPaint)
+    }
+
+    private fun ensureShapeCache(centerX: Float, centerY: Float, radius: Float) {
+        val key = (radius * 100f).toInt()
+        if (key == cachedSize && cachedSquircle != null && cachedGlyph != null) return
+        cachedSquircle = ExpressiveShape.squircle(
+            RectF(centerX - radius, centerY - radius, centerX + radius, centerY + radius),
         )
-        canvas.drawRoundRect(bodyRect, bodyWidth / 2f, bodyWidth / 2f, iconPaint)
-        val arcRect = RectF(
-            center - radius * 0.45f,
-            center - radius * 0.18f,
-            center + radius * 0.45f,
-            center + radius * 0.5f,
-        )
-        canvas.drawArc(arcRect, 0f, 180f, false, iconPaint)
-        canvas.drawLine(center, center + radius * 0.45f, center, center + radius * 0.66f, iconPaint)
-        canvas.drawLine(
-            center - radius * 0.24f,
-            center + radius * 0.66f,
-            center + radius * 0.24f,
-            center + radius * 0.66f,
-            iconPaint,
-        )
+        cachedGlyph = ExpressiveIcon.glyph(centerX, centerY, min(width, height).toFloat())
+        cachedSize = key
     }
 
     private fun drawSpinner(canvas: Canvas, rect: RectF) {
@@ -349,6 +387,130 @@ class MicBubbleView(context: Context) : View(context) {
         canvas.drawLine(center + dp(7f), center - dp(7f), center - dp(7f), center + dp(7f), iconPaint)
     }
 
+    private fun startExpressiveMotion(previous: DictationState, value: DictationState) {
+        if (!AnimationPolicy.enabled()) {
+            stopExpressiveTicker()
+            stopBreathTicker()
+            scaleSpring = SpringValue(1f)
+            scaleTarget = 1f
+            shakeSpring = SpringValue(0f)
+            shakeTarget = 0f
+            popPending = false
+            return
+        }
+        val changed = previous::class != value::class
+        if (changed) {
+            when (value) {
+                is DictationState.Success -> {
+                    scaleSpring = SpringValue(POP_FROM)
+                    scaleTarget = POP_PEAK
+                    popPending = true
+                    popSettleAt = SystemClock.elapsedRealtime() + POP_HOLD_MS
+                    startExpressiveTicker()
+                }
+                is DictationState.Error -> {
+                    shakeSpring = SpringValue(0f, SHAKE_IMPULSE)
+                    shakeTarget = 0f
+                    startExpressiveTicker()
+                }
+                else -> {
+                    scaleTarget = 1f
+                    shakeTarget = 0f
+                    if (SpringSolver.settled(scaleSpring, scaleTarget) &&
+                        value !is DictationState.Loading
+                    ) {
+                        stopExpressiveTicker()
+                    } else {
+                        startExpressiveTicker()
+                    }
+                }
+            }
+        }
+        if (value is DictationState.Idle && isAttachedToWindow) startBreathTicker() else stopBreathTicker()
+    }
+
+    private fun expressiveScale(): Float {
+        if (!AnimationPolicy.enabled()) return 1f
+        val now = SystemClock.elapsedRealtime()
+        if (popPending && now >= popSettleAt) {
+            popPending = false
+            scaleTarget = 1f
+        }
+        val dt = if (lastSpringFrameAt == 0L) {
+            1f / 60f
+        } else {
+            ((now - lastSpringFrameAt) / 1000f).coerceIn(0f, 0.05f)
+        }
+        lastSpringFrameAt = now
+        scaleSpring = SpringSolver.step(
+            scaleSpring,
+            scaleTarget,
+            dt,
+            stiffness = POP_STIFFNESS,
+            damping = POP_DAMPING,
+        )
+        shakeSpring = SpringSolver.step(
+            shakeSpring,
+            shakeTarget,
+            dt,
+            stiffness = SHAKE_STIFFNESS,
+            damping = SHAKE_DAMPING,
+        )
+        if (!popPending &&
+            SpringSolver.settled(scaleSpring, scaleTarget) &&
+            SpringSolver.settled(shakeSpring, shakeTarget, epsilon = 0.01f)
+        ) {
+            stopExpressiveTicker()
+        }
+        val current = state
+        val level = (current as? DictationState.Recording)?.level?.coerceIn(0f, 1f) ?: 0f
+        val live = if (current is DictationState.Recording) 1f + RECORDING_GAIN * level else 1f
+        val breath = if (current is DictationState.Idle) {
+            1f + BREATH_AMPLITUDE * sin(2.0 * PI * now / BREATH_PERIOD_MS).toFloat()
+        } else {
+            1f
+        }
+        return (scaleSpring.position * live * breath).coerceIn(0.8f, 1.35f)
+    }
+
+    internal fun springScaleForTest(): Float = expressiveScale()
+
+    private fun startExpressiveTicker() {
+        if (expressiveRunning || !AnimationPolicy.enabled()) return
+        expressiveRunning = true
+        lastSpringFrameAt = 0L
+        removeCallbacks(expressiveTick)
+        post(expressiveTick)
+    }
+
+    private fun stopExpressiveTicker() {
+        expressiveRunning = false
+        removeCallbacks(expressiveTick)
+    }
+
+    private fun startBreathTicker() {
+        if (breathRunning || !AnimationPolicy.enabled()) return
+        breathRunning = true
+        post(breathTick)
+    }
+
+    private fun stopBreathTicker() {
+        breathRunning = false
+        removeCallbacks(breathTick)
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        if (state is DictationState.Idle) startBreathTicker()
+    }
+
+    override fun onDetachedFromWindow() {
+        stopSpinner()
+        stopExpressiveTicker()
+        stopBreathTicker()
+        super.onDetachedFromWindow()
+    }
+
     private fun startSpinner() {
         if (spinnerRunning) return
         if (!AnimationPolicy.enabled()) {
@@ -364,16 +526,23 @@ class MicBubbleView(context: Context) : View(context) {
         removeCallbacks(spinnerTick)
     }
 
-    override fun onDetachedFromWindow() {
-        stopSpinner()
-        super.onDetachedFromWindow()
-    }
-
     private fun dp(value: Float): Float = value * density
 
     companion object {
         internal const val ERROR_DOUBLE_TICK_MS = 90L
         internal const val HOLD_THRESHOLD_MS = 275L
         private const val FEATURE_FRESH_MS = 500L
+
+        private const val POP_FROM = 0.92f
+        private const val POP_PEAK = 1.12f
+        private const val POP_HOLD_MS = 150L
+        private const val POP_STIFFNESS = 300f
+        private const val POP_DAMPING = 13f
+        private const val SHAKE_IMPULSE = -22f
+        private const val SHAKE_STIFFNESS = 420f
+        private const val SHAKE_DAMPING = 14f
+        private const val RECORDING_GAIN = 0.06f
+        private const val BREATH_AMPLITUDE = 0.012f
+        private const val BREATH_PERIOD_MS = 2_600.0
     }
 }
