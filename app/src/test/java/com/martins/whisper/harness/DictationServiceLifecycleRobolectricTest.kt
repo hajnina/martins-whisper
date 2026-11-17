@@ -324,7 +324,40 @@ class DictationServiceLifecycleRobolectricTest {
             await("long hold is inserted") { inserted.size == 1 }
 
             assertEquals(1, engine.received.size)
+            // The 31 s idle sweep also runs the 600 ms success dwell, so the state may have
+            // already returned to Idle by the time the insertion is observed.
+            assertTrue(
+                "state=${DictationService.state.value}",
+                DictationService.state.value is DictationState.Success ||
+                    DictationService.state.value is DictationState.Idle,
+            )
+        } finally {
+            controller.destroy()
+        }
+    }
+
+    @Test
+    fun `success holds for 600 ms then returns to idle`() {
+        EngineFactory.factory = { _, _ ->
+            FakeSpeechEngine(respond = { _, language -> Transcript("hello from fake", language) })
+        }
+        val controller = Robolectric.buildService(DictationService::class.java).create()
+        val service = controller.get()
+        try {
+            invoke(service, "onPress")
+            await("recording starts") {
+                DictationService.state.value is DictationState.Recording
+            }
+            audio.emit(frames = 10)
+            invoke(service, "onRelease")
+            await("transcript is inserted") { inserted.size == 1 }
             assertTrue(DictationService.state.value is DictationState.Success)
+
+            shadowOf(Looper.getMainLooper()).idleFor(599, TimeUnit.MILLISECONDS)
+            assertTrue(DictationService.state.value is DictationState.Success)
+
+            shadowOf(Looper.getMainLooper()).idleFor(2, TimeUnit.MILLISECONDS)
+            assertEquals(DictationState.Idle, DictationService.state.value)
         } finally {
             controller.destroy()
         }
