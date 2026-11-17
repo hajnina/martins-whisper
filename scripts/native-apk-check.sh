@@ -173,8 +173,8 @@ for entry in "${so_entries[@]}"; do
 
     header="$("$READELF" -W -h "$so")"
     grep -qE 'Class:[[:space:]]+ELF64' <<<"$header" || fail "$name ($abi) is not ELF64"
-    grep -qE "Machine:[[:space:]]+${ELF_MACHINE[$abi]}" <<<"$header" \
-        || fail "$name ($abi) is not ${ELF_MACHINE[$abi]}"
+    grep -qE "Machine:.*${ELF_MACHINE[$abi]}" <<<"$header" \
+        || fail "$name ($abi) is not ${ELF_MACHINE[$abi]} ($(sed -nE 's/.*Machine:[[:space:]]+//p' <<<"$header" | head -1))"
     grep -qE 'Type:[[:space:]]+DYN' <<<"$header" || fail "$name ($abi) is not a shared object (DYN)"
 
     sections="$("$READELF" -W -S "$so")"
