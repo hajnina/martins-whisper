@@ -104,9 +104,10 @@ class MicBubbleView(context: Context) : View(context) {
 
     private var downRawX = 0f
     private var downRawY = 0f
+    private var downEventTime = 0L
     private var tracking = false
     private var dragging = false
-    private var stopOnUp = false
+    private var latchedAtDown = false
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
@@ -117,12 +118,13 @@ class MicBubbleView(context: Context) : View(context) {
             MotionEvent.ACTION_DOWN -> {
                 downRawX = event.rawX
                 downRawY = event.rawY
+                downEventTime = event.eventTime
                 dragging = false
                 tracking = true
-                // Tap-to-toggle: the first tap starts and latches the session; the next tap
-                // stops it. A tap must never be turned into a stop by its own ACTION_UP.
-                stopOnUp = state is DictationState.Loading || state is DictationState.Recording
-                if (!stopOnUp) {
+                // Tap-to-toggle: a short tap starts and latches the session; the next tap stops
+                // it. A hold only stops a session this press started, never an existing latch.
+                latchedAtDown = state is DictationState.Loading || state is DictationState.Recording
+                if (!latchedAtDown) {
                     hapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                     listener?.onPress()
                 }
@@ -148,14 +150,19 @@ class MicBubbleView(context: Context) : View(context) {
                 if (tracking) {
                     if (dragging) {
                         listener?.onDragEnd()
-                    } else if (stopOnUp) {
-                        hapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                        listener?.onRelease()
+                    } else {
+                        // Exactly one owner stops on release: a hold stops the session this
+                        // press started, while a tap stops an already latched session.
+                        val held = event.eventTime - downEventTime >= HOLD_THRESHOLD_MS
+                        if (held != latchedAtDown) {
+                            hapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                            listener?.onRelease()
+                        }
                     }
                 }
                 tracking = false
                 dragging = false
-                stopOnUp = false
+                latchedAtDown = false
                 return true
             }
 
@@ -163,7 +170,7 @@ class MicBubbleView(context: Context) : View(context) {
                 if (tracking && !dragging) listener?.onCancel()
                 tracking = false
                 dragging = false
-                stopOnUp = false
+                latchedAtDown = false
                 return true
             }
         }
@@ -366,6 +373,7 @@ class MicBubbleView(context: Context) : View(context) {
 
     companion object {
         internal const val ERROR_DOUBLE_TICK_MS = 90L
+        internal const val HOLD_THRESHOLD_MS = 275L
         private const val FEATURE_FRESH_MS = 500L
     }
 }
