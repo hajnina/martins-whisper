@@ -178,16 +178,14 @@ class InsertionIntoFieldRobolectricTest {
     }
 
     @Test
-    fun `no capture at start falls back to the clipboard`() {
+    fun `no capture at start still inserts into the currently focused field`() {
         field.setText("late text")
         plantField(viewId = "late:id/input", fieldText = "late text")
 
         val result = service.insert(transcript)
 
-        assertTrue(result is InsertResult.Copied)
-        assertEquals("no target field at start", (result as InsertResult.Copied).reason)
-        assertEquals("hello whisper", clipText())
-        assertEquals("late text", field.text.toString())
+        assertEquals(InsertResult.Inserted, result)
+        assertEquals("late text hello whisper", field.text.toString())
     }
 
     private fun clipboard(): ClipboardManager =
