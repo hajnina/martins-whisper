@@ -286,6 +286,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
+          # Native-build runs are indexed under the PR head sha; the artifact name uses the
+          # merge sha (github.sha) on pull_request events. Look up runs by head, download by sha.
+          LOOKUP_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           artifact="martins-whisper-native-debug-${GITHUB_SHA}"
@@ -293,15 +296,15 @@ jobs:
           run_id=""
           while (( SECONDS < deadline )); do
             run_id="$(gh api \
-              "repos/$GH_REPO/actions/workflows/native-build.yml/runs?head_sha=$GITHUB_SHA&per_page=20" \
+              "repos/$GH_REPO/actions/workflows/native-build.yml/runs?head_sha=$LOOKUP_SHA&per_page=20" \
               --jq '[.workflow_runs[] | select(.conclusion == "success")] | sort_by(.created_at) | reverse | .[0].id // empty' \
               2>/dev/null || true)"
             [[ -n "$run_id" ]] && break
             sleep 20
           done
           if [[ -z "$run_id" ]]; then
-            echo "::error::no successful native-build run for $GITHUB_SHA; the published APK is unproven"
-            gh api "repos/$GH_REPO/actions/workflows/native-build.yml/runs?head_sha=$GITHUB_SHA&per_page=5" \
+            echo "::error::no successful native-build run for head $LOOKUP_SHA; the published APK is unproven"
+            gh api "repos/$GH_REPO/actions/workflows/native-build.yml/runs?head_sha=$LOOKUP_SHA&per_page=5" \
               --jq '.workflow_runs[] | "\(.id) \(.event) \(.status) \(.conclusion)"' || true
             exit 1
           fi
