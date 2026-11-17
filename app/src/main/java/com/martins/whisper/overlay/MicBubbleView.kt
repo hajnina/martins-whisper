@@ -17,9 +17,6 @@ import com.martins.whisper.service.DictationState
 import com.martins.whisper.ui.orb.AnimationPolicy
 import com.martins.whisper.ui.theme.WhisperOverlayPalette
 import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 class MicBubbleView(context: Context) : View(context) {
 
@@ -93,9 +90,6 @@ class MicBubbleView(context: Context) : View(context) {
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
     }
-
-    private val grillePath: Path by lazy { ExpressiveIcon.glyph(0f, 0f, 1f, 1f) }
-    private val scaledGrille = Path()
 
     private val orbDynamics = OrbDynamics()
     private var lastOrbFrameAt = 0L
@@ -294,7 +288,7 @@ class MicBubbleView(context: Context) : View(context) {
         } else {
             when (val current = state) {
                 is DictationState.Idle -> {
-                    drawGrille(canvas, centerX, centerY, GLYPH_TILE)
+                    drawClassicMic(canvas, centerX, centerY, disc)
                     glyphPaint.color = WhisperOverlayPalette.InstrumentStatusDot
                     canvas.drawCircle(
                         centerX + disc * 0.354f,
@@ -306,11 +300,11 @@ class MicBubbleView(context: Context) : View(context) {
                 is DictationState.Recording -> drawCompactRecording(canvas, centerX, centerY, disc)
                 is DictationState.Loading, is DictationState.Processing -> {
                     drawProcessingArc(canvas, centerX, centerY, disc)
-                    drawGrille(
+                    drawClassicMic(
                         canvas,
                         centerX,
                         centerY,
-                        GLYPH_TILE * 0.9f,
+                        disc * 0.86f,
                         WhisperOverlayPalette.InstrumentProcessingGlyph,
                     )
                 }
@@ -336,24 +330,42 @@ class MicBubbleView(context: Context) : View(context) {
         canvas.drawRoundRect(capsule, radius, radius, bezelPaint)
     }
 
-    private fun drawGrille(
+    private fun drawClassicMic(
         canvas: Canvas,
         centerX: Float,
         centerY: Float,
-        tile: Float,
+        disc: Float,
         color: Int = WhisperOverlayPalette.InstrumentGlyph,
     ) {
-        val size = minOf(width.toFloat(), height.toFloat())
-        grillePath.transform(
-            android.graphics.Matrix().apply {
-                setScale(size * tile, size * tile)
-                postTranslate(centerX, centerY)
-            },
-            scaledGrille,
-        )
+        val stroke = disc * 0.042f
         glyphPaint.color = color
-        canvas.drawPath(scaledGrille, glyphPaint)
-        scaledGrille.reset()
+        val bodyWidth = disc * 0.255f
+        val bodyHeight = disc * 0.465f
+        val bodyTop = centerY - disc * 0.235f
+        val body = RectF(
+            centerX - bodyWidth / 2f,
+            bodyTop,
+            centerX + bodyWidth / 2f,
+            bodyTop + bodyHeight,
+        )
+        canvas.drawRoundRect(body, bodyWidth / 2f, bodyWidth / 2f, glyphPaint)
+        markPaint.color = color
+        markPaint.strokeWidth = stroke
+        val cradleWidth = disc * 0.47f
+        val cradle = RectF(
+            centerX - cradleWidth / 2f,
+            centerY - disc * 0.118f,
+            centerX + cradleWidth / 2f,
+            centerY + disc * 0.244f,
+        )
+        canvas.drawArc(cradle, 0f, 180f, false, markPaint)
+        canvas.drawLine(
+            centerX,
+            centerY + disc * 0.238f,
+            centerX,
+            centerY + disc * 0.34f,
+            markPaint,
+        )
     }
 
     private fun drawRibbon(canvas: Canvas, capsule: RectF, motion: OrbMotion) {
@@ -364,8 +376,9 @@ class MicBubbleView(context: Context) : View(context) {
         val envelope = floatArrayOf(0.30f, 0.52f, 0.72f, 0.88f, 1f, 0.88f, 0.72f, 0.52f, 0.30f)
         val pitch = barWidth + gap
         val total = envelope.size * barWidth + (envelope.size - 1) * gap
-        val stopLeft = width - dp(55f)
-        val startX = ((stopLeft - dp(14f)) - total) / 2f
+        val stopCenter = width - dp(35f)
+        val ribbonRight = stopCenter - dp(11f)
+        val startX = (ribbonRight - total) / 2f
         val level = levelSpring.position.coerceIn(0f, 1f)
         val amplitude = (0.32f + 0.68f * level) * (0.55f + 0.45f * motion.radius.coerceIn(0f, 1f))
         glyphPaint.color = WhisperOverlayPalette.InstrumentGlyph
@@ -507,6 +520,8 @@ class MicBubbleView(context: Context) : View(context) {
         levelSpring = SpringValue(1f)
     }
 
+    internal fun renderToForTest(canvas: Canvas) = onDraw(canvas)
+
     override fun onDetachedFromWindow() {
         stopFrameTicker()
         super.onDetachedFromWindow()
@@ -538,7 +553,6 @@ class MicBubbleView(context: Context) : View(context) {
         internal const val ERROR_DOUBLE_TICK_MS = 90L
         internal const val HOLD_THRESHOLD_MS = 275L
         private const val FEATURE_FRESH_MS = 500L
-        private const val GLYPH_TILE = 0.46f
         private const val CHECK_FROM = 0.86f
         private const val SHAKE_IMPULSE = -14f
     }
