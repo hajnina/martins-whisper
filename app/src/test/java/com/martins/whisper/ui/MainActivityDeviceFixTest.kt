@@ -6,6 +6,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Button
 import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
@@ -17,6 +18,7 @@ import com.martins.whisper.MainActivity
 import com.martins.whisper.data.SettingsStore
 import com.martins.whisper.onboarding.OnboardingStore
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Before
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -26,6 +28,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowSettings
 import org.robolectric.annotation.ConscryptMode
 
 @RunWith(RobolectricTestRunner::class)
@@ -114,6 +117,20 @@ class MainActivityDeviceFixTest {
 
         assertEquals("cs", SettingsStore(activity).language)
         assertEquals("cs", SettingsStore(activity).effectiveLanguage())
+    }
+
+    @Test
+    fun `overlay toggle without permission opens the grant screen and stays off`() {
+        ShadowSettings.setCanDrawOverlays(false)
+        val activity = launchSettings().get()
+        val button = findText(activity.window.decorView, "Start overlay") as Button
+        button.performClick()
+
+        assertFalse(SettingsStore(activity).overlayEnabled)
+        assertEquals(
+            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            shadowOf(activity).nextStartedActivity.action,
+        )
     }
 
     private fun contentScroll(activity: MainActivity): ScrollView {

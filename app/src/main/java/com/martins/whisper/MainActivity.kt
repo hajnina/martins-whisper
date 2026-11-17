@@ -740,8 +740,7 @@ class MainActivity : ComponentActivity() {
                 serviceOn = serviceOn,
                 lastTranscript = lastTranscript,
                 onToggleService = { enabled ->
-                    serviceOn = enabled
-                    setServiceEnabled(enabled)
+                    serviceOn = setServiceEnabled(enabled)
                 },
                 onOpenSettings = ::showLegacySettings,
                 onRestartOnboarding = ::restartOnboarding,
@@ -767,16 +766,21 @@ class MainActivity : ComponentActivity() {
         recreate()
     }
 
-    private fun setServiceEnabled(enabled: Boolean) {
-        settings.overlayEnabled = enabled
-        if (enabled) {
-            DictationService.start(this)
-            if (!Settings.canDrawOverlays(this)) {
-                Toast.makeText(this, R.string.error_overlay, Toast.LENGTH_LONG).show()
-            }
-        } else {
+    private fun setServiceEnabled(enabled: Boolean): Boolean {
+        if (!enabled) {
+            settings.overlayEnabled = false
             DictationService.stop(this)
+            return false
         }
+        if (!Settings.canDrawOverlays(this)) {
+            settings.overlayEnabled = false
+            Toast.makeText(this, R.string.error_overlay, Toast.LENGTH_LONG).show()
+            openOverlaySettings()
+            return false
+        }
+        settings.overlayEnabled = true
+        DictationService.start(this)
+        return true
     }
 
     private fun toggleOverlay() {
