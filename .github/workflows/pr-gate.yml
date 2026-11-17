@@ -86,10 +86,11 @@ jobs:
     name: emulator-walkthrough
     needs: build-test
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 65
     permissions:
       contents: write
       pull-requests: write
+      actions: read
 
     steps:
       - name: Checkout
@@ -279,6 +280,59 @@ jobs:
           export GATE_SHOTS=shots
           export GATE_WAV="$PWD/app/src/main/cpp/whisper.cpp/samples/jfk.wav"
           scripts/ci/emulator-walkthrough.sh
+
+      - name: Prove the release APK installs (native-build artifact, same bytes as latest)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          artifact="martins-whisper-native-debug-${GITHUB_SHA}"
+          deadline=$((SECONDS + 1200))
+          run_id=""
+          while (( SECONDS < deadline )); do
+            run_id="$(gh api \
+              "repos/$GH_REPO/actions/workflows/native-build.yml/runs?head_sha=$GITHUB_SHA&per_page=20" \
+              --jq '[.workflow_runs[] | select(.conclusion == "success")] | sort_by(.created_at) | reverse | .[0].id // empty' \
+              2>/dev/null || true)"
+            [[ -n "$run_id" ]] && break
+            sleep 20
+          done
+          if [[ -z "$run_id" ]]; then
+            echo "::error::no successful native-build run for $GITHUB_SHA; the published APK is unproven"
+            gh api "repos/$GH_REPO/actions/workflows/native-build.yml/runs?head_sha=$GITHUB_SHA&per_page=5" \
+              --jq '.workflow_runs[] | "\(.id) \(.event) \(.status) \(.conclusion)"' || true
+            exit 1
+          fi
+          echo "native-build run: https://github.com/$GH_REPO/actions/runs/$run_id"
+
+          rm -rf release-apk && mkdir release-apk
+          gh run download "$run_id" -n "$artifact" -D release-apk
+          apk="$(find release-apk -name app-debug.apk -print -quit)"
+          [[ -n "$apk" ]] || { echo "::error::artifact $artifact has no app-debug.apk"; exit 1; }
+          sha="$(sha256sum "$apk" | awk '{print $1}')"
+          echo "installing $apk (sha256 $sha, $(stat -c%s "$apk") bytes)"
+          unzip -Z1 "$apk" | grep -qx 'lib/x86_64/libwhisper.so' \
+            || { echo "::error::release APK has no x86_64 whisper.cpp library"; exit 1; }
+
+          adb uninstall com.martins.whisper >/dev/null 2>&1 || true
+          adb install -t "$apk"
+          adb shell am start -W -n com.martins.whisper/.MainActivity
+          resumed=0
+          for _ in {1..15}; do
+            if adb shell dumpsys activity activities | grep -q 'com.martins.whisper/.MainActivity'; then
+              resumed=1
+              break
+            fi
+            sleep 2
+          done
+          (( resumed == 1 )) || { echo "::error::fresh install of the release APK did not reach MainActivity"; exit 1; }
+          sleep 8
+          adb exec-out screencap -p > shots/release-install.png
+          [[ -s shots/release-install.png ]] || { echo "::error::screenshot of the release APK is empty"; exit 1; }
+          printf 'release-install.png\tRelease APK: fresh install\tnative-build #%s; sha256 %s; MainActivity resumed\n' \
+            "$run_id" "$sha" >> shots/manifest.tsv
 
       - name: Upload screenshots artifact
         if: always()

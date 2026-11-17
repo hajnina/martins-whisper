@@ -116,7 +116,7 @@ fi
 
 # --- static proof before touching the device ---------------------------------
 echo "== Verifying native APK (ABI, JNI, 16 KB alignment, DT_NEEDED)"
-scripts/native-apk-check.sh "$APK" >/dev/null || die "native APK verification failed (run scripts/native-apk-check.sh directly for the report)"
+APK_ABIS=arm64-v8a scripts/native-apk-check.sh "$APK" >/dev/null || die "native APK verification failed (run scripts/native-apk-check.sh directly for the report)"
 
 # --- model file (host side) --------------------------------------------------
 if [[ -z "$MODEL_FILE" ]]; then

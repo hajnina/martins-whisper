@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Verifies the installable native APK end to end without a device:
-#   - arm64-v8a only, required whisper.cpp libraries present, no model bundled
+#   - universal (arm64-v8a for phones, x86_64 so CI can install the published
+#     bytes on its emulator), required whisper.cpp libraries, no model bundled
 #   - APK size within the v1 budget
-#   - every bundled .so is a stripped AArch64 shared object
+#   - every bundled .so is a stripped shared object matching its ABI
 #   - every .so is 16 KB-page aligned and every DT_NEEDED resolves (bundled or
 #     Android system library), i.e. the dynamic loader will not fail at startup
 #   - every Kotlin `external fun` in WhisperCppEngine.kt is exported by
@@ -10,13 +11,14 @@
 #   - uncompressed .so entries are 16 KB aligned inside the zip
 #
 # Usage: scripts/native-apk-check.sh [path/to/app-debug.apk]
-# Env:   MAX_APK_BYTES (default 32 MiB; Compose onboarding adds ~12 MiB of debug dex), ANDROID_NDK_HOME, ANDROID_HOME
+# Env:   MAX_APK_BYTES (default 96 MiB for the two-ABI APK), APK_ABIS (default
+#        "arm64-v8a,x86_64"; device smoke tests pass "arm64-v8a"), ANDROID_NDK_HOME, ANDROID_HOME
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APK="${1:-$ROOT/app/build/outputs/apk/debug/app-debug.apk}"
-MAX_APK_BYTES="${MAX_APK_BYTES:-33554432}"
-ABI="arm64-v8a"
+MAX_APK_BYTES="${MAX_APK_BYTES:-100663296}"
+IFS=',' read -r -a ABIS <<<"${APK_ABIS:-arm64-v8a,x86_64}"
 PAGE_ALIGN=0x4000
 REQUIRED_LIBS=(
     libmartins_whisper.so
@@ -105,14 +107,16 @@ find_zipalign() {
 
 entries="$(unzip -Z1 "$APK")"
 
-# --- ABI: arm64-v8a only -----------------------------------------------------
+# --- ABIs: universal (arm64-v8a for devices, x86_64 for the CI emulator) -----
 mapfile -t abis < <(printf '%s\n' "$entries" | sed -nE 's#^lib/([^/]+)/.*#\1#p' | sort -u)
 [[ ${#abis[@]} -gt 0 ]] || fail "APK has no lib/<abi>/ entries (native build did not run?)"
-[[ "${abis[*]}" == "$ABI" ]] || fail "expected only $ABI, found: ${abis[*]}"
+[[ "${abis[*]}" == "${ABIS[*]}" ]] || fail "expected ABIs '${ABIS[*]}', found: ${abis[*]}"
 
 # --- required native libraries ----------------------------------------------
-for lib in "${REQUIRED_LIBS[@]}"; do
-    printf '%s\n' "$entries" | grep -qx "lib/$ABI/$lib" || fail "missing lib/$ABI/$lib"
+for abi in "${ABIS[@]}"; do
+    for lib in "${REQUIRED_LIBS[@]}"; do
+        printf '%s\n' "$entries" | grep -qx "lib/$abi/$lib" || fail "missing lib/$abi/$lib"
+    done
 done
 
 # --- no model bundled (models are downloaded/imported on device) -------------
@@ -131,7 +135,9 @@ fi
 [[ -n "$AAPT2" ]] || AAPT2="$(command -v aapt2 || true)"
 if [[ -n "$AAPT2" ]]; then
     badging="$("$AAPT2" dump badging "$APK" 2>/dev/null)"
-    grep -q "native-code: '$ABI'" <<<"$badging" || fail "manifest native-code is not '$ABI'"
+    for abi in "${ABIS[@]}"; do
+        grep -q "native-code:.*'$abi'" <<<"$badging" || fail "manifest native-code does not list '$abi'"
+    done
 fi
 
 # --- size budget -------------------------------------------------------------
@@ -142,43 +148,47 @@ apk_bytes="$(stat -c%s "$APK")"
 # --- extract native libraries ------------------------------------------------
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-mkdir -p "$TMP/lib"
-mapfile -t so_entries < <(printf '%s\n' "$entries" | grep -E "^lib/$ABI/.*\.so$" | sort)
-[[ ${#so_entries[@]} -gt 0 ]] || fail "no .so files under lib/$ABI"
+mapfile -t so_entries < <(printf '%s\n' "$entries" | grep -E '^lib/[^/]+/.*\.so$' | sort)
+[[ ${#so_entries[@]} -gt 0 ]] || fail "no .so files under lib/<abi>"
 for entry in "${so_entries[@]}"; do
+    abi="$(cut -d/ -f2 <<<"$entry")"
     name="$(basename "$entry")"
-    unzip -p "$APK" "$entry" > "$TMP/lib/$name"
-    [[ -s "$TMP/lib/$name" ]] || fail "could not extract $entry"
+    mkdir -p "$TMP/lib/$abi"
+    unzip -p "$APK" "$entry" > "$TMP/lib/$abi/$name"
+    [[ -s "$TMP/lib/$abi/$name" ]] || fail "could not extract $entry"
 done
 
 # --- ELF machine, stripping, page alignment, DT_NEEDED -----------------------
 declare -A NEEDED=()
 declare -A BUNDLED=()
+declare -A ELF_MACHINE=([arm64-v8a]='AArch64' [x86_64]='X86-64')
 for entry in "${so_entries[@]}"; do
     BUNDLED["$(basename "$entry")"]=1
 done
 
 for entry in "${so_entries[@]}"; do
+    abi="$(cut -d/ -f2 <<<"$entry")"
     name="$(basename "$entry")"
-    so="$TMP/lib/$name"
+    so="$TMP/lib/$abi/$name"
 
     header="$("$READELF" -W -h "$so")"
-    grep -qE 'Class:[[:space:]]+ELF64' <<<"$header" || fail "$name is not ELF64"
-    grep -qE 'Machine:[[:space:]]+AArch64' <<<"$header" || fail "$name is not AArch64"
-    grep -qE 'Type:[[:space:]]+DYN' <<<"$header" || fail "$name is not a shared object (DYN)"
+    grep -qE 'Class:[[:space:]]+ELF64' <<<"$header" || fail "$name ($abi) is not ELF64"
+    grep -qE "Machine:[[:space:]]+${ELF_MACHINE[$abi]}" <<<"$header" \
+        || fail "$name ($abi) is not ${ELF_MACHINE[$abi]}"
+    grep -qE 'Type:[[:space:]]+DYN' <<<"$header" || fail "$name ($abi) is not a shared object (DYN)"
 
     sections="$("$READELF" -W -S "$so")"
     if grep -q '\.debug_info' <<<"$sections"; then
-        fail "$name is not stripped (has .debug_info)"
+        fail "$name ($abi) is not stripped (has .debug_info)"
     fi
 
     aligns="$("$READELF" -W -l "$so" | awk '/[[:space:]]LOAD[[:space:]]/ {print $NF}')"
-    [[ -n "$aligns" ]] || fail "$name has no LOAD segments"
+    [[ -n "$aligns" ]] || fail "$name ($abi) has no LOAD segments"
     while read -r align; do
         [[ -n "$align" ]] || continue
         value=$((align))
         (( value >= PAGE_ALIGN )) \
-            || fail "$name LOAD alignment $align < 0x4000 (16 KB pages unsupported); rebuild with -Wl,-z,max-page-size=16384"
+            || fail "$name ($abi) LOAD alignment $align < 0x4000 (16 KB pages unsupported); rebuild with -Wl,-z,max-page-size=16384"
     done <<<"$aligns"
 
     while read -r need; do
@@ -208,10 +218,12 @@ OBJ="$(grep -oE 'object[[:space:]]+WhisperCppNative' "$KOTLIN_ENGINE" | awk '{pr
 PREFIX="Java_$(printf '%s.%s' "$PKG" "$OBJ" | tr '.' '_')"
 mapfile -t KOTLIN_FNS < <(sed -nE 's/.*external fun ([A-Za-z0-9_]+).*/\1/p' "$KOTLIN_ENGINE" | sort -u)
 [[ ${#KOTLIN_FNS[@]} -gt 0 ]] || fail "no external fun declarations found in $KOTLIN_ENGINE"
-jni_syms="$("$READELF" -W --dyn-syms "$TMP/lib/libmartins_whisper.so")"
-for fn in "${KOTLIN_FNS[@]}"; do
-    grep -qE "[[:space:]]${PREFIX}_${fn}$" <<<"$jni_syms" \
-        || fail "Kotlin declares ${fn}() but libmartins_whisper.so does not export ${PREFIX}_${fn}"
+for abi in "${ABIS[@]}"; do
+    jni_syms="$("$READELF" -W --dyn-syms "$TMP/lib/$abi/libmartins_whisper.so")"
+    for fn in "${KOTLIN_FNS[@]}"; do
+        grep -qE "[[:space:]]${PREFIX}_${fn}$" <<<"$jni_syms" \
+            || fail "Kotlin declares ${fn}() but libmartins_whisper.so ($abi) does not export ${PREFIX}_${fn}"
+    done
 done
 
 # --- zip alignment for uncompressed native libraries -------------------------
@@ -237,16 +249,16 @@ apk_sha="$(sha256sum "$APK" | awk '{print $1}')"
     echo "- size: $apk_bytes bytes ($(( apk_bytes / 1024 )) KiB), budget $MAX_APK_BYTES bytes"
     echo "- ABI: ${abis[*]}"
     echo "- stripped: all native libraries have no .debug_info"
-    echo "- ELF: AArch64 shared objects, LOAD alignment >= 0x4000"
+    echo "- ELF: per-ABI machine (AArch64 / X86-64), LOAD alignment >= 0x4000"
     echo "- DT_NEEDED: all resolved (bundled or Android system libraries)"
-    echo "- JNI exports: ${#KOTLIN_FNS[@]}/${#KOTLIN_FNS[@]} Kotlin external funs present"
+    echo "- JNI exports: ${#KOTLIN_FNS[@]}/${#KOTLIN_FNS[@]} Kotlin external funs present per ABI"
     echo "- zip alignment: $zip_alignment"
     echo "- bundled model files: none"
     echo
     echo "| library (in APK, compressed) | bytes |"
     echo "|---|---:|"
     while read -r bytes _date _time name; do
-        [[ "$name" == "lib/$ABI/"* ]] || continue
+        printf '%s\n' "${ABIS[@]}" | grep -qx "$(cut -d/ -f2 <<<"$name")" || continue
         echo "| $name | $bytes |"
     done < <(unzip -l "$APK")
     echo

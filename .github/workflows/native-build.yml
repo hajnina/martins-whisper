@@ -1,6 +1,8 @@
 name: Android native build
 
-# Produces the real arm64-v8a APK (bundled whisper.cpp, CPU-first). Vulkan stays opt-in.
+# Produces the installable universal APK (bundled whisper.cpp, CPU-first). Vulkan stays opt-in.
+# arm64-v8a is for phones; x86_64 is included so the PR gate can install these exact published
+# bytes on its emulator and screenshot them (arm64-only APKs fail there with NO_MATCHING_ABIS).
 #
 # Two jobs run in parallel:
 #   apk   - assembleDebug + artifact checks + upload. Kept short (<~6 min warm) so the owner can
@@ -58,7 +60,7 @@ jobs:
   apk:
     name: Native arm64 debug APK
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -140,6 +142,7 @@ jobs:
             -Pmartins.vulkan=${{ inputs.vulkan || 'false' }} \
             -Pmartins.ndkVersion="$NDK_VERSION" \
             -Pmartins.cmakeVersion="$CMAKE_VERSION" \
+            -PwhisperAbis=arm64-v8a,x86_64 \
             :app:assembleDebug
 
       - name: Verify native APK (ABI, libs, size, no bundled model)
