@@ -55,27 +55,26 @@ class MicBubbleVoiceFeedTest {
     )
 
     @Test
-    fun `bubble follows measured pitch and brightness when the service feeds them`() {
+    fun `bubble follows measured features when the service feeds them`() {
         val view = bubble(recordingLevel = 0.1f)
         view.onVoiceFeatures(features(pitchNorm = 0.95f, brightness = 1f))
         settleAndDraw(view)
 
-        val motion = view.lastOrbMotion
-        assertNotNull(motion)
-        assertTrue("hue=${motion!!.hue}", motion.hue > 0.75f)
-        assertTrue("edge=${motion.edgeCrispness}", motion.edgeCrispness > 0.7f)
-        assertTrue("lobes=${motion.lobes}", motion.lobes >= 6)
+        assertTrue(
+            "level=${view.ribbonLevelForTest()}",
+            view.ribbonLevelForTest() > 0.4f,
+        )
     }
 
     @Test
-    fun `without features the bubble falls back to the measured recording level`() {
+    fun `without features the ribbon falls back to the measured recording level`() {
         val quiet = bubble(recordingLevel = 0.1f)
         val loud = bubble(recordingLevel = 0.9f)
         settleAndDraw(quiet)
         settleAndDraw(loud)
         assertTrue(
-            "quiet=${quiet.lastOrbMotion!!.radius} loud=${loud.lastOrbMotion!!.radius}",
-            loud.lastOrbMotion!!.radius > quiet.lastOrbMotion!!.radius + 0.3f,
+            "quiet=${quiet.ribbonLevelForTest()} loud=${loud.ribbonLevelForTest()}",
+            loud.ribbonLevelForTest() > quiet.ribbonLevelForTest() + 0.3f,
         )
     }
 }

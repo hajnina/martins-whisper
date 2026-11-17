@@ -37,13 +37,24 @@ class InstrumentRenderTest {
     @Test
     @Config(qualifiers = "mdpi")
     fun `render every state at 72 px`() {
+        assumeNativeGraphics()
         renderSet(densityLabel = "72", discPx = 72, pillPx = 180, suffix = "_72")
     }
 
     @Test
     @Config(qualifiers = "xxhdpi")
     fun `render every state at 216 px`() {
+        assumeNativeGraphics()
         renderSet(densityLabel = "216", discPx = 216, pillPx = 540, suffix = "_216")
+    }
+
+    /** Robolectric's native raster ships for x86_64 Linux/macOS only; arm hosts skip the loop. */
+    private fun assumeNativeGraphics() {
+        val arch = System.getProperty("os.arch") ?: ""
+        org.junit.Assume.assumeTrue(
+            "Robolectric native graphics is unavailable on os.arch=$arch",
+            arch == "x86_64" || arch == "amd64",
+        )
     }
 
     private fun renderSet(densityLabel: String, discPx: Int, pillPx: Int, suffix: String) {

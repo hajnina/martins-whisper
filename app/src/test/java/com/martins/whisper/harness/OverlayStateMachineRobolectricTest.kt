@@ -122,24 +122,36 @@ class OverlayStateMachineRobolectricTest {
     }
 
     @Test
-    fun `state changes never resize or move the bubble under the finger`() {
+    fun `recording expands to the pill anchored at the docked edge and collapses back`() {
         val controller = OverlayController(context)
         assertTrue(controller.show(listener))
         controller.update(DictationState.Idle)
-        val before = controller.positionForTest()
-        val sizeBefore = controller.sizeForTest()
+        val idlePosition = controller.positionForTest()!!
+        val sizeBefore = controller.sizeForTest()!!
         val density = context.resources.displayMetrics.density
-        val expectedSize = (72f * density).toInt()
-        assertEquals(expectedSize to expectedSize, sizeBefore)
+        val disc = (72f * density).toInt()
+        assertEquals(disc to disc, sizeBefore)
 
-        controller.update(DictationState.Loading("Loading\u2026"))
         controller.update(DictationState.Recording(1_000L, 0.4f, true))
+        val expandedSize = controller.sizeForTest()!!
+        assertEquals((180f * density).toInt(), expandedSize.first)
+        assertEquals(disc, expandedSize.second)
+        val expandedPosition = controller.positionForTest()!!
+        assertEquals(
+            "the docked edge must not move when the pill grows",
+            idlePosition.first + sizeBefore.first,
+            expandedPosition.first + expandedSize.first,
+        )
+
         controller.update(DictationState.Processing())
+        assertEquals(sizeBefore, controller.sizeForTest())
+        assertEquals(idlePosition, controller.positionForTest())
+
         controller.update(DictationState.Success("Inserted"))
         controller.update(DictationState.Error("boom"))
-
-        assertEquals(before, controller.positionForTest())
+        controller.update(DictationState.Idle)
         assertEquals(sizeBefore, controller.sizeForTest())
+        assertEquals(idlePosition, controller.positionForTest())
         controller.hide()
     }
 

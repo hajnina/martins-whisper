@@ -93,7 +93,7 @@ class DictationServiceVoiceFeedTest {
     }
 
     @Test
-    fun `captured speech frames reach the orb as measured features`() {
+    fun `captured speech frames reach the bubble as measured features`() {
         val intent = Intent(app, DictationService::class.java).setAction(DictationService.ACTION_START)
         val controller = Robolectric.buildService(DictationService::class.java, intent)
             .create()
@@ -114,12 +114,11 @@ class DictationServiceVoiceFeedTest {
                 shadowOf(Looper.getMainLooper()).idleFor(16, TimeUnit.MILLISECONDS)
                 bubble.draw(Canvas(Bitmap.createBitmap(SIZE_PX, SIZE_PX, Bitmap.Config.ARGB_8888)))
             }
-            val motion = bubble.lastOrbMotion
-            assertTrue("the orb must have drawn at least once", motion != null)
+            val level = bubble.ribbonLevelForTest()
             assertTrue(
-                "hue=${motion!!.hue} must follow the measured 440 Hz pitch (the fallback " +
-                    "path passes no pitch, so it stays ~0.5)",
-                motion.hue > MEASURED_HUE,
+                "ribbon level=$level must follow the measured speech (the fallback path " +
+                    "passes no features, so it stays near the state level)",
+                level > MEASURED_LEVEL,
             )
         } finally {
             controller.destroy()
@@ -214,6 +213,6 @@ class DictationServiceVoiceFeedTest {
         const val SPEECH_LEVEL = 6_000.0
         const val MIN_TONE_FRAMES = 45
         const val DRAW_FRAMES = 30
-        const val MEASURED_HUE = 0.75f
+        const val MEASURED_LEVEL = 0.3f
     }
 }

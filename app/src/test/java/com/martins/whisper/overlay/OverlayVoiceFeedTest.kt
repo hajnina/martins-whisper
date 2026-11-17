@@ -48,14 +48,14 @@ class OverlayVoiceFeedTest {
     }
 
     @Test
-    fun `extractor frames fed through the controller drive the orb with measured motion`() {
+    fun `extractor frames fed through the controller drive the ribbon`() {
         bubble.state = DictationState.Recording(
             elapsedMs = 500,
             level = QUIET_STATE_LEVEL,
             speechDetected = true,
         )
         settleAndDraw()
-        val fallback = bubble.lastOrbMotion!!
+        val fallback = bubble.ribbonLevelForTest()
 
         val extractor = VoiceFeatureExtractor()
         repeat(FRAMES_FED) { frameIndex ->
@@ -68,12 +68,11 @@ class OverlayVoiceFeedTest {
         shadowOf(Looper.getMainLooper()).idle()
         settleAndDraw()
 
-        val measured = bubble.lastOrbMotion!!
+        val measured = bubble.ribbonLevelForTest()
         assertTrue(
             "fallback=$fallback measured=$measured",
-            measured.radius > fallback.radius + 0.3f,
+            measured > fallback + 0.2f,
         )
-        assertTrue("hue=${measured.hue}", measured.hue > 0.75f)
     }
 
     private fun settleAndDraw() {
