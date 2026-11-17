@@ -518,6 +518,19 @@ class MicBubbleView(context: Context) : View(context) {
 
     internal fun ribbonLevelForTest(): Float = ribbonLevel
 
+    /** Renderer seam: jumps every spring to its resting value for a deterministic still. */
+    internal fun settleMotionForTest() {
+        val recording = state is DictationState.Recording
+        widthSpring = SpringValue(if (recording && width > height * 1.4f) 1f else 0f)
+        toneSpring = SpringValue(toneTarget)
+        checkScale = SpringValue(checkTarget)
+        shakeSpring = SpringValue(0f)
+        previousTone = plateColorFor(state)
+        ribbonLevel = (state as? DictationState.Recording)?.level?.coerceIn(0f, 1f) ?: ribbonLevel
+        stopMotion()
+        invalidate()
+    }
+
     private fun dp(value: Float): Float = value * density
 
     private fun spatialDamping(stiffness: Float): Float = 2f * SPATIAL_ZETA * sqrt(stiffness)

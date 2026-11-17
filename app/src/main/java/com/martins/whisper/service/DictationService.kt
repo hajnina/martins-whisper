@@ -398,7 +398,7 @@ class DictationService : Service() {
                     if (inserted) DictationState.Success(message) else DictationState.Error(message),
                     force = true,
                 )
-                scheduleReset()
+                if (inserted) scheduleReset(SUCCESS_DWELL_MS) else scheduleReset()
             } catch (t: Throwable) {
                 fail(t.message ?: "Transcription failed")
             }
@@ -505,10 +505,10 @@ class DictationService : Service() {
         scheduleReset()
     }
 
-    private fun scheduleReset() {
+    private fun scheduleReset(durationMs: Long = ERROR_DWELL_MS) {
         stateResetJob?.cancel()
         stateResetJob = scope.launch {
-            delay(STATE_RESET_MS)
+            delay(durationMs)
             if (!pressed && !sessionActive) publishState(DictationState.Idle)
         }
     }
@@ -712,7 +712,8 @@ class DictationService : Service() {
         private const val MIN_AUDIO_MS = 150L
         /** Single-shot dictation: one tap-to-tap buffer and one transcribe call. */
         private const val MAX_HOLD_MS = 30_000L
-        private const val STATE_RESET_MS = 1_800L
+        private const val SUCCESS_DWELL_MS = 600L
+        private const val ERROR_DWELL_MS = 1_600L
         private const val SPEECH_RMS_THRESHOLD = 0.015f
 
         private val _state = MutableStateFlow<DictationState>(DictationState.Idle)

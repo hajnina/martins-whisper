@@ -144,4 +144,12 @@ object WhisperOverlayPalette {
     val InstrumentOnError: Int = InstrumentPaper
     val InstrumentMuted: Int = Color(0xFF8A929A).toArgb()
     val InstrumentSegmentOff: Int = Color(0xFF39414A).toArgb()
+
+    // Compatibility aliases for the role names used by the first grille landing.
+    val InstrumentBezel: Int = InstrumentPaper
+    val InstrumentStatusDot: Int = InstrumentPaper
+    val InstrumentProcessingGlyph: Int = InstrumentMuted
+    val InstrumentArcLit: Int = InstrumentPaper
+    val InstrumentArcDim: Int = InstrumentSegmentOff
+    val InstrumentStop: Int = InstrumentAccent
 }
