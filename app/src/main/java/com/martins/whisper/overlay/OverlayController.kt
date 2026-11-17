@@ -9,6 +9,7 @@ import android.view.WindowManager
 import com.martins.whisper.core.voice.VoiceFeatures
 import com.martins.whisper.data.SettingsStore
 import com.martins.whisper.service.DictationState
+import com.martins.whisper.ui.orb.AnimationPolicy
 
 class OverlayController(context: Context) {
 
@@ -93,9 +94,32 @@ class OverlayController(context: Context) {
 
     fun update(state: DictationState) {
         val bubbleView = view ?: return
-        // The bubble never resizes or moves on a state change: growing it to a 240 dp pill made it
-        // jump sideways on the first tap (and the second tap then missed it, DEVICE-REPORT #2).
-        // State is shown inside the fixed 72 dp circle (colour, icon, content description).
+        val layoutParams = params ?: return
+        // Idle / result states stay a 72 dp disc; recording expands to the 180x72 instrument pill.
+        // The trailing edge is the anchor, so the stop target never moves under the thumb.
+        val targetWidth = if (state is DictationState.Recording && AnimationPolicy.enabled()) {
+            dp(180f)
+        } else {
+            dp(72f)
+        }
+        if (layoutParams.width != targetWidth) {
+            val trailing = layoutParams.x + layoutParams.width
+            layoutParams.width = targetWidth
+            layoutParams.x = trailing - targetWidth
+            val (screenWidth, screenHeight) = screenSize()
+            val clamped = OverlayGeometry.clamp(
+                layoutParams.x,
+                layoutParams.y,
+                layoutParams.width,
+                layoutParams.height,
+                screenWidth,
+                screenHeight,
+                dp(12f),
+            )
+            layoutParams.x = clamped.first
+            layoutParams.y = clamped.second
+            runCatching { windowManager.updateViewLayout(bubbleView, layoutParams) }
+        }
         bubbleView.state = state
     }
 

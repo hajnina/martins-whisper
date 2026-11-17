@@ -37,6 +37,15 @@ private val TertiaryTealLight = Color(0xFF008A80)
 
 private val OutlineVariantDark = Color(0xFF33344A)
 
+private val InstrumentPlateColor = Color(0xFF15151C)
+private val InstrumentBezelColor = Color(0xFFF3F0E7)
+private val InstrumentGlyphColor = Color(0xFFF6F3EA)
+private val InstrumentStatusColor = Color(0xFFFF8FAE)
+private val InstrumentAccentColor = Color(0xFFFF4D7E)
+private val InstrumentOnErrorColor = Color(0xFFFDF6F4)
+private val InstrumentProcessingColor = Color(0xFF8B8B96)
+private val InstrumentArcDimColor = Color(0xFF3A3A44)
+
 val WhisperLightColorScheme = lightColorScheme(
     primary = IndigoBrand,
     onPrimary = White,
@@ -132,4 +141,18 @@ object WhisperOverlayPalette {
     /** Scheme onPrimary: the expressive glyph tint inside the bubble. */
     val BubbleGlyph: Int = White.toArgb()
     val BubbleGlyphHalo: Int = IndigoLavender.toArgb()
+
+    // Precision Instrument overlay: one near-black plate with a paper bezel in every state.
+    val InstrumentPlate: Int = InstrumentPlateColor.toArgb()
+    val InstrumentBezel: Int = InstrumentBezelColor.toArgb()
+    val InstrumentGlyph: Int = InstrumentGlyphColor.toArgb()
+    val InstrumentStatusDot: Int = InstrumentStatusColor.toArgb()
+    val InstrumentAccent: Int = InstrumentAccentColor.toArgb()
+    val InstrumentOnAccent: Int = White.toArgb()
+    val InstrumentError: Int = ErrorLight.toArgb()
+    val InstrumentOnError: Int = InstrumentOnErrorColor.toArgb()
+    val InstrumentProcessingGlyph: Int = InstrumentProcessingColor.toArgb()
+    val InstrumentArcLit: Int = InstrumentGlyphColor.toArgb()
+    val InstrumentArcDim: Int = InstrumentArcDimColor.toArgb()
+    val InstrumentStop: Int = InstrumentOnAccent
 }
