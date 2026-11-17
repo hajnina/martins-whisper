@@ -48,7 +48,9 @@ class DictationAccessibilityService : AccessibilityService(), TextInserter {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
         if (event.packageName?.toString() == packageName) {
-            lastFocused = null
+            // Our own overlay is non-focusable and reports content changes on every tap; only a
+            // real window transition of ours invalidates the remembered foreign target.
+            if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) lastFocused = null
             return
         }
         when (event.eventType) {
@@ -109,12 +111,18 @@ class DictationAccessibilityService : AccessibilityService(), TextInserter {
 
     override fun insert(text: String): InsertResult {
         if (text.isEmpty()) return InsertResult.Failed("empty text")
-        val captured = startTarget.also { startTarget = null }
-            ?: return copyFallback(text, "no target field at start")
-        val node = obtainTarget() ?: return InsertResult.Rejected("target field disappeared")
+        val captured = startTarget.also { startTarget = null } ?: lastFocused
+        val node = obtainTarget(captured)
+        if (node == null) {
+            return if (captured != null) {
+                InsertResult.Rejected("target field disappeared")
+            } else {
+                copyFallback(text, "no focused editable field")
+            }
+        }
         try {
             val live = node.toSnapshot()
-            if (!TargetGuard.stillSameTarget(captured, live)) {
+            if (captured != null && !TargetGuard.stillSameTarget(captured, live)) {
                 AccessibilityInserter.noteTargetChanged()
                 return InsertResult.Rejected("target changed")
             }
@@ -139,13 +147,60 @@ class DictationAccessibilityService : AccessibilityService(), TextInserter {
 
     fun lastFocusedSnapshot(): NodeSnapshot? = lastFocused
 
-    private fun obtainTarget(): AccessibilityNodeInfo? {
-        var node = findFocusedEditable()
+    private fun obtainTarget(expected: NodeSnapshot? = null): AccessibilityNodeInfo? {
+        var node = findFocusedEditable() ?: findEditableMatching(expected)
         if (node != null && !node.refresh()) {
             node.recycle()
-            node = findFocusedEditable()
+            node = findFocusedEditable() ?: findEditableMatching(expected)
         }
         return node
+    }
+
+    /**
+     * A field can stop reporting input focus while our own overlay or the IME owns the window
+     * even though it is still the field the session started in; match it by identity instead.
+     */
+    private fun findEditableMatching(expected: NodeSnapshot?): AccessibilityNodeInfo? {
+        if (expected == null) return null
+        for (window in windows.orEmpty()) {
+            val root = runCatching { window.root }.getOrNull() ?: continue
+            searchEditable(root, 0, expected)?.let { return it }
+        }
+        return null
+    }
+
+    private fun searchEditable(
+        node: AccessibilityNodeInfo,
+        depth: Int,
+        expected: NodeSnapshot,
+    ): AccessibilityNodeInfo? {
+        if (depth > MAX_SEARCH_DEPTH) return null
+        if (node.isEditable && node.isEnabled && node.isVisibleToUser &&
+            matchesTarget(node, expected)
+        ) {
+            return node
+        }
+        val count = node.childCount
+        for (index in 0 until count) {
+            val child = node.getChild(index) ?: continue
+            val found = searchEditable(child, depth + 1, expected)
+            if (found != null) {
+                if (found !== child) child.recycle()
+                return found
+            }
+            child.recycle()
+        }
+        return null
+    }
+
+    private fun matchesTarget(node: AccessibilityNodeInfo, expected: NodeSnapshot): Boolean {
+        if (node.packageName?.toString() != expected.packageName) return false
+        val viewId = node.viewIdResourceName
+        if (expected.viewId != null && viewId != null) return expected.viewId == viewId
+        if (expected.windowId != -1 && node.windowId != -1) {
+            return expected.windowId == node.windowId
+        }
+        return true
     }
 
     private fun findFocusedEditable(): AccessibilityNodeInfo? {
