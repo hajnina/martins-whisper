@@ -1,9 +1,9 @@
 package com.martins.whisper.overlay
 
 import android.graphics.Path
+import android.graphics.PathMeasure
 import android.graphics.RectF
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -42,18 +42,15 @@ class ExpressiveShapeTest {
     }
 
     @Test
-    fun `squircle path covers a corner point that a circle would miss`() {
+    fun `squircle perimeter is longer than the inscribed circle`() {
         val rect = RectF(0f, 0f, 72f, 72f)
-        val path = ExpressiveShape.squircle(rect)
-        val circle = Path().apply {
-            addCircle(36f, 36f, 36f, Path.Direction.CW)
-        }
-        val probeX = 36f + 36f * 0.8f
-        val probeY = 36f + 36f * 0.8f
-        assertTrue("squircle must own its continuous corner", path.contains(probeX, probeY))
-        assertFalse("a plain circle would clip this point", circle.contains(probeX, probeY))
-        assertFalse("the exact bounding corner stays outside", path.contains(0.5f, 0.5f))
-        assertTrue("centre is inside", path.contains(36f, 36f))
+        val squircleLength = PathMeasure(ExpressiveShape.squircle(rect), false).length
+        val circleLength = PathMeasure(
+            Path().apply { addCircle(36f, 36f, 36f, Path.Direction.CW) },
+            false,
+        ).length
+        assertTrue("squircle=$squircleLength circle=$circleLength", squircleLength > circleLength * 1.05f)
+        assertTrue("squircle=$squircleLength circle=$circleLength", squircleLength < circleLength * 1.25f)
     }
 
     @Test
@@ -64,7 +61,8 @@ class ExpressiveShapeTest {
         path.computeBounds(bounds, true)
         assertEquals(72f, bounds.width(), 0.25f)
         assertEquals(72f, bounds.height(), 0.25f)
-        assertTrue(path.isEmpty.not() || path.contains(16f, 16f))
+        val length = PathMeasure(path, false).length
+        assertTrue("squircle perimeter was $length", length > 2f * PI.toFloat() * 36f)
         val (x, y) = ExpressiveShape.superellipsePoint(PI / 4, 36f, 36f)
         assertEquals(x, y, 0.0001f)
         assertEquals(sqrt(x * x + y * y) / 36f, ExpressiveShape.normalizedRadius(PI / 4), 0.0001f)

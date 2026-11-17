@@ -12,9 +12,8 @@ import androidx.core.graphics.PathParser
 object ExpressiveIcon {
 
     const val BUBBLE_GLYPH =
-        "M16.2 2.6C14.2 6.6 6.3 9.5 4.7 14.1 3.2 18.4 6.4 21.6 10.8 21.6 15.4 21.6 19.2 18.5 " +
-            "19.5 14 19.8 9.5 17.7 5.6 16.2 2.6ZM10.4 12.2A1.6 1.6 0 0 1 12 10.6 1.6 1.6 0 0 1 " +
-            "13.6 12.2V15.2A1.6 1.6 0 0 1 12 16.8 1.6 1.6 0 0 1 10.4 15.2Z"
+        "M12 2a5 5 0 0 1 5 5v10.4a1.2 1.2 0 0 1-2.4 0V10a.7.7 0 0 0-1.4 0v10.8a1.2 1.2 0 0 1-2.4 0V10a.7.7 0 0 0-1.4 0v7.4a1.2 1.2 0 0 1-2.4 0V7a5 5 0 0 1 5-5Z " +
+            "M10.35 4.8h3.3a.75.75 0 0 1 0 1.5h-3.3a.75.75 0 0 1 0-1.5Z"
 
     /** Glyph tile as a fraction of the bubble's edge. */
     const val TILE_FRACTION = 0.55f
