@@ -128,4 +128,8 @@ object WhisperOverlayPalette {
     val BubbleSurface: Int = IndigoDeep.toArgb()
     val BubbleRing: Int = OutlineVariantDark.toArgb()
     val OnBubble: Int = White.toArgb()
+
+    /** Scheme onPrimary: the expressive glyph tint inside the bubble. */
+    val BubbleGlyph: Int = White.toArgb()
+    val BubbleGlyphHalo: Int = IndigoLavender.toArgb()
 }
