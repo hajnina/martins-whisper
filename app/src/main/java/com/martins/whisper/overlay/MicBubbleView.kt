@@ -2,6 +2,7 @@ package com.martins.whisper.overlay
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
@@ -10,14 +11,20 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
-import com.martins.whisper.core.voice.OrbDynamics
-import com.martins.whisper.core.voice.OrbMotion
 import com.martins.whisper.core.voice.VoiceFeatures
 import com.martins.whisper.service.DictationState
 import com.martins.whisper.ui.orb.AnimationPolicy
 import com.martins.whisper.ui.theme.WhisperOverlayPalette
-import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.min
+import kotlin.math.sin
+import kotlin.math.sqrt
 
+/**
+ * Precision Instrument bubble: one full-radius capsule that is 72x72 at rest and 180x72 while
+ * recording, with a 2 dp paper bezel. All geometry and colour roles live here; the window only
+ * decides whether the expanded width is available.
+ */
 class MicBubbleView(context: Context) : View(context) {
 
     interface Listener {
@@ -41,30 +48,34 @@ class MicBubbleView(context: Context) : View(context) {
         set(value) {
             val previous = field
             field = value
+            if (value is DictationState.Loading) startSpinner() else stopSpinner()
             if (previous::class != value::class) {
                 when (value) {
-                    is DictationState.Success -> {
-                        hapticFeedback(HapticFeedbackConstants.CONFIRM)
-                        checkSpring = SpringValue(CHECK_FROM)
-                        checkTarget = 1f
-                    }
+                    is DictationState.Success -> hapticFeedback(HapticFeedbackConstants.CONFIRM)
                     is DictationState.Error -> {
                         hapticFeedback(HapticFeedbackConstants.REJECT)
                         scheduleHaptic(ERROR_DOUBLE_TICK_MS) {
                             hapticFeedback(HapticFeedbackConstants.REJECT)
                         }
-                        shakeSpring = SpringValue(0f, SHAKE_IMPULSE)
                     }
                     else -> Unit
                 }
             }
-            expandTarget = if (value is DictationState.Recording) 1f else 0f
-            if (!AnimationPolicy.enabled()) {
-                expandSpring = SpringValue(expandTarget)
-                checkSpring = SpringValue(1f)
+            previousTone = plateColorFor(previous)
+            toneSpring = SpringValue(0f)
+            toneTarget = 1f
+            if (value is DictationState.Success) {
+                checkScale = SpringValue(CHECK_FROM)
+                checkTarget = 1f
+            } else if (value !is DictationState.Success) {
+                checkTarget = 1f
+            }
+            if (value is DictationState.Error && AnimationPolicy.enabled()) {
+                shakeSpring = SpringValue(-dp(SHAKE_DP), 0f)
+            } else if (AnimationPolicy.enabled()) {
                 shakeSpring = SpringValue(0f)
             }
-            updateMotion(value)
+            startMotion()
             contentDescription = BubblePresentation.of(value).contentDescription
             invalidate()
         }
@@ -72,45 +83,42 @@ class MicBubbleView(context: Context) : View(context) {
     private val density = resources.displayMetrics.density
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
 
-    private val platePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-    private val bezelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = dp(2f)
-    }
-    private val glyphPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-        isDither = true
-    }
-    private val markPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     }
-    private val arcPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.ROUND
-    }
+    private val glyphPath = Path()
 
-    private val orbDynamics = OrbDynamics()
-    private var lastOrbFrameAt = 0L
-    private var previousSpeechDetected = false
     private var latestFeatures: VoiceFeatures? = null
     private var latestFeaturesAt = 0L
-    internal var lastOrbMotion: OrbMotion? = null
-        private set
+    private var ribbonLevel = 0.55f
 
-    private var expandSpring = SpringValue(0f)
-    private var expandTarget = 0f
-    private var checkSpring = SpringValue(1f)
+    private var widthSpring = SpringValue(0f)
+    private var toneSpring = SpringValue(1f)
+    private var toneTarget = 1f
+    private var previousTone = WhisperOverlayPalette.InstrumentPlate
+    private var checkScale = SpringValue(1f)
     private var checkTarget = 1f
     private var shakeSpring = SpringValue(0f)
-    private var levelSpring = SpringValue(0f)
+    private var motionRunning = false
     private var lastFrameAt = 0L
-    private var frameRunning = false
 
-    private val frameTick = object : Runnable {
+    private val motionTick = object : Runnable {
         override fun run() {
-            if (!frameRunning) return
+            if (!motionRunning) return
+            invalidate()
+            postDelayed(this, 16)
+        }
+    }
+
+    private var spinnerAngle = 0f
+    private var spinnerRunning = false
+    private val spinnerTick = object : Runnable {
+        override fun run() {
+            if (!spinnerRunning) return
+            spinnerAngle = (spinnerAngle + 12f) % 360f
             invalidate()
             postDelayed(this, 16)
         }
@@ -145,14 +153,12 @@ class MicBubbleView(context: Context) : View(context) {
                 if (!tracking) return true
                 val totalX = event.rawX - downRawX
                 val totalY = event.rawY - downRawY
-                if (!dragging && (abs(totalX) > touchSlop || abs(totalY) > touchSlop)) {
+                if (!dragging && (kotlin.math.abs(totalX) > touchSlop || kotlin.math.abs(totalY) > touchSlop)) {
                     dragging = true
                     listener?.onCancel()
                     listener?.onDragStart()
                 }
-                if (dragging) {
-                    listener?.onDrag(totalX, totalY)
-                }
+                if (dragging) listener?.onDrag(totalX, totalY)
                 return true
             }
 
@@ -192,368 +198,359 @@ class MicBubbleView(context: Context) : View(context) {
         post {
             latestFeatures = features
             latestFeaturesAt = SystemClock.elapsedRealtime()
-            invalidate()
-        }
-    }
-
-    private fun updateMotion(value: DictationState) {
-        if (!AnimationPolicy.enabled()) {
-            stopFrameTicker()
-            return
-        }
-        val live = value is DictationState.Recording || value is DictationState.Loading ||
-            value is DictationState.Processing || value is DictationState.Success ||
-            value is DictationState.Error
-        if (live || !SpringSolver.settled(expandSpring, expandTarget)) startFrameTicker()
-    }
-
-    private fun startFrameTicker() {
-        if (frameRunning) return
-        frameRunning = true
-        lastFrameAt = 0L
-        removeCallbacks(frameTick)
-        post(frameTick)
-    }
-
-    private fun stopFrameTicker() {
-        frameRunning = false
-        removeCallbacks(frameTick)
-    }
-
-    private fun motionForDraw(now: Long, dt: Float): OrbMotion {
-        val current = state
-        if (current is DictationState.Recording) {
-            val measured = latestFeatures?.takeIf { now - latestFeaturesAt < FEATURE_FRESH_MS }
-            if (measured != null) {
-                return orbDynamics.update(
-                    level = measured.level,
-                    pitchNorm = measured.pitchHz?.let { measured.pitchNorm },
-                    voicedProb = measured.voicedProb,
-                    brightness = measured.brightness,
-                    onset = measured.onset,
-                    dtSeconds = dt,
-                )
+            if (state is DictationState.Recording) {
+                startMotion()
+                invalidate()
             }
-            val onset = current.speechDetected && !previousSpeechDetected
-            previousSpeechDetected = current.speechDetected
-            val voiced = if (current.speechDetected) 1f else 0f
-            return orbDynamics.update(current.level, null, voiced, null, onset, dt)
         }
-        previousSpeechDetected = false
-        return orbDynamics.idle(dt)
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        if (width <= 0 || height <= 0) return
         val now = SystemClock.elapsedRealtime()
-        val dt = if (lastFrameAt == 0L) {
-            1f / 60f
-        } else {
-            ((now - lastFrameAt) / 1000f).coerceIn(0f, 0.05f)
-        }
-        lastFrameAt = now
-        advanceSprings(dt)
-        val motion = motionForDraw(now, dt)
-        lastOrbMotion = motion
-
-        val heightPx = height.toFloat()
-        val widthPx = width.toFloat()
-        val expanded = widthPx > heightPx * 1.2f
-        val disc = heightPx
-        val pillWidth = if (expanded) {
-            disc + (widthPx - disc) * expandSpring.position.coerceIn(0f, 1.15f)
-        } else {
-            disc
-        }
-        val left = widthPx - pillWidth
-        val capsule = RectF(left + dp(1f), dp(1f), widthPx - dp(1f), heightPx - dp(1f))
-        val radius = capsule.height() / 2f
-        val centerX = capsule.centerX()
-        val centerY = capsule.centerY()
-
-        canvas.save()
-        val shake = if (AnimationPolicy.enabled()) shakeSpring.position.coerceIn(-dp(6f), dp(6f)) else 0f
-        canvas.translate(shake, 0f)
-
-        platePaint.color = WhisperOverlayPalette.InstrumentPlate
-        canvas.drawRoundRect(capsule, radius, radius, platePaint)
-        bezelPaint.color = WhisperOverlayPalette.InstrumentBezel
-        canvas.drawRoundRect(capsule, radius, radius, bezelPaint)
+        val dt = frameDelta(now)
+        stepSprings(dt)
 
         val recording = state is DictationState.Recording
-        if (recording && pillWidth > disc * 1.35f) {
-            drawRibbon(canvas, capsule, motion)
-            drawStop(canvas, widthPx - dp(35f), centerY)
+        val expanded = recording && width > height * 1.4f
+        val target = if (expanded) 1f else 0f
+        if (!AnimationPolicy.enabled() || !expanded) widthSpring = SpringValue(target)
+        val morph = widthSpring.position.coerceIn(0f, 1f)
+        val collapsedWidth = dp(DISC_DP)
+        val drawnWidth = collapsedWidth + (width - collapsedWidth) * morph
+        val left = width - drawnWidth
+        val top = 0f
+        val right = width.toFloat()
+        val bottom = height.toFloat()
+        val radius = min(drawnWidth, bottom) / 2f
+        val plate = RectF(left, top, right, bottom)
+        val inner = RectF(
+            left + dp(BEZEL_DP),
+            top + dp(BEZEL_DP),
+            right - dp(BEZEL_DP),
+            bottom - dp(BEZEL_DP),
+        )
+
+        val tone = if (AnimationPolicy.enabled()) {
+            ColorUtils.lerp(previousTone, plateColorFor(state), toneSpring.position.coerceIn(0f, 1f))
         } else {
-            when (val current = state) {
-                is DictationState.Idle -> {
-                    drawClassicMic(canvas, centerX, centerY, disc)
-                    glyphPaint.color = WhisperOverlayPalette.InstrumentStatusDot
-                    canvas.drawCircle(
-                        centerX + disc * 0.354f,
-                        centerY - disc * 0.354f,
-                        dp(2.2f),
-                        glyphPaint,
-                    )
-                }
-                is DictationState.Recording -> drawCompactRecording(canvas, centerX, centerY, disc)
-                is DictationState.Loading, is DictationState.Processing -> {
-                    drawProcessingArc(canvas, centerX, centerY, disc)
-                    drawClassicMic(
-                        canvas,
-                        centerX,
-                        centerY,
-                        disc * 0.86f,
-                        WhisperOverlayPalette.InstrumentProcessingGlyph,
-                    )
-                }
-                is DictationState.Success -> {
-                    drawFilledDisc(canvas, capsule, radius, WhisperOverlayPalette.InstrumentAccent)
-                    drawCheck(canvas, centerX, centerY)
-                }
-                is DictationState.Error -> {
-                    drawFilledDisc(canvas, capsule, radius, WhisperOverlayPalette.InstrumentError)
-                    drawExclamation(canvas, centerX, centerY)
-                }
-            }
+            plateColorFor(state)
         }
-        canvas.restore()
+        val shake = if (AnimationPolicy.enabled()) shakeSpring.position else 0f
 
-        if (frameRunning && allSettled()) stopFrameTicker()
-    }
-
-    private fun drawFilledDisc(canvas: Canvas, capsule: RectF, radius: Float, color: Int) {
-        platePaint.color = color
-        canvas.drawRoundRect(capsule, radius, radius, platePaint)
-        bezelPaint.color = WhisperOverlayPalette.InstrumentBezel
-        canvas.drawRoundRect(capsule, radius, radius, bezelPaint)
-    }
-
-    private fun drawClassicMic(
-        canvas: Canvas,
-        centerX: Float,
-        centerY: Float,
-        disc: Float,
-        color: Int = WhisperOverlayPalette.InstrumentGlyph,
-    ) {
-        val stroke = disc * 0.042f
-        glyphPaint.color = color
-        val bodyWidth = disc * 0.255f
-        val bodyHeight = disc * 0.465f
-        val bodyTop = centerY - disc * 0.235f
-        val body = RectF(
-            centerX - bodyWidth / 2f,
-            bodyTop,
-            centerX + bodyWidth / 2f,
-            bodyTop + bodyHeight,
-        )
-        canvas.drawRoundRect(body, bodyWidth / 2f, bodyWidth / 2f, glyphPaint)
-        markPaint.color = color
-        markPaint.strokeWidth = stroke
-        val cradleWidth = disc * 0.47f
-        val cradle = RectF(
-            centerX - cradleWidth / 2f,
-            centerY - disc * 0.118f,
-            centerX + cradleWidth / 2f,
-            centerY + disc * 0.244f,
-        )
-        canvas.drawArc(cradle, 0f, 180f, false, markPaint)
-        canvas.drawLine(
-            centerX,
-            centerY + disc * 0.238f,
-            centerX,
-            centerY + disc * 0.34f,
-            markPaint,
-        )
-    }
-
-    private fun drawRibbon(canvas: Canvas, capsule: RectF, motion: OrbMotion) {
-        val barWidth = dp(4f)
-        val gap = dp(4.2f)
-        val maxHeight = dp(34f)
-        val minHeight = dp(7f)
-        val envelope = floatArrayOf(0.30f, 0.52f, 0.72f, 0.88f, 1f, 0.88f, 0.72f, 0.52f, 0.30f)
-        val pitch = barWidth + gap
-        val total = envelope.size * barWidth + (envelope.size - 1) * gap
-        val stopCenter = width - dp(35f)
-        val ribbonRight = stopCenter - dp(11f)
-        val startX = (ribbonRight - total) / 2f
-        val level = levelSpring.position.coerceIn(0f, 1f)
-        val amplitude = (0.32f + 0.68f * level) * (0.55f + 0.45f * motion.radius.coerceIn(0f, 1f))
-        glyphPaint.color = WhisperOverlayPalette.InstrumentGlyph
-        for (index in envelope.indices) {
-            val barHeight = (maxHeight * envelope[index] * amplitude).coerceIn(minHeight, maxHeight)
-            val left = startX + index * pitch
-            val rect = RectF(
-                left,
-                capsule.centerY() - barHeight / 2f,
-                left + barWidth,
-                capsule.centerY() + barHeight / 2f,
-            )
-            canvas.drawRoundRect(rect, barWidth / 2f, barWidth / 2f, glyphPaint)
-        }
-    }
-
-    private fun drawStop(canvas: Canvas, centerX: Float, centerY: Float) {
-        glyphPaint.color = WhisperOverlayPalette.InstrumentAccent
-        canvas.drawCircle(centerX, centerY, dp(20f), glyphPaint)
-        glyphPaint.color = WhisperOverlayPalette.InstrumentOnAccent
-        val half = dp(6.5f)
-        canvas.drawRoundRect(
-            RectF(centerX - half, centerY - half, centerX + half, centerY + half),
-            dp(2f),
-            dp(2f),
-            glyphPaint,
-        )
-    }
-
-    private fun drawCompactRecording(canvas: Canvas, centerX: Float, centerY: Float, disc: Float) {
-        arcPaint.color = WhisperOverlayPalette.InstrumentAccent
-        arcPaint.strokeWidth = dp(5.2f)
-        val inset = dp(8.6f)
-        val rect = RectF(
-            centerX - disc / 2f + inset,
-            centerY - disc / 2f + inset,
-            centerX + disc / 2f - inset,
-            centerY + disc / 2f - inset,
-        )
-        canvas.drawArc(rect, -140f, 280f, false, arcPaint)
-        drawStop(canvas, centerX, centerY)
-    }
-
-    private fun drawProcessingArc(canvas: Canvas, centerX: Float, centerY: Float, disc: Float) {
-        arcPaint.strokeWidth = dp(5.2f)
-        val radius = disc / 2f - dp(6.5f)
-        val rect = RectF(centerX - radius, centerY - radius, centerX + radius, centerY + radius)
-        for (index in 0 until 8) {
-            arcPaint.color = if (index % 2 == 1) {
-                WhisperOverlayPalette.InstrumentArcLit
-            } else {
-                WhisperOverlayPalette.InstrumentArcDim
-            }
-            canvas.drawArc(rect, -90f + index * 45f + 7f, 31f, false, arcPaint)
-        }
-    }
-
-    private fun drawCheck(canvas: Canvas, centerX: Float, centerY: Float) {
-        val scale = if (AnimationPolicy.enabled()) checkSpring.position.coerceIn(0.7f, 1.1f) else 1f
         canvas.save()
-        canvas.scale(scale, scale, centerX, centerY)
-        markPaint.color = WhisperOverlayPalette.InstrumentOnAccent
-        markPaint.strokeWidth = dp(4.9f)
-        val path = Path().apply {
-            moveTo(centerX - dp(9f), centerY)
-            lineTo(centerX - dp(2.5f), centerY + dp(7f))
-            lineTo(centerX + dp(10f), centerY - dp(7f))
+        canvas.translate(shake, 0f)
+        drawCapsule(canvas, plate, radius, WhisperOverlayPalette.InstrumentPaper)
+        drawCapsule(canvas, inner, (radius - dp(BEZEL_DP)).coerceAtLeast(0f), tone)
+
+        val cx = plate.centerX()
+        val cy = plate.centerY()
+        when (state) {
+            is DictationState.Idle -> {
+                drawMic(canvas, cx, cy, WhisperOverlayPalette.InstrumentGlyph)
+                drawStatusDot(canvas, cx, cy)
+            }
+            is DictationState.Loading -> {
+                drawMic(canvas, cx, cy, WhisperOverlayPalette.InstrumentMuted)
+                drawSegmentArc(canvas, cx, cy, radius, litOffset = spinnerAngle)
+            }
+            is DictationState.Recording -> {
+                if (morph > 0.55f) {
+                    drawRibbon(canvas, cx)
+                    drawStopDisc(canvas, plate.right)
+                } else {
+                    drawCompactRecording(canvas, cx, cy, radius)
+                }
+            }
+            is DictationState.Processing -> {
+                drawMic(canvas, cx, cy, WhisperOverlayPalette.InstrumentMuted)
+                drawSegmentArc(canvas, cx, cy, radius, litOffset = 0f)
+            }
+            is DictationState.Success -> drawCheck(canvas, cx, cy, checkScale.position)
+            is DictationState.Error -> drawErrorMark(canvas, cx, cy)
         }
-        canvas.drawPath(path, markPaint)
+        canvas.restore()
+        if (motionSettled()) stopMotion()
+    }
+
+    private fun drawCapsule(canvas: Canvas, rect: RectF, radius: Float, color: Int) {
+        fillPaint.color = color
+        fillPaint.alpha = 255
+        canvas.drawRoundRect(rect, radius, radius, fillPaint)
+    }
+
+    private fun drawMic(canvas: Canvas, cx: Float, cy: Float, color: Int) {
+        val bodyWidth = dp(6.6f)
+        val bodyHeight = dp(12.2f)
+        val bodyCenter = cy - dp(7.2f)
+        fillPaint.color = color
+        fillPaint.alpha = 255
+        canvas.drawRoundRect(
+            RectF(cx - bodyWidth / 2f, bodyCenter - bodyHeight / 2f, cx + bodyWidth / 2f, bodyCenter + bodyHeight / 2f),
+            bodyWidth / 2f,
+            bodyWidth / 2f,
+            fillPaint,
+        )
+        strokePaint.color = color
+        strokePaint.strokeWidth = dp(2.6f)
+        val cradle = dp(8.6f)
+        canvas.drawArc(
+            RectF(cx - cradle, cy - dp(1.8f) - cradle, cx + cradle, cy - dp(1.8f) + cradle),
+            0f,
+            180f,
+            false,
+            strokePaint,
+        )
+        canvas.drawLine(cx, cy + dp(6.8f), cx, cy + dp(10.8f), strokePaint)
+    }
+
+    private fun drawStatusDot(canvas: Canvas, cx: Float, cy: Float) {
+        val angle = -PI_OVER_4
+        val distance = dp(24.5f)
+        fillPaint.color = WhisperOverlayPalette.InstrumentPaper
+        fillPaint.alpha = 255
+        canvas.drawCircle(
+            cx + distance * cos(angle).toFloat(),
+            cy + distance * sin(angle).toFloat(),
+            dp(STATUS_DOT_DP) / 2f,
+            fillPaint,
+        )
+    }
+
+    private fun drawRibbon(canvas: Canvas, cx: Float) {
+        fillPaint.color = WhisperOverlayPalette.InstrumentPaper
+        fillPaint.alpha = 255
+        val amp = ribbonLevel.coerceIn(0f, 1f)
+        val envelope = floatArrayOf(0.34f, 0.54f, 0.74f, 0.9f, 1f, 0.9f, 0.74f, 0.54f, 0.34f)
+        val pitch = dp(6.2f)
+        val barWidth = dp(2f)
+        val ribbonCenter = (width - dp(STOP_ZONE_DP)) / 2f + dp(4f)
+        val base = height / 2f
+        for (index in envelope.indices) {
+            val x = ribbonCenter + (index - envelope.size / 2) * pitch
+            val barHeight = dp(4f) + dp(20f) * envelope[index] * (0.35f + 0.65f * amp)
+            canvas.drawRoundRect(
+                RectF(x - barWidth / 2f, base - barHeight / 2f, x + barWidth / 2f, base + barHeight / 2f),
+                barWidth / 2f,
+                barWidth / 2f,
+                fillPaint,
+            )
+        }
+    }
+
+    private fun drawStopDisc(canvas: Canvas, right: Float) {
+        val cx = right - dp(32f)
+        val cy = height / 2f
+        fillPaint.color = WhisperOverlayPalette.InstrumentAccent
+        fillPaint.alpha = 255
+        canvas.drawCircle(cx, cy, dp(20f), fillPaint)
+        val half = dp(7f)
+        fillPaint.color = WhisperOverlayPalette.InstrumentOnAccent
+        canvas.drawRoundRect(
+            RectF(cx - half, cy - half, cx + half, cy + half),
+            dp(2f),
+            dp(2f),
+            fillPaint,
+        )
+    }
+
+    private fun drawCompactRecording(canvas: Canvas, cx: Float, cy: Float, radius: Float) {
+        strokePaint.color = WhisperOverlayPalette.InstrumentAccent
+        strokePaint.strokeWidth = dp(5.2f)
+        val ring = radius - dp(7.5f)
+        canvas.drawArc(
+            RectF(cx - ring, cy - ring, cx + ring, cy + ring),
+            -90f,
+            282f,
+            false,
+            strokePaint,
+        )
+        fillPaint.color = WhisperOverlayPalette.InstrumentPaper
+        fillPaint.alpha = 255
+        val half = dp(7f)
+        canvas.drawRoundRect(
+            RectF(cx - half, cy - half, cx + half, cy + half),
+            dp(2f),
+            dp(2f),
+            fillPaint,
+        )
+    }
+
+    private fun drawSegmentArc(canvas: Canvas, cx: Float, cy: Float, radius: Float, litOffset: Float) {
+        strokePaint.strokeWidth = dp(5.2f)
+        val ring = radius - dp(7.5f)
+        val arcRect = RectF(cx - ring, cy - ring, cx + ring, cy + ring)
+        for (index in 0 until SEGMENTS) {
+            val start = index * (360f / SEGMENTS) + 7.5f + litOffset
+            val lit = index == 0 || index == 1 || index == 6 || index == 7
+            strokePaint.color = if (lit) {
+                WhisperOverlayPalette.InstrumentPaper
+            } else {
+                WhisperOverlayPalette.InstrumentSegmentOff
+            }
+            canvas.drawArc(arcRect, start, SEGMENT_SWEEP, false, strokePaint)
+        }
+    }
+
+    private fun drawCheck(canvas: Canvas, cx: Float, cy: Float, scale: Float) {
+        canvas.save()
+        canvas.scale(scale.coerceIn(0.5f, 1.2f), scale.coerceIn(0.5f, 1.2f), cx, cy)
+        glyphPath.reset()
+        glyphPath.moveTo(cx - dp(13.5f), cy - dp(1.5f))
+        glyphPath.lineTo(cx - dp(5.5f), cy + dp(7.5f))
+        glyphPath.lineTo(cx + dp(14f), cy - dp(9f))
+        strokePaint.color = WhisperOverlayPalette.InstrumentOnAccent
+        strokePaint.strokeWidth = dp(4.9f)
+        canvas.drawPath(glyphPath, strokePaint)
         canvas.restore()
     }
 
-    private fun drawExclamation(canvas: Canvas, centerX: Float, centerY: Float) {
-        markPaint.color = WhisperOverlayPalette.InstrumentOnError
-        markPaint.strokeWidth = dp(5.2f)
-        canvas.drawLine(centerX, centerY - dp(13f), centerX, centerY + dp(2f), markPaint)
-        glyphPaint.color = WhisperOverlayPalette.InstrumentOnError
-        canvas.drawCircle(centerX, centerY + dp(10f), dp(3f), glyphPaint)
+    private fun drawErrorMark(canvas: Canvas, cx: Float, cy: Float) {
+        strokePaint.color = WhisperOverlayPalette.InstrumentOnError
+        strokePaint.strokeWidth = dp(5.4f)
+        canvas.drawLine(cx, cy - dp(12f), cx, cy + dp(4f), strokePaint)
+        fillPaint.color = WhisperOverlayPalette.InstrumentOnError
+        fillPaint.alpha = 255
+        canvas.drawCircle(cx, cy + dp(13f), dp(3f), fillPaint)
     }
 
-    private fun advanceSprings(dt: Float) {
-        if (!AnimationPolicy.enabled()) {
-            expandSpring = SpringValue(expandTarget)
-            checkSpring = SpringValue(1f)
-            shakeSpring = SpringValue(0f)
-            levelSpring = SpringValue(0f)
-            return
-        }
-        expandSpring = SpringSolver.step(
-            expandSpring,
-            expandTarget,
+    private fun plateColorFor(value: DictationState): Int = when (value) {
+        is DictationState.Success -> WhisperOverlayPalette.InstrumentAccent
+        is DictationState.Error -> WhisperOverlayPalette.InstrumentError
+        else -> WhisperOverlayPalette.InstrumentPlate
+    }
+
+    private fun frameDelta(now: Long): Float {
+        val dt = if (lastFrameAt == 0L) 1f / 60f else ((now - lastFrameAt) / 1000f).coerceIn(0f, 0.05f)
+        lastFrameAt = now
+        return dt
+    }
+
+    private fun stepSprings(dt: Float) {
+        if (!AnimationPolicy.enabled()) return
+        widthSpring = SpringSolver.step(
+            widthSpring,
+            if (state is DictationState.Recording && width > height * 1.4f) 1f else 0f,
             dt,
-            stiffness = SpatialFast.stiffness,
-            damping = SpatialFast.damping,
+            stiffness = SPATIAL_FAST_K,
+            damping = spatialDamping(SPATIAL_FAST_K),
         )
-        checkSpring = SpringSolver.step(
-            checkSpring,
+        toneSpring = SpringSolver.step(
+            toneSpring,
+            toneTarget,
+            dt,
+            stiffness = EFFECTS_FAST_K,
+            damping = effectsDamping(EFFECTS_FAST_K),
+        )
+        checkScale = SpringSolver.step(
+            checkScale,
             checkTarget,
             dt,
-            stiffness = SpatialFast.stiffness,
-            damping = SpatialFast.damping,
+            stiffness = SPATIAL_FAST_K,
+            damping = spatialDamping(SPATIAL_FAST_K),
         )
         shakeSpring = SpringSolver.step(
             shakeSpring,
             0f,
             dt,
-            stiffness = SpatialFast.stiffness,
-            damping = SpatialFast.damping,
+            stiffness = SPATIAL_FAST_K,
+            damping = spatialDamping(SPATIAL_FAST_K),
         )
         val current = state
-        val measured = latestFeatures
-        val targetLevel = when {
-            current is DictationState.Recording && measured != null -> measured.level
-            current is DictationState.Recording -> current.level
-            else -> 0f
-        }.coerceIn(0f, 1f)
-        levelSpring = SpringSolver.step(
-            levelSpring,
-            targetLevel,
-            dt,
-            stiffness = EffectsFast.stiffness,
-            damping = EffectsFast.damping,
-        )
+        if (current is DictationState.Recording) {
+            val measured = latestFeatures?.takeIf { SystemClock.elapsedRealtime() - latestFeaturesAt < FEATURE_FRESH_MS }
+            val targetLevel = measured?.level ?: current.level
+            ribbonLevel = SpringSolver.step(
+                SpringValue(ribbonLevel),
+                targetLevel.coerceIn(0f, 1f),
+                dt,
+                stiffness = EFFECTS_FAST_K,
+                damping = effectsDamping(EFFECTS_FAST_K),
+            ).position
+        }
     }
 
-    private fun allSettled(): Boolean =
-        SpringSolver.settled(expandSpring, expandTarget, epsilon = 0.002f) &&
-            SpringSolver.settled(checkSpring, checkTarget, epsilon = 0.002f) &&
-            SpringSolver.settled(shakeSpring, 0f, epsilon = 0.01f) &&
-            SpringSolver.settled(levelSpring, levelSpring.position, epsilon = 100f) &&
+    private fun motionSettled(): Boolean =
+        SpringSolver.settled(widthSpring, if (state is DictationState.Recording && width > height * 1.4f) 1f else 0f, 0.002f) &&
+            SpringSolver.settled(toneSpring, toneTarget, 0.002f) &&
+            SpringSolver.settled(checkScale, checkTarget, 0.002f) &&
+            SpringSolver.settled(shakeSpring, 0f, 0.01f) &&
             state !is DictationState.Recording
 
-    internal fun springScaleForTest(): Float = expandSpring.position
-
-    internal fun settleMotionForTest() {
-        expandSpring = SpringValue(expandTarget)
-        checkSpring = SpringValue(1f)
-        shakeSpring = SpringValue(0f)
-        levelSpring = SpringValue(1f)
+    private fun startMotion() {
+        if (!AnimationPolicy.enabled() || motionRunning) return
+        motionRunning = true
+        lastFrameAt = 0L
+        removeCallbacks(motionTick)
+        post(motionTick)
     }
 
-    internal fun renderToForTest(canvas: Canvas) = onDraw(canvas)
+    private fun stopMotion() {
+        motionRunning = false
+        removeCallbacks(motionTick)
+    }
+
+    private fun startSpinner() {
+        if (spinnerRunning || !AnimationPolicy.enabled()) return
+        spinnerRunning = true
+        post(spinnerTick)
+    }
+
+    private fun stopSpinner() {
+        spinnerRunning = false
+        removeCallbacks(spinnerTick)
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        startMotion()
+    }
 
     override fun onDetachedFromWindow() {
-        stopFrameTicker()
+        stopSpinner()
+        stopMotion()
         super.onDetachedFromWindow()
     }
 
+    internal fun springScaleForTest(): Float = checkScale.position
+
+    internal fun ribbonLevelForTest(): Float = ribbonLevel
+
     private fun dp(value: Float): Float = value * density
 
-    internal object SpatialFast {
-        const val stiffness = 800f
-        const val damping = 33.94f
-    }
+    private fun spatialDamping(stiffness: Float): Float = 2f * SPATIAL_ZETA * sqrt(stiffness)
 
-    internal object SpatialDefault {
-        const val stiffness = 380f
-        const val damping = 23.39f
-    }
+    private fun effectsDamping(stiffness: Float): Float = 2f * EFFECTS_ZETA * sqrt(stiffness)
 
-    internal object EffectsFast {
-        const val stiffness = 3800f
-        const val damping = 123.29f
-    }
-
-    internal object EffectsDefault {
-        const val stiffness = 1600f
-        const val damping = 80f
+    private object ColorUtils {
+        fun lerp(from: Int, to: Int, fraction: Float): Int {
+            val t = fraction.coerceIn(0f, 1f)
+            val a = (Color.alpha(from) + (Color.alpha(to) - Color.alpha(from)) * t).toInt()
+            val r = (Color.red(from) + (Color.red(to) - Color.red(from)) * t).toInt()
+            val g = (Color.green(from) + (Color.green(to) - Color.green(from)) * t).toInt()
+            val b = (Color.blue(from) + (Color.blue(to) - Color.blue(from)) * t).toInt()
+            return Color.argb(a, r, g, b)
+        }
     }
 
     companion object {
         internal const val ERROR_DOUBLE_TICK_MS = 90L
         internal const val HOLD_THRESHOLD_MS = 275L
         private const val FEATURE_FRESH_MS = 500L
+
+        private const val DISC_DP = 72f
+        private const val BEZEL_DP = 2f
+        private const val STATUS_DOT_DP = 4.4f
+        private const val STOP_ZONE_DP = 64f
+        private const val SEGMENTS = 8
+        private const val SEGMENT_SWEEP = 30f
         private const val CHECK_FROM = 0.86f
-        private const val SHAKE_IMPULSE = -14f
+        private const val SHAKE_DP = 2.5f
+
+        private const val SPATIAL_ZETA = 0.6f
+        private const val EFFECTS_ZETA = 1f
+        private const val SPATIAL_FAST_K = 800f
+        private const val EFFECTS_FAST_K = 3800f
+        private const val PI_OVER_4 = -Math.PI / 4.0
     }
 }

@@ -95,32 +95,42 @@ class OverlayController(context: Context) {
     fun update(state: DictationState) {
         val bubbleView = view ?: return
         val layoutParams = params ?: return
-        // Idle / result states stay a 72 dp disc; recording expands to the 180x72 instrument pill.
-        // The trailing edge is the anchor, so the stop target never moves under the thumb.
-        val targetWidth = if (state is DictationState.Recording && AnimationPolicy.enabled()) {
-            dp(180f)
-        } else {
-            dp(72f)
-        }
-        if (layoutParams.width != targetWidth) {
-            val trailing = layoutParams.x + layoutParams.width
-            layoutParams.width = targetWidth
-            layoutParams.x = trailing - targetWidth
-            val (screenWidth, screenHeight) = screenSize()
-            val clamped = OverlayGeometry.clamp(
-                layoutParams.x,
-                layoutParams.y,
-                layoutParams.width,
-                layoutParams.height,
-                screenWidth,
-                screenHeight,
-                dp(12f),
-            )
-            layoutParams.x = clamped.first
-            layoutParams.y = clamped.second
-            runCatching { windowManager.updateViewLayout(bubbleView, layoutParams) }
-        }
+        resizeFor(state, bubbleView, layoutParams)
         bubbleView.state = state
+    }
+
+    /**
+     * Recording widens the same window to 180x72, anchored at the edge nearest the screen so the
+     * disc under the finger (the stop target) never moves. Reduced motion and narrow screens keep
+     * the 72 dp compact ring; loading, processing, success and error are always 72.
+     */
+    private fun resizeFor(state: DictationState, bubbleView: MicBubbleView, layoutParams: WindowManager.LayoutParams) {
+        val (screenWidth, screenHeight) = screenSize()
+        val margin = dp(12f)
+        val disc = dp(DISC_DP)
+        val pill = dp(PILL_DP)
+        val expanded = state is DictationState.Recording &&
+            AnimationPolicy.enabled() &&
+            screenWidth >= pill + margin * 2
+        val targetWidth = if (expanded) pill else disc
+        if (layoutParams.width == targetWidth && layoutParams.height == disc) return
+        val oldWidth = layoutParams.width
+        val rightAnchored = layoutParams.x + oldWidth / 2 >= screenWidth / 2
+        val proposedX = if (rightAnchored) layoutParams.x + oldWidth - targetWidth else layoutParams.x
+        val (x, y) = OverlayGeometry.clamp(
+            proposedX,
+            layoutParams.y,
+            targetWidth,
+            disc,
+            screenWidth,
+            screenHeight,
+            margin,
+        )
+        layoutParams.width = targetWidth
+        layoutParams.height = disc
+        layoutParams.x = x
+        layoutParams.y = y
+        runCatching { windowManager.updateViewLayout(bubbleView, layoutParams) }
     }
 
     /**
@@ -219,4 +229,9 @@ class OverlayController(context: Context) {
 
     private fun dp(value: Float): Int =
         (value * appContext.resources.displayMetrics.density).toInt()
+
+    private companion object {
+        const val DISC_DP = 72f
+        const val PILL_DP = 180f
+    }
 }
