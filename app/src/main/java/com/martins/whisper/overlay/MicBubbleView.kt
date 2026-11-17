@@ -293,15 +293,15 @@ class MicBubbleView(context: Context) : View(context) {
         )
         strokePaint.color = color
         strokePaint.strokeWidth = dp(2.6f)
-        val cradle = dp(8.6f)
+        val cradle = dp(9.4f)
         canvas.drawArc(
-            RectF(cx - cradle, cy - dp(1.8f) - cradle, cx + cradle, cy - dp(1.8f) + cradle),
+            RectF(cx - cradle, cy - dp(3.2f) - cradle, cx + cradle, cy - dp(3.2f) + cradle),
             0f,
             180f,
             false,
             strokePaint,
         )
-        canvas.drawLine(cx, cy + dp(6.8f), cx, cy + dp(10.8f), strokePaint)
+        canvas.drawLine(cx, cy + dp(6.2f), cx, cy + dp(11f), strokePaint)
     }
 
     private fun drawStatusDot(canvas: Canvas, cx: Float, cy: Float) {
@@ -322,8 +322,8 @@ class MicBubbleView(context: Context) : View(context) {
         fillPaint.alpha = 255
         val amp = ribbonLevel.coerceIn(0f, 1f)
         val envelope = floatArrayOf(0.34f, 0.54f, 0.74f, 0.9f, 1f, 0.9f, 0.74f, 0.54f, 0.34f)
-        val pitch = dp(6.2f)
-        val barWidth = dp(2f)
+        val pitch = dp(6.3f)
+        val barWidth = dp(2.6f)
         val ribbonCenter = (width - dp(STOP_ZONE_DP)) / 2f + dp(4f)
         val base = height / 2f
         for (index in envelope.indices) {
@@ -339,12 +339,12 @@ class MicBubbleView(context: Context) : View(context) {
     }
 
     private fun drawStopDisc(canvas: Canvas, right: Float) {
-        val cx = right - dp(32f)
+        val cx = right - dp(31.5f)
         val cy = height / 2f
         fillPaint.color = WhisperOverlayPalette.InstrumentAccent
         fillPaint.alpha = 255
-        canvas.drawCircle(cx, cy, dp(20f), fillPaint)
-        val half = dp(7f)
+        canvas.drawCircle(cx, cy, dp(18f), fillPaint)
+        val half = dp(6.75f)
         fillPaint.color = WhisperOverlayPalette.InstrumentOnAccent
         canvas.drawRoundRect(
             RectF(cx - half, cy - half, cx + half, cy + half),
@@ -378,6 +378,7 @@ class MicBubbleView(context: Context) : View(context) {
 
     private fun drawSegmentArc(canvas: Canvas, cx: Float, cy: Float, radius: Float, litOffset: Float) {
         strokePaint.strokeWidth = dp(5.2f)
+        strokePaint.strokeCap = Paint.Cap.BUTT
         val ring = radius - dp(7.5f)
         val arcRect = RectF(cx - ring, cy - ring, cx + ring, cy + ring)
         for (index in 0 until SEGMENTS) {
@@ -390,15 +391,16 @@ class MicBubbleView(context: Context) : View(context) {
             }
             canvas.drawArc(arcRect, start, SEGMENT_SWEEP, false, strokePaint)
         }
+        strokePaint.strokeCap = Paint.Cap.ROUND
     }
 
     private fun drawCheck(canvas: Canvas, cx: Float, cy: Float, scale: Float) {
         canvas.save()
         canvas.scale(scale.coerceIn(0.5f, 1.2f), scale.coerceIn(0.5f, 1.2f), cx, cy)
         glyphPath.reset()
-        glyphPath.moveTo(cx - dp(13.5f), cy - dp(1.5f))
-        glyphPath.lineTo(cx - dp(5.5f), cy + dp(7.5f))
-        glyphPath.lineTo(cx + dp(14f), cy - dp(9f))
+        glyphPath.moveTo(cx - dp(13.7f), cy - dp(3.5f))
+        glyphPath.lineTo(cx - dp(6.7f), cy + dp(4.7f))
+        glyphPath.lineTo(cx + dp(13.7f), cy - dp(12f))
         strokePaint.color = WhisperOverlayPalette.InstrumentOnAccent
         strokePaint.strokeWidth = dp(4.9f)
         canvas.drawPath(glyphPath, strokePaint)
