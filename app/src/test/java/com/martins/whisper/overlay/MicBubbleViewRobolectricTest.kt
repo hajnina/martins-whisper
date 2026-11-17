@@ -193,9 +193,80 @@ class MicBubbleViewRobolectricTest {
         assertEquals(listOf("press"), events)
     }
 
+    @Test
+    fun `a short press below the hold threshold still latches and never releases on up`() {
+        val events = mutableListOf<String>()
+        view.listener = gestureListener(events)
+        view.state = DictationState.Idle
+
+        touch(downAt = 1_000L, upAt = 1_000L + MicBubbleView.HOLD_THRESHOLD_MS - 1)
+        assertEquals(listOf("press"), events)
+        assertTrue(view.state is DictationState.Recording)
+
+        touch(downAt = 2_000L, upAt = 2_000L + 10L)
+        assertEquals(listOf("press", "release"), events)
+    }
+
+    @Test
+    fun `a press held to the threshold stops on release instead of latching`() {
+        val events = mutableListOf<String>()
+        view.listener = gestureListener(events)
+        view.state = DictationState.Idle
+
+        touch(downAt = 1_000L, upAt = 1_000L + MicBubbleView.HOLD_THRESHOLD_MS)
+
+        assertEquals(listOf("press", "release"), events)
+    }
+
+    @Test
+    fun `a hold on a latched session leaves it recording until the next tap`() {
+        val events = mutableListOf<String>()
+        view.listener = gestureListener(events)
+        view.state = DictationState.Recording(500L, 0.2f, false)
+
+        touch(downAt = 1_000L, upAt = 1_000L + MicBubbleView.HOLD_THRESHOLD_MS + 200L)
+        assertEquals(emptyList<String>(), events)
+        assertTrue(view.state is DictationState.Recording)
+
+        touch(downAt = 2_000L, upAt = 2_000L + 10L)
+        assertEquals(listOf("release"), events)
+    }
+
+    private fun gestureListener(events: MutableList<String>) = object : MicBubbleView.Listener {
+        override fun onPress() {
+            events += "press"
+            view.state = DictationState.Recording(0L, 0f, false)
+        }
+
+        override fun onRelease() {
+            events += "release"
+        }
+
+        override fun onCancel() {
+            events += "cancel"
+        }
+
+        override fun onDrag(dxFromDown: Float, dyFromDown: Float) = Unit
+        override fun onDragEnd() = Unit
+        override fun onSettingsTap() = Unit
+        override fun onStopTap() = Unit
+    }
+
     private fun tap() {
         val down = MotionEvent.obtain(0L, 0L, MotionEvent.ACTION_DOWN, 10f, 10f, 0)
         val up = MotionEvent.obtain(0L, 10L, MotionEvent.ACTION_UP, 10f, 10f, 0)
+        try {
+            view.onTouchEvent(down)
+            view.onTouchEvent(up)
+        } finally {
+            down.recycle()
+            up.recycle()
+        }
+    }
+
+    private fun touch(downAt: Long, upAt: Long) {
+        val down = MotionEvent.obtain(downAt, downAt, MotionEvent.ACTION_DOWN, 10f, 10f, 0)
+        val up = MotionEvent.obtain(downAt, upAt, MotionEvent.ACTION_UP, 10f, 10f, 0)
         try {
             view.onTouchEvent(down)
             view.onTouchEvent(up)
